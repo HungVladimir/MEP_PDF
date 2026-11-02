@@ -1,17 +1,16 @@
 <!-- ====================================================================
      GIAO DIỆN DARK THEME ELEMENT PLUS CHO ĐỐI SOÁT THANH TOÁN MEP
+     Hỗ trợ đầy đủ: Toolbar Insert/Delete/Save, Inline Edit, Blob Download
      Copy file này vào src/views/ (hoặc src/views/tab/) trong OneAI Frontend
      ==================================================================== -->
 <template>
   <div class="mep-container">
-    <!-- THANH CÔNG CỤ TÌM KIẾM & LỌC (TOOLBAR) -->
+    <!-- 1. THANH TÌM KIẾM & BỘ LỌC (TOP FILTER) -->
     <div class="toolbar">
-      <!-- LỌC TRẠNG THÁI (STATUS) -->
       <el-select v-model="selectedStatus" placeholder="Chọn Trạng Thái" clearable style="width: 170px">
         <el-option v-for="item in statusList" :key="item" :label="item" :value="item" />
       </el-select>
 
-      <!-- LỌC THÁNG THANH TOÁN -->
       <el-date-picker
         v-model="selectedMonth"
         type="month"
@@ -20,7 +19,6 @@
         style="width: 190px"
       />
 
-      <!-- TÌM KIẾM THEO SỐ WO HOẶC TÊN CÔNG VIỆC -->
       <el-input
         v-model="searchKeyword"
         placeholder="Nhập số WO hoặc tên công việc..."
@@ -29,73 +27,173 @@
         @keyup.enter="handleReload"
       />
 
-      <!-- NÚT RELOAD & ĐẾM NGƯỢC (POLLING) -->
       <el-button type="primary" @click="handleReload">
         Reload ({{ countdown }}s)
       </el-button>
     </div>
 
-    <!-- BẢNG DỮ LIỆU ĐỐI SOÁT (TABLE GRID GỒM 10 CỘT) -->
+    <!-- 2. THANH CÔNG CỤ QUẢN TRỊ BẢNG (TOOLBAR THEO MẪU 3.WEBP & 4.WEBP) -->
+    <div class="table-action-bar">
+      <div class="total-count">
+        Total: <span class="count-number">{{ total }} rows</span>
+      </div>
+
+      <div class="action-buttons">
+        <!-- NÚT DELETE (ĐỎ) -->
+        <el-button
+          type="danger"
+          size="small"
+          class="btn-delete"
+          :disabled="selectedRows.length === 0"
+          @click="handleDelete"
+        >
+          <i class="el-icon-remove-outline"></i> Delete
+        </el-button>
+
+        <!-- NÚT INSERT (NỀN TỐI, VIỀN XÁM) -->
+        <el-button size="small" class="btn-insert" @click="handleInsert">
+          <i class="el-icon-circle-plus-outline"></i> Insert
+        </el-button>
+
+        <!-- NÚT EXPORT (.CSV) -->
+        <el-button size="small" class="btn-export" @click="handleExportCsv">
+          <i class="el-icon-download"></i> Export (.csv)
+        </el-button>
+
+        <!-- NÚT SAVE (XANH DƯƠNG) -->
+        <el-button type="primary" size="small" class="btn-save" :loading="isSaving" @click="handleSave">
+          <i class="el-icon-document-checked"></i> Save
+        </el-button>
+      </div>
+    </div>
+
+    <!-- 3. BẢNG DỮ LIỆU ĐỐI SOÁT (TABLE GRID HỖ TRỢ INLINE EDIT) -->
     <div class="table-container">
       <el-table
         :data="tableData"
         border
-        height="720"
+        height="680"
         size="small"
         style="width: 100%"
         show-overflow-tooltip
         empty-text="Không có dữ liệu đối soát"
+        @selection-change="handleSelectionChange"
       >
-        <!-- CỘT 1: STT -->
+        <!-- CỘT CHECKBOX CHỌN DÒNG -->
+        <el-table-column type="selection" width="45" align="center" />
+
+        <!-- CỘT STT -->
         <el-table-column prop="STT" label="STT" width="55" align="center" />
 
-        <!-- CỘT 2: SỐ CÔNG VIỆC (SỐ WO / TASK ID) -->
-        <el-table-column prop="KEYID" label="Số Công Việc (WO)" width="150" sortable align="center">
+        <!-- CỘT: SỐ CÔNG VIỆC (SỐ WO) -->
+        <el-table-column prop="KEYID" label="Số Công Việc (WO)" width="160" sortable align="center">
           <template #default="{ row }">
-            <el-tag type="info" effect="plain" class="font-bold">{{ row.KEYID }}</el-tag>
+            <el-input
+              v-if="row.isNew"
+              v-model="row.KEYID"
+              placeholder="Nhập số WO..."
+              size="mini"
+              class="inline-input"
+            />
+            <el-tag v-else type="info" effect="plain" class="font-bold">{{ row.KEYID }}</el-tag>
           </template>
         </el-table-column>
 
-        <!-- CỘT 3: TÊN CÔNG VIỆC -->
-        <el-table-column prop="TASK_NAME" label="Tên Công Việc" min-width="200" show-overflow-tooltip />
+        <!-- CỘT: TÊN CÔNG VIỆC -->
+        <el-table-column prop="TASK_NAME" label="Tên Công Việc" min-width="190">
+          <template #default="{ row }">
+            <el-input
+              v-if="row.isNew || row.isEditing"
+              v-model="row.TASK_NAME"
+              placeholder="Tên công việc..."
+              size="mini"
+              class="inline-input"
+            />
+            <span v-else class="cell-text" @dblclick="row.isEditing = true">{{ row.TASK_NAME || '-' }}</span>
+          </template>
+        </el-table-column>
 
-        <!-- CỘT 4: THÁNG THANH TOÁN -->
-        <el-table-column prop="PAYMENT_MONTH" label="Tháng TT" width="95" align="center" sortable />
+        <!-- CỘT: THÁNG THANH TOÁN -->
+        <el-table-column prop="PAYMENT_MONTH" label="Tháng TT" width="110" align="center" sortable>
+          <template #default="{ row }">
+            <el-input
+              v-if="row.isNew || row.isEditing"
+              v-model="row.PAYMENT_MONTH"
+              placeholder="YYYY-MM"
+              size="mini"
+              class="inline-input"
+            />
+            <span v-else class="cell-text" @dblclick="row.isEditing = true">{{ row.PAYMENT_MONTH || '-' }}</span>
+          </template>
+        </el-table-column>
 
-        <!-- CỘT 5: NGƯỜI PHỤ TRÁCH (PIC) -->
-        <el-table-column prop="PIC" label="Người Phụ Trách" width="125" align="center" />
+        <!-- CỘT: NGƯỜI PHỤ TRÁCH (PIC) -->
+        <el-table-column prop="PIC" label="Người Phụ Trách" width="130" align="center">
+          <template #default="{ row }">
+            <el-input
+              v-if="row.isNew || row.isEditing"
+              v-model="row.PIC"
+              placeholder="PIC..."
+              size="mini"
+              class="inline-input"
+            />
+            <span v-else class="cell-text" @dblclick="row.isEditing = true">{{ row.PIC || '-' }}</span>
+          </template>
+        </el-table-column>
 
-        <!-- CỘT 6: PART (TỰ ĐỘNG THEO TÊN) -->
-        <el-table-column prop="PART_NAME" label="Part" width="95" align="center" />
+        <!-- CỘT: PART -->
+        <el-table-column prop="PART_NAME" label="Part" width="105" align="center">
+          <template #default="{ row }">
+            <el-input
+              v-if="row.isNew || row.isEditing"
+              v-model="row.PART_NAME"
+              placeholder="Part..."
+              size="mini"
+              class="inline-input"
+            />
+            <span v-else class="cell-text" @dblclick="row.isEditing = true">{{ row.PART_NAME || '-' }}</span>
+          </template>
+        </el-table-column>
 
-        <!-- CỘT 7: GROUP (TỰ ĐỘNG THEO TÊN) -->
-        <el-table-column prop="GROUP_NAME" label="Group" width="105" align="center" />
+        <!-- CỘT: GROUP -->
+        <el-table-column prop="GROUP_NAME" label="Group" width="115" align="center">
+          <template #default="{ row }">
+            <el-input
+              v-if="row.isNew || row.isEditing"
+              v-model="row.GROUP_NAME"
+              placeholder="Group..."
+              size="mini"
+              class="inline-input"
+            />
+            <span v-else class="cell-text" @dblclick="row.isEditing = true">{{ row.GROUP_NAME || '-' }}</span>
+          </template>
+        </el-table-column>
 
-        <!-- CỘT TRẠNG THÁI XỬ LÝ (STATUS SYSTEM) -->
+        <!-- CỘT: TRẠNG THÁI (STATUS) -->
         <el-table-column prop="STATUS" label="Trạng Thái" width="110" align="center" sortable>
           <template #default="{ row }">
             <el-tag v-if="row.STATUS === 'COMPLETED'" type="success" effect="dark">Hoàn Tất</el-tag>
             <el-tag v-else-if="row.STATUS === 'RUNNING'" type="warning" effect="dark">Đang Xử Lý</el-tag>
             <el-tag v-else-if="row.STATUS === 'WAITING'" type="info">Chờ Duyệt</el-tag>
-            <el-tag v-else type="danger">{{ row.STATUS }}</el-tag>
+            <el-tag v-else type="danger">{{ row.STATUS || 'Mới' }}</el-tag>
           </template>
         </el-table-column>
 
-        <!-- CỘT 8: TÀI LIỆU ĐÍNH KÈM (UPLOAD FILE EXCEL) -->
-        <el-table-column label="Tài Liệu Đính Kèm" width="125" align="center">
+        <!-- CỘT: TÀI LIỆU ĐÍNH KÈM (UPLOAD FILE EXCEL) -->
+        <el-table-column label="Tài Liệu Đính Kèm" width="130" align="center">
           <template #default="{ row }">
             <el-upload
               :show-file-list="false"
               :auto-upload="false"
               accept=".xlsx,.xlsm"
               :on-change="(file) => handleUploadExcel(file, row)"
-              :disabled="row.STATUS === 'RUNNING'"
+              :disabled="row.STATUS === 'RUNNING' || row.isNew"
             >
               <el-button
                 type="primary"
-                size="small"
+                size="mini"
                 :loading="row.STATUS === 'RUNNING'"
-                :disabled="row.STATUS === 'RUNNING'"
+                :disabled="row.STATUS === 'RUNNING' || row.isNew"
               >
                 {{ row.STATUS === 'RUNNING' ? 'Đang chạy...' : '+ Upload File' }}
               </el-button>
@@ -103,7 +201,7 @@
           </template>
         </el-table-column>
 
-        <!-- CỘT 9: KẾT QUẢ KIỂM TRA (TỔNG SỐ LỖI PHÁT SINH) -->
+        <!-- CỘT: KẾT QUẢ KIỂM TRA -->
         <el-table-column label="Kết Quả Kiểm Tra" width="150" align="center">
           <template #default="{ row }">
             <div v-if="row.STATUS === 'COMPLETED'">
@@ -121,19 +219,25 @@
           </template>
         </el-table-column>
 
-        <!-- CỘT 10: CHI TIẾT BÁO CÁO & DUYỆT (REVIEW WORKFLOW) -->
+        <!-- CỘT: CHI TIẾT BÁO CÁO & DUYỆT (BLOB DOWNLOAD CHỐNG CHẶN) -->
         <el-table-column label="Chi Tiết Báo Cáo" min-width="210" align="center">
           <template #default="{ row }">
             <div v-if="row.STATUS === 'COMPLETED'">
-              <!-- Nút tải file Excel Báo cáo 2 Sheet -->
-              <a v-if="row.RESULT_LINK" :href="getDownloadUrl(row.RESULT_LINK)" target="_blank" download class="download-link">
-                📥 Tải Báo Cáo 2 Sheet
-              </a>
+              <!-- Nút tải file báo cáo bằng Blob -->
+              <el-button
+                v-if="row.RESULT_LINK"
+                type="text"
+                size="small"
+                class="download-btn"
+                @click="handleDownloadFile(row)"
+              >
+                📥 Tải Báo Cáo (.zip)
+              </el-button>
 
-              <!-- Quyết định Review của Kỹ sư -->
+              <!-- Phê duyệt / Từ chối -->
               <div style="margin-top: 4px;">
-                <el-tag v-if="row.REVIEW_DECISION === 'APPROVED'" type="success" size="small">Đã Duyệt</el-tag>
-                <el-tag v-else-if="row.REVIEW_DECISION === 'REJECTED'" type="danger" size="small">Từ Chối</el-tag>
+                <el-tag v-if="row.REVIEW_DECISION === 'APPROVED'" type="success" size="mini">Đã Duyệt</el-tag>
+                <el-tag v-else-if="row.REVIEW_DECISION === 'REJECTED'" type="danger" size="mini">Từ Chối</el-tag>
                 <div v-else style="display: inline-flex; gap: 4px;">
                   <el-button type="success" size="mini" @click="handleReview(row, 'APPROVED')">Duyệt</el-button>
                   <el-button type="danger" size="mini" @click="handleReview(row, 'REJECTED')">Hủy</el-button>
@@ -146,20 +250,19 @@
         </el-table-column>
       </el-table>
 
-      <!-- PHÂN TRANG (PAGINATION BAR) -->
+      <!-- 4. THANH PHÂN TRANG -->
       <div class="pagination-bar">
-        <el-button @click="goFirst" :disabled="page === 1">First</el-button>
+        <el-button size="small" @click="goFirst" :disabled="page === 1">First</el-button>
         <el-pagination
           v-model:current-page="page"
           v-model:page-size="pageSize"
-          :page-sizes="[20, 50, 100]"
+          :page-sizes="[15, 30, 50, 100]"
           :total="total"
           layout="total, sizes, prev, pager, next, jumper"
           @current-change="handlePageChange"
           @size-change="handleSizeChange"
         />
-        <span class="page-indicator">{{ page }} / {{ totalPages }}</span>
-        <el-button @click="goLast" :disabled="page === totalPages">Last</el-button>
+        <el-button size="small" @click="goLast" :disabled="page >= totalPages">Last</el-button>
       </div>
     </div>
   </div>
@@ -167,36 +270,44 @@
 
 <script setup>
 import { ref, computed, onMounted, onUnmounted, watch } from 'vue'
-import { get_total_row, get_data_page } from '../js/mepPayment'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import axios from 'axios'
+import { get_total_row, get_data_page, save_mep_rows, delete_mep_rows } from '@/js/mepPayment'
 
-// CẤU HÌNH ĐƯỜNG DẪN TỚI FASTAPI WORKER BACKEND
-const FASTAPI_BASE_URL = "http://127.0.0.1:8386"
+// Địa chỉ Worker API (tự động thích ứng local hoặc reverse proxy)
+const FASTAPI_BASE_URL = window.location.port === '8000' ? '' : 'http://127.0.0.1:8000'
 
+// Bộ lọc
 const selectedStatus = ref('')
 const selectedMonth = ref('')
 const searchKeyword = ref('')
-const tableData = ref([])
+const statusList = ['ALL', 'WAITING', 'RUNNING', 'COMPLETED', 'CANCEL']
 
+// Bảng dữ liệu & Phân trang
+const tableData = ref([])
+const selectedRows = ref([])
 const page = ref(1)
-const pageSize = ref(50)
+const pageSize = ref(15)
 const total = ref(0)
 const countdown = ref(10)
-
-const statusList = ref(['ALL', 'WAITING', 'RUNNING', 'COMPLETED', 'CANCEL'])
-
+const isSaving = ref(false)
 let timer = null
 let countdownTimer = null
 
+// 1. TẢI DỮ LIỆU TỪ BACKEND
 const loadData = async () => {
   try {
-    tableData.value = await get_data_page(
+    const data = await get_data_page(
       page.value, pageSize.value,
       selectedStatus.value || 'ALL',
       selectedMonth.value || 'ALL',
       searchKeyword.value || 'ALL'
     )
+    tableData.value = (data || []).map(row => ({
+      ...row,
+      isNew: false,
+      isEditing: false
+    }))
   } catch (err) {
     console.error("Lỗi tải bảng dữ liệu MEP:", err)
   }
@@ -221,6 +332,220 @@ const handleReload = async () => {
   countdown.value = 10
 }
 
+// 2. CHỌN DÒNG TRONG BẢNG (SELECTION)
+const handleSelectionChange = (selection) => {
+  selectedRows.value = selection
+}
+
+// 3. THAO TÁC INSERT (THÊM DÒNG MỚI THEO ẢNH 4.WEBP)
+const handleInsert = () => {
+  const newRow = {
+    STT: tableData.value.length + 1,
+    KEYID: '',
+    TASK_NAME: '',
+    PAYMENT_MONTH: selectedMonth.value || new Date().toISOString().slice(0, 7),
+    PIC: '',
+    PART_NAME: 'MEP',
+    GROUP_NAME: '',
+    STATUS: 'WAITING',
+    ERROR_COUNT: 0,
+    isNew: true,
+    isEditing: true
+  }
+  // Thêm dòng mới vào đầu bảng
+  tableData.value.unshift(newRow)
+  total.value += 1
+  ElMessage.info("Đã thêm 1 dòng mới. Vui lòng nhập thông tin và bấm [Save].")
+}
+
+// 4. THAO TÁC SAVE (LƯU CÁC DÒNG MỚI HOẶC SỬA XUỐNG DB)
+const handleSave = async () => {
+  const modifiedRows = tableData.value.filter(r => r.isNew || r.isEditing)
+  if (modifiedRows.length === 0) {
+    ElMessage.info("Không có dòng nào thay đổi để lưu.")
+    return
+  }
+
+  // Kiểm tra không để trống KEYID
+  for (const r of modifiedRows) {
+    if (!r.KEYID || !r.KEYID.trim()) {
+      ElMessage.warning("Vui lòng nhập Số Công Việc (KEYID) trước khi lưu!")
+      return
+    }
+  }
+
+  isSaving.value = true
+  try {
+    // Gửi danh sách dòng xuống backend
+    const res = await axios.post(`${FASTAPI_BASE_URL}/mep_payment/save_rows`, {
+      rows: modifiedRows.map(r => ({
+        KEYID: r.KEYID,
+        TASK_NAME: r.TASK_NAME,
+        PAYMENT_MONTH: r.PAYMENT_MONTH,
+        PIC: r.PIC,
+        PART_NAME: r.PART_NAME,
+        GROUP_NAME: r.GROUP_NAME,
+        STATUS: r.STATUS || 'WAITING'
+      }))
+    })
+
+    ElMessage.success(res.data?.message || "Lưu dữ liệu thành công!")
+    await handleReload()
+  } catch (err) {
+    console.error("Lỗi khi lưu dòng:", err)
+    ElMessage.error(err.response?.data?.detail || "Lỗi khi lưu dữ liệu xuống Database!")
+  } finally {
+    isSaving.value = false
+  }
+}
+
+// 5. THAO TÁC DELETE (XÓA CÁC DÒNG ĐƯỢC CHỌN)
+const handleDelete = async () => {
+  if (selectedRows.value.length === 0) {
+    ElMessage.warning("Vui lòng chọn ít nhất 1 dòng để xóa.")
+    return
+  }
+
+  try {
+    await ElMessageBox.confirm(
+      `Bạn có chắc chắn muốn xóa ${selectedRows.value.length} dòng đã chọn?`,
+      'Xác nhận xóa',
+      { confirmButtonText: 'Xác nhận', cancelButtonText: 'Hủy', type: 'warning' }
+    )
+
+    // Tách dòng mới tạo (chưa lưu vào DB) và dòng đã có trong DB
+    const newKeys = selectedRows.value.filter(r => r.isNew).map(r => r.KEYID)
+    const dbKeys = selectedRows.value.filter(r => !r.isNew && r.KEYID).map(r => r.KEYID)
+
+    // Xóa các dòng mới khỏi RAM
+    if (newKeys.length > 0) {
+      tableData.value = tableData.value.filter(r => !selectedRows.value.includes(r))
+      total.value = Math.max(0, total.value - newKeys.length)
+    }
+
+    // Nếu có dòng trong DB, gọi API xóa
+    if (dbKeys.length > 0) {
+      const res = await axios.post(`${FASTAPI_BASE_URL}/mep_payment/delete_rows`, { keyids: dbKeys })
+      ElMessage.success(res.data?.message || `Đã xóa ${dbKeys.length} dòng thành công!`)
+      await handleReload()
+    } else {
+      ElMessage.success("Đã xóa dòng tạm khỏi bảng.")
+    }
+  } catch (err) {
+    if (err !== 'cancel') {
+      console.error("Lỗi xóa dòng:", err)
+      ElMessage.error("Không thể xóa dòng đã chọn!")
+    }
+  }
+}
+
+// 6. THAO TÁC TẢI BÁO CÁO (BLOB DOWNLOAD CHỐNG CHẶN)
+const handleDownloadFile = async (row) => {
+  if (!row.RESULT_LINK) return
+
+  try {
+    ElMessage.info("Đang chuẩn bị tải file báo cáo...")
+    const url = row.RESULT_LINK.startsWith('http') 
+      ? row.RESULT_LINK 
+      : `${FASTAPI_BASE_URL}${row.RESULT_LINK}`
+
+    // Tải mảng byte nhị phân Blob
+    const res = await axios.get(url, { responseType: 'blob' })
+
+    const contentType = res.headers['content-type'] || 'application/zip'
+    const blob = new Blob([res.data], { type: contentType })
+    const blobUrl = window.URL.createObjectURL(blob)
+
+    const filename = row.RESULT_LINK.split('/').pop() || `Bao_Cao_${row.KEYID}.zip`
+    const link = document.createElement('a')
+    link.href = blobUrl
+    link.download = filename
+    document.body.appendChild(link)
+    link.click()
+    document.body.removeChild(link)
+    window.URL.revokeObjectURL(blobUrl)
+
+    ElMessage.success("Tải file thành công!")
+  } catch (err) {
+    console.error("Lỗi download file:", err)
+    ElMessage.error("Không thể tải file báo cáo. Vui lòng kiểm tra lại server!")
+  }
+}
+
+// 7. XUẤT CSV (EXPORT .CSV)
+const handleExportCsv = () => {
+  if (tableData.value.length === 0) {
+    ElMessage.warning("Không có dữ liệu để xuất file CSV.")
+    return
+  }
+
+  const headers = ['STT', 'KEYID', 'TASK_NAME', 'PAYMENT_MONTH', 'PIC', 'PART_NAME', 'GROUP_NAME', 'STATUS', 'ERROR_COUNT']
+  const csvContent = [
+    headers.join(','),
+    ...tableData.value.map(row => [
+      row.STT,
+      `"${row.KEYID || ''}"`,
+      `"${row.TASK_NAME || ''}"`,
+      `"${row.PAYMENT_MONTH || ''}"`,
+      `"${row.PIC || ''}"`,
+      `"${row.PART_NAME || ''}"`,
+      `"${row.GROUP_NAME || ''}"`,
+      `"${row.STATUS || ''}"`,
+      row.ERROR_COUNT || 0
+    ].join(','))
+  ].join('\n')
+
+  const blob = new Blob(['\uFEFF' + csvContent], { type: 'text/csv;charset=utf-8;' })
+  const url = URL.createObjectURL(blob)
+  const a = document.createElement('a')
+  a.href = url
+  a.download = `MEP_Payment_${new Date().toISOString().slice(0, 10)}.csv`
+  a.click()
+  URL.revokeObjectURL(url)
+  ElMessage.success("Đã xuất file CSV thành công!")
+}
+
+// 8. TIẾP NHẬN UPLOAD FILE EXCEL
+const handleUploadExcel = async (file, row) => {
+  if (!file.name.endsWith('.xlsx') && !file.name.endsWith('.xlsm')) {
+    ElMessage.error("Chỉ chấp nhận file Excel (.xlsx / .xlsm)")
+    return
+  }
+
+  const formData = new FormData()
+  formData.append("file", file.raw)
+  formData.append("KEYID", row.KEYID)
+
+  row.STATUS = 'RUNNING'
+  row.REASON = 'Đang đẩy file lên AI Worker...'
+
+  try {
+    const res = await axios.post(`${FASTAPI_BASE_URL}/mep_payment/upload`, formData)
+    ElMessage.success(res.data.message || "Tải lên thành công! AI đang bóc tách ngầm.")
+    countdown.value = 10
+  } catch (err) {
+    row.STATUS = 'WAITING'
+    row.REASON = 'Lỗi upload file'
+    ElMessage.error("Lỗi khi kết nối Worker: " + (err.response?.data?.detail || err.message))
+  }
+}
+
+// 9. DUYỆT / TỪ CHỐI (REVIEW WORKFLOW)
+const handleReview = async (row, decision) => {
+  try {
+    await axios.post(`${FASTAPI_BASE_URL}/mep_payment/review`, {
+      keyid: row.KEYID,
+      decision: decision,
+      reviewer: 'Engineer'
+    })
+    row.REVIEW_DECISION = decision
+    ElMessage.success(`Đã lưu trạng thái: ${decision}`)
+  } catch (err) {
+    ElMessage.error("Lỗi lưu quyết định duyệt: " + err.message)
+  }
+}
+
+// Vòng đời Polling
 onMounted(() => {
   handleReload()
   timer = setInterval(() => {
@@ -249,72 +574,121 @@ watch([selectedStatus, selectedMonth], () => {
   page.value = 1
   handleReload()
 })
-
-const handleUploadExcel = async (file, row) => {
-  if (!file.name.endsWith('.xlsx') && !file.name.endsWith('.xlsm')) {
-    ElMessage.error("Chỉ chấp nhận file Excel (.xlsx / .xlsm)")
-    return
-  }
-
-  const formData = new FormData()
-  formData.append("file", file.raw)
-  formData.append("KEYID", row.KEYID)
-
-  row.STATUS = 'RUNNING'
-  row.REASON = 'Đang đẩy file lên AI Server...'
-
-  try {
-    const res = await axios.post(`${FASTAPI_BASE_URL}/mep_payment/upload`, formData)
-    if (res.data.status === "accepted") {
-      ElMessage.success(`Đã nạp file cho WO [${row.KEYID}]. AI đang phân tích...`)
-      setTimeout(handleReload, 2000)
-    } else {
-      ElMessage.error(res.data.message || "Upload thất bại!")
-      row.STATUS = 'CANCEL'
-    }
-  } catch (err) {
-    ElMessage.error("Mất kết nối tới Server FastAPI Worker!")
-    row.STATUS = 'CANCEL'
-  }
-}
-
-const handleReview = async (row, decision) => {
-  const actionText = decision === 'APPROVED' ? 'Duyệt thanh toán' : 'Từ chối thanh toán'
-  try {
-    const { value: note } = await ElMessageBox.prompt(`Nhập ghi chú ${actionText}:`, 'Xác nhận Review', {
-      confirmButtonText: 'Xác nhận',
-      cancelButtonText: 'Hủy'
-    })
-
-    await axios.post(`${FASTAPI_BASE_URL}/mep_payment/review`, {
-      keyid: row.KEYID,
-      decision: decision,
-      note: note || '',
-      reviewer: 'PIC'
-    })
-
-    ElMessage.success(`Đã cập nhật: ${actionText}`)
-    handleReload()
-  } catch {
-    // User cancels prompt
-  }
-}
-
-const getDownloadUrl = (link) => {
-  if (!link) return '#'
-  return link.startsWith('http') ? link : `${FASTAPI_BASE_URL}${link}`
-}
 </script>
 
 <style scoped>
-.mep-container { padding: 12px; }
-.toolbar { display: flex; flex-wrap: wrap; gap: 12px; align-items: center; margin-bottom: 15px; }
-.table-container { width: 100%; overflow-x: auto; }
-.font-bold { font-weight: 600; }
-.download-link { color: #67C23A; font-weight: bold; text-decoration: underline; cursor: pointer; display: inline-block; }
-.download-link:hover { color: #85ce61; }
-.text-reason { color: #F56C6C; font-size: 11px; }
-.pagination-bar { display: flex; align-items: center; justify-content: center; gap: 10px; margin-top: 15px; }
-.page-indicator { margin-left: 10px; color: #909399; }
-</style>
+.mep-container {
+  padding: 14px;
+  background-color: #141414;
+  color: #E5EAF3;
+  min-height: 100vh;
+}
 
+.toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  align-items: center;
+  margin-bottom: 12px;
+}
+
+/* THANH CÔNG CỤ TOOLBAR THEO ẢNH 3.WEBP & 4.WEBP */
+.table-action-bar {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 10px;
+  padding: 0 4px;
+}
+
+.total-count {
+  font-size: 13px;
+  color: #A3A6AD;
+}
+
+.count-number {
+  color: #E5EAF3;
+  font-weight: 600;
+}
+
+.action-buttons {
+  display: flex;
+  gap: 8px;
+}
+
+.btn-delete {
+  background-color: #F56C6C;
+  border-color: #F56C6C;
+  color: #FFF;
+  font-weight: 500;
+}
+
+.btn-insert, .btn-export {
+  background-color: #262727;
+  border-color: #4C4D4F;
+  color: #E5EAF3;
+}
+
+.btn-insert:hover, .btn-export:hover {
+  background-color: #363637;
+  border-color: #606266;
+  color: #409EFF;
+}
+
+.btn-save {
+  background-color: #409EFF;
+  border-color: #409EFF;
+  color: #FFF;
+  font-weight: 500;
+}
+
+.table-container {
+  width: 100%;
+  overflow-x: auto;
+}
+
+.font-bold {
+  font-weight: 600;
+}
+
+.cell-text {
+  cursor: pointer;
+  display: inline-block;
+  width: 100%;
+}
+
+.cell-text:hover {
+  color: #409EFF;
+  text-decoration: underline;
+}
+
+.inline-input :deep(.el-input__inner) {
+  background-color: #1D1E1F;
+  border-color: #409EFF;
+  color: #FFF;
+}
+
+.download-btn {
+  color: #67C23A;
+  font-weight: 600;
+  text-decoration: underline;
+  cursor: pointer;
+}
+
+.download-btn:hover {
+  color: #85CE61;
+}
+
+.text-reason {
+  color: #F56C6C;
+  font-size: 11px;
+}
+
+.pagination-bar {
+  display: flex;
+  justify-content: flex-end;
+  align-items: center;
+  gap: 8px;
+  margin-top: 14px;
+}
+</style>

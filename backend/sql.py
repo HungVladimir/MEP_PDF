@@ -96,3 +96,81 @@ def update_review_decision(keyid: str, decision: str, note: str, reviewer: str):
         cursor.close()
         conn.close()
 
+def batch_upsert_tasks(rows: list):
+    """
+    Thực hiện MERGE INTO để vừa hỗ trợ Insert dòng mới vừa hỗ trợ Update dòng cũ vào Oracle DB.
+    """
+    conn = get_connection()
+    if not conn:
+        print(f"⚠️ [DB Mock] Đã lưu mock {len(rows)} dòng.")
+        return len(rows)
+
+    cursor = conn.cursor()
+    try:
+        sql = """
+            MERGE INTO LOCAL_AI.MEP_PAYMENT_ANALYSIS T
+            USING (
+                SELECT :keyid AS KEYID,
+                       :task_name AS TASK_NAME,
+                       :payment_month AS PAYMENT_MONTH,
+                       :pic AS PIC,
+                       :part_name AS PART_NAME,
+                       :group_name AS GROUP_NAME,
+                       :status AS STATUS
+                FROM DUAL
+            ) S
+            ON (T.KEYID = S.KEYID)
+            WHEN MATCHED THEN
+                UPDATE SET T.TASK_NAME     = S.TASK_NAME,
+                           T.PAYMENT_MONTH = S.PAYMENT_MONTH,
+                           T.PIC           = S.PIC,
+                           T.PART_NAME     = S.PART_NAME,
+                           T.GROUP_NAME    = S.GROUP_NAME
+            WHEN NOT MATCHED THEN
+                INSERT (KEYID, TASK_NAME, PAYMENT_MONTH, PIC, PART_NAME, GROUP_NAME, STATUS, UPLOAD_TIME)
+                VALUES (S.KEYID, S.TASK_NAME, S.PAYMENT_MONTH, S.PIC, S.PART_NAME, S.GROUP_NAME, S.STATUS, SYSDATE)
+        """
+        for r in rows:
+            cursor.execute(sql, {
+                "keyid": str(r.get("KEYID", "")).strip(),
+                "task_name": str(r.get("TASK_NAME", "")).strip(),
+                "payment_month": str(r.get("PAYMENT_MONTH", "")).strip(),
+                "pic": str(r.get("PIC", "")).strip(),
+                "part_name": str(r.get("PART_NAME", "")).strip(),
+                "group_name": str(r.get("GROUP_NAME", "")).strip(),
+                "status": str(r.get("STATUS", "WAITING")).strip()
+            })
+        conn.commit()
+        print(f"✅ [Oracle DB] Đã lưu thành công {len(rows)} dòng vào MEP_PAYMENT_ANALYSIS.")
+        return len(rows)
+    except Exception as e:
+        print(f"❌ [Oracle DB Error] Lỗi batch_upsert_tasks: {e}")
+        raise
+    finally:
+        cursor.close()
+        conn.close()
+
+def delete_tasks(keyids: list):
+    """Xóa các dòng được chọn khỏi Oracle DB theo danh sách KEYID."""
+    if not keyids:
+        return 0
+    conn = get_connection()
+    if not conn:
+        print(f"⚠️ [DB Mock] Đã xóa mock {len(keyids)} dòng.")
+        return len(keyids)
+
+    cursor = conn.cursor()
+    try:
+        for k in keyids:
+            cursor.execute("DELETE FROM LOCAL_AI.MEP_PAYMENT_ANALYSIS WHERE KEYID = :keyid", {"keyid": str(k).strip()})
+        conn.commit()
+        print(f"🗑️ [Oracle DB] Đã xóa {len(keyids)} dòng khỏi MEP_PAYMENT_ANALYSIS.")
+        return len(keyids)
+    except Exception as e:
+        print(f"❌ [Oracle DB Error] Lỗi delete_tasks: {e}")
+        raise
+    finally:
+        cursor.close()
+        conn.close()
+
+

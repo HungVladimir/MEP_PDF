@@ -37,3 +37,14 @@ export async function get_data_page(page = 1, pageSize = 50, status = "ALL", pay
   return res.data[reqId].VAL
 }
 
+export async function save_mep_rows(rows = []) {
+  // Gửi danh sách dòng mới / sửa xuống API Worker
+  const res = await api.post("/mep_payment/save_rows", { rows })
+  return res.data
+}
+
+export async function delete_mep_rows(keyids = []) {
+  // Gửi danh sách KEYID cần xóa xuống API Worker
+  const res = await api.post("/mep_payment/delete_rows", { keyids })
+  return res.data
+}
