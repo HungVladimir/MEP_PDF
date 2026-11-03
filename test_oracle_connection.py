@@ -78,21 +78,30 @@ print(f"  * ORACLE_CLIENT_LIB_DIR: {oracle_client_dir or '<None>'}")
 
 # 3. KIỂM TRA THƯ VIỆN ORACLE INSTANT CLIENT (THICK CLIENT)
 print("\n--- [2] KIEM TRA ORACLE INSTANT CLIENT (THICK CLIENT) ---")
-if not oracle_client_dir:
-    print("[NOTE] ORACLE_CLIENT_LIB_DIR chua cau hinh. Thu vien oracledb se thu o che do Thin Mode.")
-else:
-    if os.path.exists(oracle_client_dir):
-        print(f"[OK] Thu muc ton tai: {oracle_client_dir}")
-        oci_dll = Path(oracle_client_dir) / "oci.dll"
-        clntsh = Path(oracle_client_dir) / "libclntsh.so"
-        if oci_dll.exists():
-            print(f"[OK] Da tim thay Windows Instant Client DLL: {oci_dll}")
-        elif clntsh.exists():
-            print(f"[OK] Da tim thay Linux Instant Client SO: {clntsh}")
-        else:
-            print("[CANH BAO] Khong thay oci.dll hoac libclntsh.so trong thu muc client!")
+if not oracle_client_dir or not os.path.exists(oracle_client_dir):
+    print(f"[CANH BAO] Duong dan trong .env khong ton tai: '{oracle_client_dir}'")
+    # Tu dong quet tim thu muc oracle_client tren may
+    found_cand = None
+    for cand in [Path("oracle_client"), Path("../oracle_client"), Path(__file__).resolve().parent / "oracle_client", Path(r"C:\oracle_client"), Path(r"C:\instantclient_19_19"), Path(r"C:\instantclient_23_7")]:
+        if cand.exists():
+            found_cand = str(cand.resolve())
+            break
+    if found_cand:
+        print(f"[TIM THAY TU DONG] Phat hien thu muc chua client tai: {found_cand}")
+        oracle_client_dir = found_cand
     else:
-        print(f"[ERROR] Thu muc khong ton tai tren may: {oracle_client_dir}")
+        print("[NOTE] Khong tim thay thu muc Oracle Client. Thu vien oracledb se thu o che do Thin Mode.")
+
+if oracle_client_dir and os.path.exists(oracle_client_dir):
+    print(f"[OK] Thu muc ton tai: {oracle_client_dir}")
+    oci_dll = Path(oracle_client_dir) / "oci.dll"
+    clntsh = Path(oracle_client_dir) / "libclntsh.so"
+    if oci_dll.exists():
+        print(f"[OK] Da tim thay Windows Instant Client DLL: {oci_dll}")
+    elif clntsh.exists():
+        print(f"[OK] Da tim thay Linux Instant Client SO: {clntsh}")
+    else:
+        print("[CANH BAO] Khong thay oci.dll hoac libclntsh.so trong thu muc client!")
 
 # Kiểm tra thư viện oracledb
 try:

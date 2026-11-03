@@ -1,13 +1,14 @@
 # ====================================================================
 # THAO TÁC CƠ SỞ DỮ LIỆU ORACLE (ORACLE SQL HELPER)
-# Dự án: MEP Payment AI - Tích hợp OneAI Portal
-# Hỗ trợ cả 2 chuẩn: Thư viện OneAI SDV nội bộ (oracle_conn) & oracledb Thick Client
+# Dự án: MEP Payment AI - Chuẩn hóa 100% theo kiến trúc OneAI công ty
+# Sử dụng trực tiếp Oracle DB (Schema LOCAL_AI.MEP_PAYMENT_ANALYSIS)
 # ====================================================================
 import os
 import sys
 from pathlib import Path
+import oracledb
 
-# Đảm bảo mã hóa UTF-8 cho console Windows để không bị lỗi font Tiếng Việt
+# Đảm bảo console Windows chạy đúng UTF-8
 if sys.stdout and hasattr(sys.stdout, 'reconfigure'):
     try:
         sys.stdout.reconfigure(encoding='utf-8')
@@ -15,52 +16,54 @@ if sys.stdout and hasattr(sys.stdout, 'reconfigure'):
     except Exception:
         pass
 
-# 1. TỰ ĐỘNG TẢI CẤU HÌNH TỪ .ENV (HỖ TRỢ CẢ KHI CÓ HOẶC CHƯA CÓ THƯ VIỆN DOTENV)
-def load_env_variables():
-    # Thử dùng python-dotenv nếu đã cài
-    try:
-        from dotenv import load_dotenv, find_dotenv
-        env_file = find_dotenv()
-        if env_file:
-            load_dotenv(env_file)
-            return
-    except ImportError:
-        pass
+# 1. NẠP CẤU HÌNH BIẾN MÔI TRƯỜNG TỪ .ENV
+try:
+    from dotenv import load_dotenv, find_dotenv
+    env_file = find_dotenv()
+    if env_file:
+        load_dotenv(env_file)
+    else:
+        load_dotenv()
+except ImportError:
+    pass
 
-    # Nếu chưa cài python-dotenv, tự quét và nạp file .env thủ công
-    candidates = [
-        Path(".env"),
-        Path("../.env"),
-        Path(__file__).resolve().parent / ".env",
-        Path(__file__).resolve().parent.parent / ".env",
-    ]
-    for p in candidates:
-        if p.exists() and p.is_file():
-            with open(p, "r", encoding="utf-8") as f:
-                for line in f:
-                    line = line.strip()
-                    if line and not line.startswith("#") and "=" in line:
-                        k, v = line.split("=", 1)
-                        k = k.strip()
-                        v = v.strip().strip("'").strip('"')
-                        if k not in os.environ:
-                            os.environ[k] = v
-            break
-
-load_env_variables()
-
-# 2. CẤU HÌNH THÔNG SỐ DATABASE THEO QUY CHUẨN CÔNG TY (YMS / ONEAI)
 DB_USER_YMS = os.getenv("DB_USER_YMS")
 DB_PASSWORD_YMS = os.getenv("DB_PASSWORD_YMS")
 TNS_YMS = os.getenv("TNS_YMS")
 
-# Tài khoản Local AI chuyên dụng
-DB_USER_YMS_AI = os.getenv("DB_USER_YMS_AI") or DB_USER_YMS or os.getenv("DB_USER", "LOCAL_AI")
-DB_PASSWORD_YMS_AI = os.getenv("DB_PASSWORD_YMS_AI") or DB_PASSWORD_YMS or os.getenv("DB_PASSWORD", "")
-DNS_NAME = "MBAYMS"  # Cố định MBAYMS theo đúng chuẩn hạ tầng OneAI / SDV công ty
-oracle_client_path = os.getenv("ORACLE_CLIENT_LIB_DIR")
+# Tài khoản Local AI chuyên trách
+DB_USER_YMS_AI = os.getenv("DB_USER_YMS_AI")
+DB_PASSWORD_YMS_AI = os.getenv("DB_PASSWORD_YMS_AI")
 
-# 3. KIỂM TRA THƯ VIỆN NỘI BỘ ONEAI SDV
+# 2. TỰ ĐỘNG TÌM THƯ MỤC ORACLE INSTANT CLIENT (CHỨA OCI.DLL)
+oracle_client_path = os.getenv("ORACLE_CLIENT_LIB_DIR")
+if not oracle_client_path or not os.path.exists(oracle_client_path):
+    # Quét tự động các vị trí phổ biến chứa oracle_client
+    candidates = [
+        Path(__file__).resolve().parent / "oracle_client",
+        Path(__file__).resolve().parent.parent / "oracle_client",
+        Path(r"C:\oracle_client"),
+        Path(r"C:\instantclient_19_19"),
+        Path(r"C:\instantclient_23_7"),
+        Path("/opt/oracle/instantclient_23_7"),
+        Path("/service/oracle_client"),
+    ]
+    for cand in candidates:
+        if cand.exists():
+            oracle_client_path = str(cand)
+            break
+
+# 3. KHỞI TẠO ORACLE THICK CLIENT (BẮT BUỘC ĐỂ TRÁNH LỖI DPY-3015)
+if oracle_client_path and os.path.exists(oracle_client_path):
+    try:
+        oracledb.init_oracle_client(lib_dir=oracle_client_path)
+        print(f"[Oracle] Da khoi tao Oracle Thick Client tai: {oracle_client_path}")
+    except Exception as e:
+        pass
+else:
+    print(f"[CANH BAO] Chua tim thay thu muc Oracle Client tai: {oracle_client_path}")
+
+# 4. KIỂM TRA THƯ VIỆN NỘI BỘ ONEAI SDV
 try:
     from oneai_sdv import oracle_conn, result_type
     HAS_ONEAI_SDV = True
@@ -68,162 +71,19 @@ except ImportError:
     oracle_conn = None
     HAS_ONEAI_SDV = False
 
-# 4. KIỂM TRA THƯ VIỆN ORACLEDB
-try:
-    import oracledb
-    HAS_ORACLEDB = True
-except ImportError:
-    oracledb = None
-    HAS_ORACLEDB = False
-
-# 5. KHỞI TẠO ORACLE THICK CLIENT (NẾU CÓ ĐƯỜNG DẪN INSTANT CLIENT)
-_oracle_client_initialized = False
-
-def init_oracle_client():
-    """Khởi tạo Oracle Thick Client một lần duy nhất."""
-    global _oracle_client_initialized
-    if _oracle_client_initialized or not HAS_ORACLEDB:
-        return
-    client_dir = os.getenv("ORACLE_CLIENT_LIB_DIR")
-    if client_dir and os.path.exists(client_dir):
-        try:
-            oracledb.init_oracle_client(lib_dir=client_dir)
-            _oracle_client_initialized = True
-            print(f"[Oracle] Khoi tao Thick Client thanh cong: {client_dir}")
-        except Exception as e:
-            _oracle_client_initialized = True
-            print(f"[Oracle Thick Client Note] {e}")
-
-# 6. KẾT NỐI ORACLE NATIVE (FALLBACK KHI KHÔNG CÓ ONEAI_SDV)
+# 5. HÀM LẤY KẾT NỐI DỰ PHÒNG NẾU KHÔNG CÓ ONEAI_SDV
 def get_native_conn():
-    """
-    Tạo kết nối trực tiếp bằng oracledb.
-    Theo chuẩn code công ty:
-      Cách A: Dùng user=DB_USER_YMS, pass=DB_PASSWORD_YMS, dsn=TNS_YMS
-      Cách B: Dùng user=DB_USER_YMS_AI, pass=DB_PASSWORD_YMS_AI, dsn=MBAYMS
-    """
-    if not HAS_ORACLEDB:
-        raise RuntimeError("Moi truong Python chua cai dat thu vien 'oracledb'. Hay chay: pip install oracledb")
+    """Dùng oracledb native Thick Client kết nối qua TNS_YMS."""
+    if not oracle_client_path or not os.path.exists(oracle_client_path):
+        raise RuntimeError(
+            f"Không tìm thấy thư mục Oracle Client chứa oci.dll tại: '{oracle_client_path}'. "
+            "Vui lòng kiểm tra lại đường dẫn ORACLE_CLIENT_LIB_DIR trong file .env!"
+        )
+    return oracledb.connect(user=DB_USER_YMS, password=DB_PASSWORD_YMS, dsn=TNS_YMS)
 
-    init_oracle_client()
-    errors = []
-
-    # CÁCH A: Kết nối bằng tài khoản YMS và chuỗi TNS_YMS (Đúng y hệt code anh Triệu Minh Đức)
-    if DB_USER_YMS and DB_PASSWORD_YMS and TNS_YMS:
-        try:
-            return oracledb.connect(user=DB_USER_YMS, password=DB_PASSWORD_YMS, dsn=TNS_YMS)
-        except Exception as e:
-            errors.append(f"Cach A (YMS + TNS_YMS): {e}")
-
-    # CÁCH B: Kết nối bằng tài khoản AI và DSN MBAYMS
-    if DB_USER_YMS_AI and DB_PASSWORD_YMS_AI:
-        try:
-            dsn_target = TNS_YMS or DNS_NAME
-            return oracledb.connect(user=DB_USER_YMS_AI, password=DB_PASSWORD_YMS_AI, dsn=dsn_target)
-        except Exception as e:
-            errors.append(f"Cach B (AI + {DNS_NAME}): {e}")
-
-    # CÁCH C: Kết nối bằng Host:Port nếu có khai báo
-    host = os.getenv("DB_HOST")
-    if host:
-        try:
-            port = int(os.getenv("DB_PORT", 1521))
-            user = DB_USER_YMS or DB_USER_YMS_AI
-            password = DB_PASSWORD_YMS or DB_PASSWORD_YMS_AI
-            return oracledb.connect(user=user, password=password, host=host, port=port, service_name=DNS_NAME)
-        except Exception as e:
-            errors.append(f"Cach C (Host/Port): {e}")
-
-    err_msg = " | ".join(errors) if errors else "Thieu thong tin ket noi trong .env (DB_USER_YMS, DB_PASSWORD_YMS, TNS_YMS)"
-    raise RuntimeError(f"Khong the ket noi Oracle DB: {err_msg}")
-
-# 7. BỘ THỰC THI DML AN TOÀN (DÙNG ĐƯỢC CẢ ONEAI_SDV VÀ NATIVE ORACLEDB)
-def execute_dml(sql: str, params: dict = None):
-    """Thực thi câu lệnh DML đơn lẻ (UPDATE / DELETE / INSERT)."""
-    if params is None:
-        params = {}
-
-    # Ưu tiên 1: Sử dụng thư viện nội bộ OneAI SDV (chuẩn như update_status_spec)
-    if HAS_ONEAI_SDV and oracle_conn is not None:
-        try:
-            cur = oracle_conn(
-                dns=DNS_NAME,
-                user_name=DB_USER_YMS_AI,
-                password=DB_PASSWORD_YMS_AI,
-                oracle_client_dir=oracle_client_path,
-            )
-            cur.execute(sql, params=params)
-
-            if hasattr(cur, "connection") and cur.connection:
-                try: cur.connection.commit()
-                except Exception: pass
-            elif hasattr(cur, "commit"):
-                try: cur.commit()
-                except Exception: pass
-
-            if hasattr(cur, "close"):
-                try: cur.close()
-                except Exception: pass
-            return
-        except Exception as e:
-            print(f"[OneAI SDV Warning] {e}. Dang chuyen sang oracledb native...")
-
-    # Ưu tiên 2: Sử dụng thư viện oracledb native
-    conn = get_native_conn()
-    cursor = conn.cursor()
-    try:
-        cursor.execute(sql, params)
-        conn.commit()
-    finally:
-        cursor.close()
-        conn.close()
-
-def execute_dml_batch(sql: str, params_list: list) -> int:
-    """Thực thi danh sách lệnh DML trong 1 transaction an toàn."""
-    if not params_list:
-        return 0
-
-    # Ưu tiên 1: Thư viện OneAI SDV
-    if HAS_ONEAI_SDV and oracle_conn is not None:
-        try:
-            cur = oracle_conn(
-                dns=DNS_NAME,
-                user_name=DB_USER_YMS_AI,
-                password=DB_PASSWORD_YMS_AI,
-                oracle_client_dir=oracle_client_path,
-            )
-            for p in params_list:
-                cur.execute(sql, params=p)
-
-            if hasattr(cur, "connection") and cur.connection:
-                try: cur.connection.commit()
-                except Exception: pass
-            elif hasattr(cur, "commit"):
-                try: cur.commit()
-                except Exception: pass
-
-            if hasattr(cur, "close"):
-                try: cur.close()
-                except Exception: pass
-            return len(params_list)
-        except Exception as e:
-            print(f"[OneAI SDV Batch Warning] {e}. Dang chuyen sang oracledb native...")
-
-    # Ưu tiên 2: Thư viện oracledb native
-    conn = get_native_conn()
-    cursor = conn.cursor()
-    try:
-        for p in params_list:
-            cursor.execute(sql, p)
-        conn.commit()
-        return len(params_list)
-    finally:
-        cursor.close()
-        conn.close()
-
-# 8. CÁC NGHIỆP VỤ DATABASE PHỤC VỤ MEP PAYMENT
+# 6. CÁC NGHIỆP VỤ DATABASE PHỤC VỤ BẢNG LOCAL_AI.MEP_PAYMENT_ANALYSIS
 def update_task_status(keyid: str, status: str, error_count: int = 0, result_link: str = None, reason: str = ""):
-    """Cập nhật trạng thái công việc vào bảng LOCAL_AI.MEP_PAYMENT_ANALYSIS."""
+    """Cập nhật trạng thái tiến độ vào bảng LOCAL_AI.MEP_PAYMENT_ANALYSIS."""
     sql = """
         UPDATE LOCAL_AI.MEP_PAYMENT_ANALYSIS
         SET STATUS       = :STATUS,
@@ -241,8 +101,26 @@ def update_task_status(keyid: str, status: str, error_count: int = 0, result_lin
         "REASON": reason,
         "KEYID": str(keyid).strip()
     }
-    execute_dml(sql, params)
-    print(f"[Oracle DB] Da cap nhat KEYID={keyid} -> STATUS={status}")
+    try:
+        if HAS_ONEAI_SDV and oracle_conn is not None:
+            cur = oracle_conn(
+                dns="MBAYMS",
+                user_name=DB_USER_YMS_AI,
+                password=DB_PASSWORD_YMS_AI,
+                oracle_client_dir=oracle_client_path,
+            )
+            cur.execute(sql, params=params)
+        else:
+            conn = get_native_conn()
+            c = conn.cursor()
+            c.execute(sql, params)
+            conn.commit()
+            c.close()
+            conn.close()
+        print(f"[Oracle DB] Da cap nhat KEYID={keyid} -> STATUS={status}")
+    except Exception as e:
+        print(f"[Oracle DB Error] update_task_status: {e}")
+        raise
 
 def update_review_decision(keyid: str, decision: str, note: str, reviewer: str):
     """Cập nhật quyết định phê duyệt (Approve / Reject) của kỹ sư."""
@@ -259,11 +137,29 @@ def update_review_decision(keyid: str, decision: str, note: str, reviewer: str):
         "REVIEWER": reviewer,
         "KEYID": str(keyid).strip()
     }
-    execute_dml(sql, params)
-    print(f"[Oracle DB] Da luu Review cho KEYID={keyid} -> {decision}")
+    try:
+        if HAS_ONEAI_SDV and oracle_conn is not None:
+            cur = oracle_conn(
+                dns="MBAYMS",
+                user_name=DB_USER_YMS_AI,
+                password=DB_PASSWORD_YMS_AI,
+                oracle_client_dir=oracle_client_path,
+            )
+            cur.execute(sql, params=params)
+        else:
+            conn = get_native_conn()
+            c = conn.cursor()
+            c.execute(sql, params)
+            conn.commit()
+            c.close()
+            conn.close()
+        print(f"[Oracle DB] Da luu Review cho KEYID={keyid} -> {decision}")
+    except Exception as e:
+        print(f"[Oracle DB Error] update_review_decision: {e}")
+        raise
 
 def batch_upsert_tasks(rows: list) -> int:
-    """MERGE INTO bảng LOCAL_AI.MEP_PAYMENT_ANALYSIS (Insert & Update)."""
+    """MERGE INTO bảng LOCAL_AI.MEP_PAYMENT_ANALYSIS (Insert dòng mới & Update dòng cũ)."""
     if not rows:
         return 0
 
@@ -302,17 +198,59 @@ def batch_upsert_tasks(rows: list) -> int:
         }
         for r in rows
     ]
-    count = execute_dml_batch(sql, params_list)
-    print(f"[Oracle DB] Da luu thanh cong {count} dong vao MEP_PAYMENT_ANALYSIS.")
-    return count
+    try:
+        if HAS_ONEAI_SDV and oracle_conn is not None:
+            cur = oracle_conn(
+                dns="MBAYMS",
+                user_name=DB_USER_YMS_AI,
+                password=DB_PASSWORD_YMS_AI,
+                oracle_client_dir=oracle_client_path,
+            )
+            for p in params_list:
+                cur.execute(sql, params=p)
+        else:
+            conn = get_native_conn()
+            c = conn.cursor()
+            for p in params_list:
+                c.execute(sql, p)
+            conn.commit()
+            c.close()
+            conn.close()
+
+        print(f"[Oracle DB] Da MERGE thanh cong {len(rows)} dong vao MEP_PAYMENT_ANALYSIS.")
+        return len(rows)
+    except Exception as e:
+        print(f"[Oracle DB Error] batch_upsert_tasks: {e}")
+        raise
 
 def delete_tasks(keyids: list) -> int:
-    """Xóa các dòng được chọn khỏi Oracle DB theo danh sách KEYID."""
+    """Xóa các dòng được chọn khỏi bảng LOCAL_AI.MEP_PAYMENT_ANALYSIS."""
     if not keyids:
         return 0
 
     sql = "DELETE FROM LOCAL_AI.MEP_PAYMENT_ANALYSIS WHERE KEYID = :KEYID"
     params_list = [{"KEYID": str(k).strip()} for k in keyids]
-    count = execute_dml_batch(sql, params_list)
-    print(f"[Oracle DB] Da xoa {count} dong khoi MEP_PAYMENT_ANALYSIS.")
-    return count
+    try:
+        if HAS_ONEAI_SDV and oracle_conn is not None:
+            cur = oracle_conn(
+                dns="MBAYMS",
+                user_name=DB_USER_YMS_AI,
+                password=DB_PASSWORD_YMS_AI,
+                oracle_client_dir=oracle_client_path,
+            )
+            for p in params_list:
+                cur.execute(sql, params=p)
+        else:
+            conn = get_native_conn()
+            c = conn.cursor()
+            for p in params_list:
+                c.execute(sql, p)
+            conn.commit()
+            c.close()
+            conn.close()
+
+        print(f"[Oracle DB] Da xoa {len(keyids)} dong khoi MEP_PAYMENT_ANALYSIS.")
+        return len(keyids)
+    except Exception as e:
+        print(f"[Oracle DB Error] delete_tasks: {e}")
+        raise

@@ -3,6 +3,14 @@
 
 > **Tài liệu tổng hợp toàn diện (Consolidated Master Guide):** Hợp nhất đầy đủ từ các bản kế hoạch thi công, hướng dẫn triển khai OneAI, thiết kế thanh công cụ Toolbar (Delete, Insert, Save) theo mẫu OneAI thực tế, cơ chế tải file Blob nén `.zip` chống chặn mạng doanh nghiệp, và hướng dẫn vận hành End-to-End.
 
+> [!IMPORTANT]
+> **TÓM TẮT THAO TÁC THỰC THI (QUICK START - MỚI NHẤT):**
+> 1. Bạn **chỉ việc lấy code mới nhất hiện tại** trong thư mục `MEP_OneAI_System`. Toàn bộ code đã được đồng bộ, fix sạch lỗi và sẵn sàng chạy!
+> 2. Bạn chỉ cần thực hiện đúng **2 việc duy nhất**:
+>    * **Việc 1:** Trong file `.env`, đảm bảo dòng `ORACLE_CLIENT_LIB_DIR` trỏ đúng vào thư mục chứa file `oci.dll` trên máy bạn (ví dụ: `ORACLE_CLIENT_LIB_DIR=C:\oracle_client`).
+>    * **Việc 2:** Chạy lệnh `python init_oracle_table.py` để tạo bảng `LOCAL_AI.MEP_PAYMENT_ANALYSIS` trên Oracle DB của công ty (hoặc copy SQL ở Bước 1 dán vào DBeaver rồi ấn F5).
+> 3. Khởi động Worker: `python backend/main.py` $\rightarrow$ Mở Web kiểm tra: Insert, Save, Delete, Upload file, AI bóc tách đối soát chạy trực tiếp trên Oracle DB công ty!
+
 ---
 
 ## MỤC LỤC TỔNG QUAN
@@ -770,29 +778,58 @@ watch([selectedStatus, selectedMonth], () => { page.value = 1; handleReload(); }
 ## 7. BƯỚC 5: XÂY DỰNG FASTAPI WORKER BACKEND (`api.py` & `sql.py`)
 
 ### 1. File Database Helper: `backend/sql.py`
-File này hỗ trợ 2 chế độ kết nối song song: Thư viện `oneai_sdv` nội bộ công ty (nếu chạy trong môi trường OneAI Portal) và `oracledb` Thick Client native (qua Oracle Instant Client & file `.env`). Đặc biệt, không dùng cơ chế mock giả mạo thành công khi DB lỗi, giúp frontend bắt chính xác lỗi thực tế:
+File này kết nối trực tiếp Oracle DB (Schema `LOCAL_AI.MEP_PAYMENT_ANALYSIS`) thông qua thư viện `oneai_sdv.oracle_conn` (hoặc `oracledb` Thick Client native). Tự động nhận diện thư mục Oracle Instant Client trên máy và trên Docker:
 
 ```python
 # ====================================================================
 # THAO TÁC CƠ SỞ DỮ LIỆU ORACLE (ORACLE SQL HELPER)
 # Đường dẫn: backend/sql.py
-# Hỗ trợ cả 2 chuẩn: Thư viện OneAI SDV nội bộ (oracle_conn) & oracledb Thick Client
+# Chuẩn hóa theo kiến trúc OneAI: Schema LOCAL_AI.MEP_PAYMENT_ANALYSIS
 # ====================================================================
 import os
+import sys
 from pathlib import Path
-from dotenv import load_dotenv, find_dotenv
+import oracledb
 
-# Tự động nạp thông số kết nối từ file .env
-load_dotenv(find_dotenv())
+# Nạp cấu hình biến môi trường từ .env
+try:
+    from dotenv import load_dotenv, find_dotenv
+    env_file = find_dotenv()
+    if env_file: load_dotenv(env_file)
+    else: load_dotenv()
+except ImportError:
+    pass
 
 DB_USER_YMS = os.getenv("DB_USER_YMS")
 DB_PASSWORD_YMS = os.getenv("DB_PASSWORD_YMS")
 TNS_YMS = os.getenv("TNS_YMS")
 
-DB_USER_YMS_AI = os.getenv("DB_USER_YMS_AI") or DB_USER_YMS or os.getenv("DB_USER", "LOCAL_AI")
-DB_PASSWORD_YMS_AI = os.getenv("DB_PASSWORD_YMS_AI") or DB_PASSWORD_YMS or os.getenv("DB_PASSWORD", "")
-DNS_NAME = os.getenv("DB_SERVICE") or TNS_YMS or "MBAYMS"
+DB_USER_YMS_AI = os.getenv("DB_USER_YMS_AI")
+DB_PASSWORD_YMS_AI = os.getenv("DB_PASSWORD_YMS_AI")
+
+# Tự động nhận diện thư mục Oracle Instant Client
 oracle_client_path = os.getenv("ORACLE_CLIENT_LIB_DIR")
+if not oracle_client_path or not os.path.exists(oracle_client_path):
+    candidates = [
+        Path(__file__).resolve().parent / "oracle_client",
+        Path(__file__).resolve().parent.parent / "oracle_client",
+        Path(r"C:\oracle_client"),
+        Path(r"C:\instantclient_19_19"),
+        Path(r"C:\instantclient_23_7"),
+        Path("/opt/oracle/instantclient_23_7"),
+        Path("/service/oracle_client"),
+    ]
+    for cand in candidates:
+        if cand.exists():
+            oracle_client_path = str(cand)
+            break
+
+# Khởi tạo Oracle Thick Client
+if oracle_client_path and os.path.exists(oracle_client_path):
+    try:
+        oracledb.init_oracle_client(lib_dir=oracle_client_path)
+    except Exception:
+        pass
 
 try:
     from oneai_sdv import oracle_conn, result_type
@@ -801,78 +838,8 @@ except ImportError:
     oracle_conn = None
     HAS_ONEAI_SDV = False
 
-import oracledb
-
-_oracle_client_initialized = False
-
-def init_oracle_client():
-    global _oracle_client_initialized
-    if _oracle_client_initialized:
-        return
-    client_dir = os.getenv("ORACLE_CLIENT_LIB_DIR")
-    if client_dir and os.path.exists(client_dir):
-        try:
-            oracledb.init_oracle_client(lib_dir=client_dir)
-            _oracle_client_initialized = True
-        except Exception:
-            _oracle_client_initialized = True
-
 def get_native_conn():
-    init_oracle_client()
-    user = DB_USER_YMS_AI
-    password = DB_PASSWORD_YMS_AI
-    dsn_target = TNS_YMS or DNS_NAME
-    if dsn_target:
-        try:
-            return oracledb.connect(user=user, password=password, dsn=dsn_target)
-        except Exception as e:
-            raise RuntimeError(f"Lỗi kết nối Oracle DSN '{dsn_target}': {e}")
-    raise RuntimeError("Thiếu thông tin kết nối DB trong .env")
-
-def execute_dml(sql: str, params: dict = None):
-    if params is None: params = {}
-    if HAS_ONEAI_SDV and oracle_conn is not None:
-        try:
-            cur = oracle_conn(dns=DNS_NAME, user_name=DB_USER_YMS_AI, password=DB_PASSWORD_YMS_AI, oracle_client_dir=oracle_client_path)
-            cur.execute(sql, params)
-            if hasattr(cur, "connection") and cur.connection:
-                try: cur.connection.commit()
-                except Exception: pass
-            return
-        except Exception as e:
-            print(f"⚠️ [OneAI SDV Error] {e}. Chuyển sang oracledb...")
-
-    conn = get_native_conn()
-    cursor = conn.cursor()
-    try:
-        cursor.execute(sql, params)
-        conn.commit()
-    finally:
-        cursor.close()
-        conn.close()
-
-def execute_dml_batch(sql: str, params_list: list) -> int:
-    if not params_list: return 0
-    if HAS_ONEAI_SDV and oracle_conn is not None:
-        try:
-            cur = oracle_conn(dns=DNS_NAME, user_name=DB_USER_YMS_AI, password=DB_PASSWORD_YMS_AI, oracle_client_dir=oracle_client_path)
-            for p in params_list: cur.execute(sql, p)
-            if hasattr(cur, "connection") and cur.connection:
-                try: cur.connection.commit()
-                except Exception: pass
-            return len(params_list)
-        except Exception as e:
-            print(f"⚠️ [OneAI SDV Batch Error] {e}. Chuyển sang oracledb...")
-
-    conn = get_native_conn()
-    cursor = conn.cursor()
-    try:
-        for p in params_list: cursor.execute(sql, p)
-        conn.commit()
-        return len(params_list)
-    finally:
-        cursor.close()
-        conn.close()
+    return oracledb.connect(user=DB_USER_YMS, password=DB_PASSWORD_YMS, dsn=TNS_YMS)
 
 def update_task_status(keyid: str, status: str, error_count: int = 0, result_link: str = None, reason: str = ""):
     sql = """
@@ -882,11 +849,29 @@ def update_task_status(keyid: str, status: str, error_count: int = 0, result_lin
             UPLOAD_TIME = CASE WHEN :STATUS = 'WAITING' THEN SYSDATE ELSE UPLOAD_TIME END
         WHERE KEYID = :KEYID
     """
-    execute_dml(sql, {"STATUS": status, "ERROR_COUNT": error_count, "RESULT_LINK": result_link, "REASON": reason, "KEYID": str(keyid).strip()})
+    params = {"STATUS": status, "ERROR_COUNT": error_count, "RESULT_LINK": result_link, "REASON": reason, "KEYID": str(keyid).strip()}
+    if HAS_ONEAI_SDV and oracle_conn is not None:
+        cur = oracle_conn(dns="MBAYMS", user_name=DB_USER_YMS_AI, password=DB_PASSWORD_YMS_AI, oracle_client_dir=oracle_client_path)
+        cur.execute(sql, params=params)
+    else:
+        conn = get_native_conn()
+        c = conn.cursor()
+        c.execute(sql, params)
+        conn.commit()
+        c.close(); conn.close()
 
 def update_review_decision(keyid: str, decision: str, note: str, reviewer: str):
     sql = "UPDATE LOCAL_AI.MEP_PAYMENT_ANALYSIS SET REVIEW_DECISION = :DECISION, REVIEW_NOTE = :NOTE, REVIEW_BY = :REVIEWER WHERE KEYID = :KEYID"
-    execute_dml(sql, {"DECISION": decision, "NOTE": note, "REVIEWER": reviewer, "KEYID": str(keyid).strip()})
+    params = {"DECISION": decision, "NOTE": note, "REVIEWER": reviewer, "KEYID": str(keyid).strip()}
+    if HAS_ONEAI_SDV and oracle_conn is not None:
+        cur = oracle_conn(dns="MBAYMS", user_name=DB_USER_YMS_AI, password=DB_PASSWORD_YMS_AI, oracle_client_dir=oracle_client_path)
+        cur.execute(sql, params=params)
+    else:
+        conn = get_native_conn()
+        c = conn.cursor()
+        c.execute(sql, params)
+        conn.commit()
+        c.close(); conn.close()
 
 def batch_upsert_tasks(rows: list) -> int:
     if not rows: return 0
@@ -908,13 +893,32 @@ def batch_upsert_tasks(rows: list) -> int:
         "PART_NAME": str(r.get("PART_NAME", "")).strip(), "GROUP_NAME": str(r.get("GROUP_NAME", "")).strip(),
         "STATUS": str(r.get("STATUS", "WAITING")).strip()
     } for r in rows]
-    return execute_dml_batch(sql, params_list)
+
+    if HAS_ONEAI_SDV and oracle_conn is not None:
+        cur = oracle_conn(dns="MBAYMS", user_name=DB_USER_YMS_AI, password=DB_PASSWORD_YMS_AI, oracle_client_dir=oracle_client_path)
+        for p in params_list: cur.execute(sql, params=p)
+    else:
+        conn = get_native_conn()
+        c = conn.cursor()
+        for p in params_list: c.execute(sql, p)
+        conn.commit()
+        c.close(); conn.close()
+    return len(rows)
 
 def delete_tasks(keyids: list) -> int:
     if not keyids: return 0
     sql = "DELETE FROM LOCAL_AI.MEP_PAYMENT_ANALYSIS WHERE KEYID = :KEYID"
     params_list = [{"KEYID": str(k).strip()} for k in keyids]
-    return execute_dml_batch(sql, params_list)
+    if HAS_ONEAI_SDV and oracle_conn is not None:
+        cur = oracle_conn(dns="MBAYMS", user_name=DB_USER_YMS_AI, password=DB_PASSWORD_YMS_AI, oracle_client_dir=oracle_client_path)
+        for p in params_list: cur.execute(sql, params=p)
+    else:
+        conn = get_native_conn()
+        c = conn.cursor()
+        for p in params_list: c.execute(sql, p)
+        conn.commit()
+        c.close(); conn.close()
+    return len(keyids)
 ```
 
 ### 2. File Backend Worker: `backend/api.py`
