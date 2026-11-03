@@ -11,10 +11,6 @@
 
       <el-input v-model="searchKeyword" placeholder="Nhập số WO hoặc tên công việc..." clearable style="width: 270px"
         @keyup.enter="handleReload" />
-
-      <el-button type="primary" @click="handleReload">
-        Reload ({{ countdown }}s)
-      </el-button>
     </div>
 
     <!-- 2. THANH CÔNG CỤ QUẢN TRỊ BẢNG (TOOLBAR THEO MẪU 3.WEBP & 4.WEBP) -->
@@ -24,6 +20,11 @@
       </div>
 
       <div class="action-buttons">
+        <!-- NÚT RELOAD (NỀN TỐI, VIỀN XÁM) -->
+        <el-button size="small" class="btn-reload" :loading="isLoading" @click="handleReload">
+          <i class="el-icon-refresh"></i> Reload
+        </el-button>
+
         <!-- NÚT DELETE (ĐỎ) -->
         <el-button type="danger" size="small" class="btn-delete" :disabled="selectedRows.length === 0"
           @click="handleDelete">
@@ -218,10 +219,8 @@ const selectedRows = ref([])
 const page = ref(1)
 const pageSize = ref(15)
 const total = ref(0)
-const countdown = ref(10)
 const isSaving = ref(false)
-let timer = null
-let countdownTimer = null
+const isLoading = ref(false)
 
 // 1. TẢI DỮ LIỆU TỪ BACKEND
 const loadData = async () => {
@@ -256,9 +255,13 @@ const loadTotal = async () => {
 }
 
 const handleReload = async () => {
-  await loadData()
-  await loadTotal()
-  countdown.value = 60
+  isLoading.value = true
+  try {
+    await loadData()
+    await loadTotal()
+  } finally {
+    isLoading.value = false
+  }
 }
 
 // 2. CHỌN DÒNG TRONG BẢNG (SELECTION)
@@ -490,27 +493,9 @@ const handleReview = async (row, decision) => {
   }
 }
 
-// Vòng đời Polling
+// Vòng đời khởi tạo
 onMounted(() => {
   handleReload()
-  timer = setInterval(() => {
-    // Không reload đè khi người dùng đang có dòng mới (isNew)
-    const hasNewRow = tableData.value.some(r => r.isNew)
-    if (!hasNewRow) {
-      loadData()
-      loadTotal()
-      countdown.value = 60
-    }
-  }, 60 * 1000)
-
-  countdownTimer = setInterval(() => {
-    if (countdown.value > 0) countdown.value--
-  }, 1000)
-})
-
-onUnmounted(() => {
-  clearInterval(timer)
-  clearInterval(countdownTimer)
 })
 
 const totalPages = computed(() => Math.max(1, Math.ceil(total.value / pageSize.value)))
@@ -572,6 +557,7 @@ watch([selectedStatus, selectedMonth], () => {
   font-weight: 500;
 }
 
+.btn-reload,
 .btn-insert,
 .btn-export {
   background-color: #262727;
@@ -579,6 +565,7 @@ watch([selectedStatus, selectedMonth], () => {
   color: #E5EAF3;
 }
 
+.btn-reload:hover,
 .btn-insert:hover,
 .btn-export:hover {
   background-color: #363637;
