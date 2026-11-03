@@ -65,4 +65,15 @@ Thư mục tài liệu này đã được tinh gọn và quy hoạch thành **5 
 
 ---
 
+### 📐 [6. Kiến Trúc & Kế Hoạch Triển Khai Step 2: MEP CAD Vector Engine](./06_KIEN_TRUC_STEP2_BOC_TACH_CAD_DXF_VA_DOI_SOAT_SO_DO_DI_DAY.md) 🚀 *(ĐỐI SOÁT HÌNH HỌC THIẾT KẾ CAD DXF VS EXCEL STEP 1)*
+* **Tên file:** `06_KIEN_TRUC_STEP2_BOC_TACH_CAD_DXF_VA_DOI_SOAT_SO_DO_DI_DAY.md`
+* **Nội dung:** Toàn bộ chiến lược và phương pháp triển khai Step 2:
+  * **Hiện trạng AI thị giác toàn cầu:** Lý do chưa có AI nào nhìn ảnh bản vẽ A0 mà bóc tách chuẩn 100% (nút thắt Gigapixel, nhiễu hình học) và cách các tập đoàn lớn (Autodesk, Trimble, Glodon) giải quyết.
+  * **Chiến lược triển khai On-Premise nội bộ:** Mô hình Hybrid kết hợp **Python ezdxf** (đo đạc hình học vector chính xác 100%, 0% GPU) và **Qwen 3.8 NextAI** (đọc hiểu ngữ nghĩa ghi chú kỹ thuật sang JSON).
+  * **Giải mã quy chuẩn ký hiệu (Symbol Key & Legend):** Phân tích bảng ký hiệu chuẩn có sẵn trên bản vẽ thực tế `img1.png`, `img2.png` (`SPARE CABLE`, `CABLE LINE UP/DN`, `STEEL CONDUIT`, `FLEXIBLE CONDUIT`, `CABLE DUCT & TRAY`) và cách lưu trữ trong CAD (Layer, Linetype, Lineweight, Text tags `22C`).
+  * **Kịch bản dự phòng khi KHÔNG CÓ CAD:** Quy trình 5 bước Computer Vision (OpenCV Crop bảng chú giải, lọc hình thái học nét đậm, vector hóa Skeletonization, đo tỷ lệ pixel theo trục cột `9,000` mm, Qwen 3.8 đọc cao độ `UP/DN`).
+  * **Ma trận yêu cầu hai bên:** Chuẩn hóa Layer & Block cho nhà thầu, xây dựng 4 module cho đội ngũ phát triển, thuật toán Python mẫu và lộ trình 4 tuần.
+
+---
+
 > 📂 **Thư mục lưu trữ lịch sử:** Các bản nháp hoặc tài liệu đơn lẻ trước đây đã được lưu trữ an toàn trong thư mục [`archive/`](./archive/) để tra cứu khi cần thiết.
