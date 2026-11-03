@@ -337,10 +337,10 @@ const handleSelectionChange = (selection) => {
   selectedRows.value = selection
 }
 
-// 3. THAO TÁC INSERT (THÊM DÒNG MỚI THEO ẢNH 4.WEBP)
+// 3. THAO TÁC INSERT (THÊM DÒNG MỚI THEO ẢNH 4.WEBP - THÊM VÀO CUỐI BẢNG)
 const handleInsert = () => {
   const newRow = {
-    STT: tableData.value.length + 1,
+    STT: (page.value - 1) * pageSize.value + tableData.value.length + 1,
     KEYID: '',
     TASK_NAME: '',
     PAYMENT_MONTH: selectedMonth.value || new Date().toISOString().slice(0, 7),
@@ -352,10 +352,10 @@ const handleInsert = () => {
     isNew: true,
     isEditing: true
   }
-  // Thêm dòng mới vào đầu bảng
-  tableData.value.unshift(newRow)
+  // Thêm dòng mới vào CUỐI bảng hiện tại (Ví dụ đang có 3 dòng thì vào vị trí số 4, không đẩy dòng cũ)
+  tableData.value.push(newRow)
   total.value += 1
-  ElMessage.info("Đã thêm 1 dòng mới. Vui lòng nhập thông tin và bấm [Save].")
+  ElMessage.info("Đã thêm 1 dòng mới vào cuối bảng. Vui lòng nhập thông tin và bấm [Save].")
 }
 
 // 4. THAO TÁC SAVE (LƯU CÁC DÒNG MỚI HOẶC SỬA XUỐNG DB)
