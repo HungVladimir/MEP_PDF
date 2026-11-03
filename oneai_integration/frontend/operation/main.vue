@@ -42,4 +42,3 @@ export default {
   margin-bottom: 8px;
 }
 </style>
-

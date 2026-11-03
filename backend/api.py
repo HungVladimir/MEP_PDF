@@ -1,6 +1,3 @@
-# ==========================================
-# FASTAPI WORKER SERVICE (MEP AI BACKEND)
-# ==========================================
 import os
 import shutil
 import time
@@ -36,20 +33,25 @@ FINAL_REPORT_DIR = BASE_DIR / "final_reports"
 STORAGE_DIR.mkdir(exist_ok=True)
 FINAL_REPORT_DIR.mkdir(exist_ok=True)
 
+
 class ReviewRequest(BaseModel):
     keyid: str
     decision: str  # APPROVED hoặc REJECTED
     note: str = ""
     reviewer: str = "Engineer"
 
+
 class SaveRowsRequest(BaseModel):
     rows: list
+
 
 class DeleteRowsRequest(BaseModel):
     keyids: list
     reviewer: str = "PIC"
 
 # 3. TIẾN TRÌNH XỬ LÝ CHẠY NGẦM (BACKGROUND TASK)
+
+
 def run_ai_task_background(keyid: str, session_dir: Path, excel_path: str):
     """
     Hàm này chạy hoàn toàn độc lập dưới nền (Background).
@@ -57,7 +59,8 @@ def run_ai_task_background(keyid: str, session_dir: Path, excel_path: str):
     """
     try:
         print(f"\n🚀 [TASK {keyid}] Bắt đầu thực thi Pipeline MEP AI...")
-        update_task_status(keyid=keyid, status="RUNNING", reason="AI đang bóc tách bản vẽ & đối soát...")
+        update_task_status(keyid=keyid, status="RUNNING",
+                           reason="AI đang bóc tách bản vẽ & đối soát...")
 
         pdf_drawings = session_dir / "drawings"
         pdf_gatepass = session_dir / "gatepass"
@@ -79,14 +82,16 @@ def run_ai_task_background(keyid: str, session_dir: Path, excel_path: str):
         # ĐẾM SỐ LỖI THỰC TẾ TRONG SHEET 1 ĐỂ BÁO LÊN GIAO DIỆN
         error_count = 0
         try:
-            df_check = pd.read_excel(final_excel_path, sheet_name="1. Đối Soát Bản Vẽ")
+            df_check = pd.read_excel(
+                final_excel_path, sheet_name="1. Đối Soát Bản Vẽ")
             if 'Note' in df_check.columns:
-                error_count = int(df_check['Note'].astype(str).str.contains('Lệch|Mã mồ côi', na=False).sum())
+                error_count = int(df_check['Note'].astype(
+                    str).str.contains('Lệch|Mã mồ côi', na=False).sum())
         except Exception as e:
             print(f"⚠️ Cảnh báo đọc lỗi: {e}")
 
         file_name = os.path.basename(final_excel_path)
-        
+
         # ĐÓNG GÓI .ZIP ĐỂ LÁCH BẢO MẬT HỆ THỐNG / DLP (THEO REFER_SAVE.PY)
         zip_name = f"{Path(file_name).stem}.zip"
         zip_path = FINAL_REPORT_DIR / zip_name
@@ -120,10 +125,13 @@ def run_ai_task_background(keyid: str, session_dir: Path, excel_path: str):
         )
 
 # 4. CÁC ENDPOINT API GIAO TIẾP VỚI WEB
+
+
 @app.get("/mep_payment/health")
 async def health_check():
     """Kiểm tra tình trạng hoạt động của Worker Service."""
     return {"status": "ok", "service": "MEP Payment AI Worker", "timestamp": time.time()}
+
 
 @app.post("/mep_payment/upload")
 async def upload_excel_task(
@@ -134,7 +142,8 @@ async def upload_excel_task(
     """Tiếp nhận file Excel từ OneAI Portal và kích hoạt Background Task."""
     try:
         if not file.filename.endswith(('.xlsx', '.xlsm')):
-            raise HTTPException(status_code=400, detail="Chỉ chấp nhận file Excel (.xlsx / .xlsm)")
+            raise HTTPException(
+                status_code=400, detail="Chỉ chấp nhận file Excel (.xlsx / .xlsm)")
 
         safe_keyid = KEYID.replace('/', '_').replace('\\', '_')
         session_dir = STORAGE_DIR / f"session_{safe_keyid}_{int(time.time())}"
@@ -144,14 +153,17 @@ async def upload_excel_task(
         with open(excel_path, "wb") as buffer:
             shutil.copyfileobj(file.file, buffer)
 
-        update_task_status(keyid=KEYID, status="WAITING", reason="Đã nhận file, đang xếp hàng chạy...")
-        background_tasks.add_task(run_ai_task_background, KEYID, session_dir, str(excel_path))
+        update_task_status(keyid=KEYID, status="WAITING",
+                           reason="Đã nhận file, đang xếp hàng chạy...")
+        background_tasks.add_task(
+            run_ai_task_background, KEYID, session_dir, str(excel_path))
 
         return {"status": "accepted", "message": "Nạp file thành công, AI đang khởi chạy."}
     except Exception as e:
         return {"status": "error", "message": str(e)}
     finally:
         await file.close()
+
 
 @app.get("/mep_payment/files/{filename}")
 async def download_report_file(filename: str):
@@ -172,7 +184,8 @@ async def download_report_file(filename: str):
                 filename = alt_path.name
 
     if not file_path.exists():
-        raise HTTPException(status_code=404, detail="File báo cáo không tồn tại.")
+        raise HTTPException(
+            status_code=404, detail="File báo cáo không tồn tại.")
 
     is_zip = filename.lower().endswith(".zip")
     media_type = "application/zip" if is_zip else "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
@@ -186,6 +199,7 @@ async def download_report_file(filename: str):
             "Access-Control-Expose-Headers": "Content-Disposition"
         }
     )
+
 
 @app.post("/mep_payment/save_rows")
 async def save_rows(req: SaveRowsRequest):
@@ -204,25 +218,31 @@ async def save_rows(req: SaveRowsRequest):
                 )
 
     try:
-        print(f"📥 [FastAPI Worker] Nhận yêu cầu /save_rows ({len(req.rows)} dòng): {req.rows}")
+        print(
+            f"📥 [FastAPI Worker] Nhận yêu cầu /save_rows ({len(req.rows)} dòng): {req.rows}")
         count = batch_upsert_tasks(req.rows)
         return {"status": "ok", "message": f"Đã lưu thành công {count} bản ghi vào Database."}
     except HTTPException:
         raise
     except Exception as e:
         print(f"❌ [FastAPI Worker Error] save_rows: {e}")
-        raise HTTPException(status_code=500, detail=f"Lỗi khi lưu vào Database: {str(e)}")
+        raise HTTPException(
+            status_code=500, detail=f"Lỗi khi lưu vào Database: {str(e)}")
+
 
 @app.post("/mep_payment/delete_rows")
 async def delete_rows_endpoint(req: DeleteRowsRequest):
     """Tiếp nhận danh sách KEYID cần xóa khỏi Database."""
     if not req.keyids:
-        raise HTTPException(status_code=400, detail="Vui lòng chọn ít nhất 1 dòng để xóa.")
+        raise HTTPException(
+            status_code=400, detail="Vui lòng chọn ít nhất 1 dòng để xóa.")
     try:
         count = delete_tasks(req.keyids)
         return {"status": "ok", "message": f"Đã xóa thành công {count} bản ghi khỏi Database."}
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Lỗi khi xóa trong Database: {str(e)}")
+        raise HTTPException(
+            status_code=500, detail=f"Lỗi khi xóa trong Database: {str(e)}")
+
 
 @app.post("/mep_payment/review")
 async def submit_review(req: ReviewRequest):
@@ -231,10 +251,5 @@ async def submit_review(req: ReviewRequest):
         update_review_decision(req.keyid, req.decision, req.note, req.reviewer)
         return {"status": "ok", "message": f"Đã lưu quyết định: {req.decision}"}
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Lỗi khi lưu phê duyệt: {str(e)}")
-
-if __name__ == "__main__":
-    import uvicorn
-    print("🚀 Khởi động MEP Payment AI Worker tại cổng 8000...")
-    uvicorn.run("api:app", host="0.0.0.0", port=8000, reload=False)
-
+        raise HTTPException(
+            status_code=500, detail=f"Lỗi khi lưu phê duyệt: {str(e)}")

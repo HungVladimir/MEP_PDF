@@ -20,9 +20,9 @@
    * 3.4. File [`backend/main.py`](#34-file-backendmainpy---launcher-dịch-vụ-worker--tiến-trình-dọn-rác-30-ngày)
    * 3.5. File [`backend/api.py`](#35-file-backendapipy---trạm-điều-phối-fastapi-backgroundtasks--blob-zip)
    * 3.6. File [`mep_payment_analysis.py`](#36-file-mep_payment_analysispy---truy-vấn-tĩnh-querysettings-cho-oneai-gateway)
-   * 3.7. File [`mepPayment.js`](#37-file-meppaymentjs---trạm-phát-sóng-api-javascript-phía-frontend)
-   * 3.8. File [`operation.vue`](#38-file-operationvue--mepoperationvue---giao-diện-dark-theme-chuẩn-oneai)
-4. [GIẢI MÃ LỖI THỨ TỰ STT & CƠ CHẾ SỬA LỖI INSERT ĐẨY LÊN VỊ TRÍ 1](#4-giải-mã-lỗi-thứ-tự-stt--cơ-chế-sửa-lỗi-insert-đẩy-lên-vị-trí-1)
+   * 3.7. File [`mep_payment.js`](#37-file-mep_paymentjs---trạm-phát-sóng-api-javascript-phía-frontend)
+   * 3.8. File [`operation.vue`](#38-file-operationvue---giao-diện-dark-theme-chuẩn-oneai)
+4. [CƠ CHẾ INSERT VÀO CUỐI BẢNG (PUSH + ASC) VÀ HỆ THỐNG PHÒNG THỦ CHỐNG TRÙNG MÃ KEYID](#4-cơ-chế-insert-vào-cuối-bảng-push--asc-và-hệ-thống-phòng-thủ-chống-trùng-mã-keyid)
 5. [MA TRẬN DÒNG CHẢY DỮ LIỆU END-TO-END (4 SEQUENCE DIAGRAMS)](#5-ma-trận-dòng-chảy-dữ-liệu-end-to-end-4-sequence-diagrams)
 6. [BẢN ĐỒ GỌI NHAU GIỮA CÁC HÀM (CROSS-FILE FUNCTION CALL GRAPH)](#6-bản-đồ-gọi-nhau-giữa-các-hàm-cross-file-function-call-graph)
 7. [BỘ CÂU HỎI VẤN ĐÁP KỸ THUẬT BẰNG MIỆNG VỚI SẾP (Q&A CHEAT SHEET)](#7-bộ-câu-hỏi-vấn-đáp-kỹ-thuật-bằng-miệng-với-sếp-qa-cheat-sheet)
@@ -36,16 +36,16 @@ Hệ thống được thiết kế theo chuẩn **Microservices phân tán hư�
 ```mermaid
 graph TD
     subgraph TIER1["TẦNG 1: GIAO DIỆN NGƯỜI DÙNG (ONEAI FRONTEND - VUE.JS)"]
-        UI_MAIN["main.vue<br/>(OneAI Shell Navigation)"]
-        UI_TAB["operation.vue / MepOperation.vue<br/>(Element Plus Dark Theme Grid)"]
-        JS_API["mepPayment.js<br/>(Frontend Gateway & API Caller)"]
+        UI_MAIN["main.vue<br/>(src/views/operation/main.vue)"]
+        UI_TAB["operation.vue<br/>(src/views/operation/tab/operation.vue)"]
+        JS_API["mep_payment.js<br/>(src/views/operation/js/mep_payment.js)"]
         UI_MAIN --> UI_TAB
         UI_TAB --> JS_API
     end
 
     subgraph TIER2["TẦNG 2: CỔNG ĐIỀU PHỐI TỔNG THỂ (ONEAI PORTAL GATEWAY)"]
         GW_ROUTE["/crud/ui Endpoint<br/>(OneAI Dynamic Framework)"]
-        ONEAI_QUERY["mep_payment_analysis.py<br/>(QuerySettings: getdata_page / searchTotalRow)"]
+        ONEAI_QUERY["mep_payment_analysis.py<br/>(backend/menu_operation/mep_payment/mep_payment_analysis.py)"]
         GW_ROUTE --> ONEAI_QUERY
     end
 
@@ -347,9 +347,9 @@ while True:
 
 ---
 
-### 3.6. File [`mep_payment_analysis.py`](file:///d:/Project/Payment_PDF/MEP_OneAI_System/oneai_integration/backend/mep_payment_analysis.py) - Truy Vấn Tĩnh `QuerySettings` Cho OneAI Gateway
+### 3.6. File [`mep_payment_analysis.py`](file:///d:/Project/Payment_PDF/MEP_OneAI_System/oneai_integration/backend/menu_operation/mep_payment/mep_payment_analysis.py) - Truy Vấn Tĩnh `QuerySettings` Cho OneAI Gateway
 
-File này cấu hình truy vấn tĩnh trên OneAI Gateway, phục vụ cổng API `/crud/ui`.
+File này cấu hình truy vấn tĩnh trên OneAI Gateway, đặt tại thư mục: `backend/menu_operation/mep_payment/mep_payment_analysis.py` phục vụ cổng API `/crud/ui`.
 
 #### A. Biến `searchTotalRow` (Đếm tổng số dòng):
 ```python
@@ -362,7 +362,7 @@ searchTotalRow = QuerySettings(
         AND (:PAYMENT_MONTH = 'ALL' OR PAYMENT_MONTH = :PAYMENT_MONTH)
         AND (:KEYID = 'ALL' OR KEYID LIKE '%' || :KEYID || '%' OR TASK_NAME LIKE '%' || :KEYID || '%')
     """,
-    dns="MBAYMS",
+    dns="MBLDB",
     note="Đếm tổng số dòng quản lý thanh toán MEP"
 )
 ```
@@ -381,7 +381,7 @@ getdata_page = QuerySettings(
         TO_CHAR(RESULT_TIME, 'YYYY-MM-DD HH24:MI') AS RESULT_TIME
     FROM (
         SELECT A.*,
-               ROW_NUMBER() OVER(ORDER BY UPLOAD_TIME DESC NULLS LAST, KEYID DESC) RN
+               ROW_NUMBER() OVER(ORDER BY UPLOAD_TIME ASC NULLS LAST, KEYID ASC) RN
         FROM LOCAL_AI.MEP_PAYMENT_ANALYSIS A
         WHERE 1 = 1
         AND (:STATUS = 'ALL' OR STATUS = :STATUS)
@@ -391,20 +391,20 @@ getdata_page = QuerySettings(
     WHERE RN BETWEEN :start_row AND :end_row
     ORDER BY RN
     """,
-    dns="MBAYMS",
+    dns="MBLDB",
     note="Lấy danh sách phân trang bảng MEP"
 )
 ```
 * **Giải phẫu thuật toán phân trang:**
-  1. Trong câu truy vấn con (Subquery): Hàm cửa sổ `ROW_NUMBER() OVER(ORDER BY UPLOAD_TIME DESC NULLS LAST, KEYID DESC)` đánh số thứ tự dòng ảo `RN` từ dòng mới nhất đến dòng cũ nhất.
+  1. Trong câu truy vấn con (Subquery): Hàm cửa sổ `ROW_NUMBER() OVER(ORDER BY UPLOAD_TIME ASC NULLS LAST, KEYID ASC)` đánh số thứ tự dòng ảo `RN` tăng dần từ cũ nhất đến mới nhất.
   2. Ở câu truy vấn ngoài: `WHERE RN BETWEEN :start_row AND :end_row` chỉ lấy đúng các dòng thuộc trang hiện tại (ví dụ: Trang 1 lấy từ dòng 1 đến dòng 15).
-  3. Nhờ sắp xếp theo `UPLOAD_TIME DESC`, dòng công việc mới nhất vừa được thêm hoặc upload file sẽ luôn xuất hiện ở vị trí đầu tiên của Trang 1 (`RN = 1`), giúp kỹ sư theo dõi ngay kết quả vừa thao tác mà không phải cuộn tìm kiếm.
+  3. Nhờ sắp xếp theo `UPLOAD_TIME ASC NULLS LAST`, các dòng cũ đã lưu trước đó luôn giữ nguyên vị trí (STT 1, 2, 3...), còn dòng mới thêm vào nhận `UPLOAD_TIME = SYSDATE` sẽ xuất hiện ổn định ở **vị trí cuối cùng** (STT 4) của danh sách!
 
 ---
 
-### 3.7. File [`mepPayment.js`](file:///d:/Project/Payment_PDF/MEP_OneAI_System/oneai_integration/frontend/src/js/mepPayment.js) - Trạm Phát Sóng API Javascript Phía Frontend
+### 3.7. File [`mep_payment.js`](file:///d:/Project/Payment_PDF/MEP_OneAI_System/oneai_integration/frontend/operation/js/mep_payment.js) - Trạm Phát Sóng API Javascript Phía Frontend
 
-File này đặt tại `src/js/mepPayment.js` trong thư mục frontend của OneAI, gói gọn toàn bộ các lời gọi mạng thành các hàm Javascript bất đồng bộ.
+File này đặt tại `src/views/operation/js/mep_payment.js` (đồng thời có alias `mepPayment.js`) trong thư mục frontend của OneAI, gói gọn toàn bộ các lời gọi mạng thành các hàm Javascript bất đồng bộ.
 
 #### A. Cấu hình định danh Request ID OneAI:
 ```javascript
@@ -412,37 +412,37 @@ import { api } from '@/aiPlugins/aiApiConfig'
 const BASE_REQ_ID = "menu_operation.mep_payment.mep_payment_analysis"
 ```
 * `api`: Là Axios client đã được OneAI tiêm sẵn cấu hình đăng nhập, token bảo mật và URL cổng Gateway.
-* `BASE_REQ_ID`: Quy ước định tuyến đặc thù của OneAI để Gateway biết cần nạp file `mep_payment_analysis.py`.
+* `BASE_REQ_ID`: Quy ước định tuyến đặc thù của OneAI để Gateway biết cần nạp file `menu_operation/mep_payment/mep_payment_analysis.py`.
 
 #### B. Phân tích 4 hàm API trong file:
-1. **`get_total_row(status, paymentMonth, keyword)` (Dòng 10-20):**
+1. **`get_total_row(status, paymentMonth, keyword)` (Dòng 6-16):**
    * Định danh: `reqId = "menu_operation.mep_payment.mep_payment_analysis:searchTotalRow"`.
    * Gói tham số: `parameter = { [reqId]: { STATUS, PAYMENT_MONTH, KEYID } }`.
    * Gửi HTTP GET: `await api.get("/crud/ui", { params: parameter })`.
    * Trích xuất kết quả: `return res.data[reqId].VAL`. Trả về mảng `[{ TOTAL: 3 }]`.
-2. **`get_data_page(page, pageSize, status, paymentMonth, keyword)` (Dòng 22-38):**
+2. **`get_data_page(page, pageSize, status, paymentMonth, keyword)` (Dòng 19-35):**
    * Định danh: `reqId = "menu_operation.mep_payment.mep_payment_analysis:getdata_page"`.
    * Tính toán khoảng phân trang: `start = (page - 1) * pageSize + 1`, `end = page * pageSize`. (Ví dụ: Trang 1, cỡ 15 dòng thì `start = 1, end = 15`).
    * Gửi HTTP GET lên `/crud/ui`.
    * Trả về mảng các dòng dữ liệu để vẽ lên bảng.
-3. **`save_mep_rows(rows = [])` (Dòng 40-44):**
+3. **`save_mep_rows(rows = [])` (Dòng 38-41):**
    * Gửi HTTP POST trực tiếp đến máy chủ Worker: `await api.post("/mep_payment/save_rows", { rows })`.
    * Trả về object phản hồi từ FastAPI.
-4. **`delete_mep_rows(keyids = [])` (Dòng 46-50):**
+4. **`delete_mep_rows(keyids = [])` (Dòng 44-47):**
    * Gửi HTTP POST trực tiếp đến máy chủ Worker: `await api.post("/mep_payment/delete_rows", { keyids })`.
    * Trả về object phản hồi từ FastAPI.
 
 ---
 
-### 3.8. File [`operation.vue`](file:///d:/Project/Payment_PDF/MEP_OneAI_System/oneai_integration/frontend/src/views/tab/operation.vue) / [`MepOperation.vue`](file:///d:/Project/Payment_PDF/MEP_OneAI_System/oneai_integration/frontend/src/views/MepOperation.vue) - Giao Diện Dark Theme Chuẩn OneAI
+### 3.8. File [`operation.vue`](file:///d:/Project/Payment_PDF/MEP_OneAI_System/oneai_integration/frontend/operation/tab/operation.vue) & [`main.vue`](file:///d:/Project/Payment_PDF/MEP_OneAI_System/oneai_integration/frontend/operation/main.vue) - Giao Diện Dark Theme Chuẩn OneAI
 
-File này xây dựng bằng Vue 3 (`<script setup>`) và Element Plus UI.
+File này đặt tại `src/views/operation/tab/operation.vue` và được bọc bởi khung `main.vue`. Xây dựng bằng Vue 3 (`<script setup>`) và Element Plus UI.
 
-#### A. Cấu trúc State (Các biến phản ứng Reactivity) (Dòng 280-296):
+#### A. Cấu trúc State (Các biến phản ứng Reactivity) (Dòng 208-225):
 * `tableData = ref([])`: Chứa mảng dữ liệu các dòng đang hiển thị trên bảng.
 * `selectedRows = ref([])`: Chứa danh sách các dòng người dùng đang tích chọn checkbox.
 * `page = ref(1)`, `pageSize = ref(15)`, `total = ref(0)`: Quản lý trạng thái phân trang.
-* `countdown = ref(10)`: Số giây đếm ngược tự động tải lại dữ liệu.
+* `countdown = ref(60)`: Số giây đếm ngược tự động tải lại dữ liệu (chu kỳ 60s).
 * `isSaving = ref(false)`: Cờ điều khiển hiệu ứng xoay tròn (loading) trên nút Save.
 
 #### B. Phân tích chi tiết 12 hàm nghiệp vụ trong file:
@@ -467,7 +467,7 @@ File này xây dựng bằng Vue 3 (`<script setup>`) và Element Plus UI.
 * Được gắn vào sự kiện `@selection-change` của `<el-table>`.
 * Khi người dùng tích hoặc bỏ tích checkbox ở cột đầu tiên, mảng `selectedRows.value` sẽ tự động cập nhật. Nút **Delete** trên thanh công cụ sẽ tự động sáng lên hoặc mờ đi dựa vào độ dài mảng này.
 
-##### 4. `handleInsert()` - Thao tác chèn dòng mới vào đầu bảng (Dòng 341-360)
+##### 4. `handleInsert()` - Thao tác chèn dòng mới vào cuối bảng
 * **Logic hoạt động:**
   ```javascript
   const handleInsert = () => {
@@ -484,21 +484,25 @@ File này xây dựng bằng Vue 3 (`<script setup>`) và Element Plus UI.
       isNew: true,      // Cờ báo hiệu đây là dòng mới tạo
       isEditing: true   // Mở ngay ô nhập liệu <el-input> để kỹ sư gõ phím
     }
-    // Dùng unshift để thêm vào ĐẦU bảng, người dùng thấy ngay trước mắt để gõ phím
-    tableData.value.unshift(newRow)
+    // Dùng push để thêm vào CUỐI bảng (nhận STT tiếp theo)
+    tableData.value.push(newRow)
     total.value += 1
-    ElMessage.info("Đã thêm 1 dòng mới vào đầu bảng. Vui lòng nhập thông tin và bấm [Save].")
+    ElMessage.info("Đã thêm 1 dòng mới vào cuối bảng. Vui lòng nhập thông tin và bấm [Save].")
   }
   ```
 
-##### 5. `handleSave()` - Lưu các dòng mới hoặc sửa xuống Oracle (Dòng 362-401)
+##### 5. `handleSave()` - Lưu các dòng mới hoặc sửa xuống Oracle & Chặn trùng mã
 * **Logic hoạt động:**
   1. Lọc ra các dòng cần lưu: `const modifiedRows = tableData.value.filter(r => r.isNew || r.isEditing)`.
   2. Kiểm tra tính hợp lệ: Nếu có dòng nào để trống `KEYID`, lập tức báo lỗi cảnh báo và dừng lại.
-  3. Bật cờ `isSaving.value = true` (hiện icon xoay trên nút Save).
-  4. Gọi hàm `save_mep_rows(modifiedRows)`. Dữ liệu được gửi qua HTTP POST tới FastAPI Worker $\rightarrow$ `sql.py` $\rightarrow$ Oracle `MERGE INTO`.
-  5. Khi thành công, hiện thông báo xanh `ElMessage.success("Đã lưu thành công vào Database!")`.
-  6. Gọi `handleReload()` để tải lại dữ liệu mới nhất từ Oracle DB.
+  3. **Kiểm tra trùng mã KEYID (Lớp 1 - Client Side):**
+     Duyệt qua `tableData.value`, nếu phát hiện dòng mới (`r.isNew`) có `KEYID` trùng với dòng đã có trên bảng thì chặn ngay:
+     `ElMessage.error(`Số công việc (KEYID) "${r.KEYID}" đã tồn tại! Vui lòng nhập mã khác.`)`
+  4. Bật cờ `isSaving.value = true` (hiện icon xoay trên nút Save).
+  5. Gửi payload kèm cờ `isNew` tới FastAPI Worker `/mep_payment/save_rows`.
+  6. **Kiểm tra trùng mã KEYID (Lớp 2 - Server Side):** FastAPI gọi `check_keyid_exists(keyid)`, nếu mã đã có trong Oracle DB sẽ trả về mã lỗi 400 chặn đứng việc ghi đè vô ý.
+  7. Khi thành công, hiện thông báo xanh `ElMessage.success("Đã lưu thành công vào Database!")`.
+  8. Gọi `handleReload()` để tải lại dữ liệu mới nhất từ Oracle DB. Dòng mới vững vàng ở cuối bảng!
 
 ##### 6. `handleDelete()` - Xóa dòng khỏi Oracle DB (Dòng 403-441)
 * **Logic hoạt động:**
@@ -544,20 +548,32 @@ File này xây dựng bằng Vue 3 (`<script setup>`) và Element Plus UI.
 
 ---
 
-## 4. BẢN CHẤT CƠ CHẾ SẮP XẾP VÀ VÌ SAO CHÈN ĐẦU BẢNG (UNSHIFT + DESC) LÀ CHUẨN MỰC
+## 4. CƠ CHẾ INSERT VÀO CUỐI BẢNG (PUSH + ASC) VÀ HỆ THỐNG PHÒNG THỦ CHỐNG TRÙNG MÃ KEYID
 
-### 4.1. Tại sao chèn vào đầu bảng (`unshift`) kết hợp sắp xếp giảm dần (`DESC`) là chuẩn mực Enterprise Portal?
-Trong thiết kế các hệ thống cổng thông tin quản trị doanh nghiệp (OneAI, SAP, Oracle ERP), luồng thêm mới dữ liệu luôn tuân thủ nguyên lý:
-1. **Trải nghiệm gõ phím trực diện:** Khi người dùng bấm nút **[Insert]**, dòng nhập liệu phải xuất hiện ngay ở **Hàng đầu tiên (Row 1)** ngay trước mắt họ bằng hàm `unshift()`. Kỹ sư không phải cuộn chuột xuống đáy bảng tìm ô nhập liệu.
-2. **Nguyên lý mới nhất lên đầu (`ORDER BY UPLOAD_TIME DESC`):**
-   * Khi kỹ sư gõ mã WO và bấm **[Save]**, dòng mới được lưu vào Oracle DB với `UPLOAD_TIME = SYSDATE` (thời gian mới nhất lúc đó).
-   * Khi trang web tự động tải lại dữ liệu (`handleReload()`), câu lệnh SQL phân trang `ORDER BY UPLOAD_TIME DESC` (giảm dần từ mới nhất đến cũ nhất) bảo đảm dòng vừa tạo sẽ **luôn xuất hiện ở Vị trí số 1 của Trang 1**!
-   * Kỹ sư vừa bấm Save xong, trang tải lại thì dòng mới vẫn nằm nguyên vẹn ở vị trí số 1 ngay trước mắt, thấy ngay kết quả lưu thành công, thao tác mượt mà và không bao giờ bị "lạc" dòng.
+### 4.1. Bản chất luồng Insert vào cuối danh sách:
+1. **Tại Frontend (`operation.vue`):**
+   * Khi bấm nút **[Insert]**, hàm `tableData.value.push(newRow)` thêm dòng mới vào **cuối bảng** (ví dụ đang có 3 dòng thì dòng mới là dòng số 4).
+   * Trường `STT` được gán bằng `tableData.value.length + 1` (STT = 4).
+   * Giao diện mở ô input sẵn sàng cho kỹ sư gõ mã WO, Tên việc, PIC...
+2. **Tại Database & Phân trang (`mep_payment_analysis.py`):**
+   * Câu lệnh SQL phân trang sắp xếp tăng dần:
+     `ROW_NUMBER() OVER(ORDER BY UPLOAD_TIME ASC NULLS LAST, KEYID ASC) RN`
+   * Các dòng cũ (được tạo trước) có `UPLOAD_TIME` nhỏ hơn nên luôn giữ nguyên vị trí ở đầu (STT 1, 2, 3).
+   * Dòng mới thêm có `UPLOAD_TIME = SYSDATE` (thời điểm mới nhất) nên luôn được xếp ở **cuối cùng** (STT 4). Sau khi Save và tải lại trang, vị trí của toàn bộ các dòng hoàn toàn ổn định!
 
-### 4.2. Điều gì đã xảy ra khi thử đổi sang `push` và `ASC`?
-* Khi đổi sang `push`, dòng mới bị đẩy xuống dưới đáy bảng. Nếu bảng có thanh cuộn hoặc người dùng không thấy ô nhập liệu ở dòng dưới đáy, bấm Save mà `KEYID` rỗng thì hệ thống sẽ chặn lại (`return`).
-* Đồng thời, khi câu truy vấn SQL đổi thành `ORDER BY UPLOAD_TIME ASC` (sắp xếp tăng dần từ cũ đến mới), dòng mới tạo có thời gian mới nhất nên bị xếp ở tận cùng của toàn bộ database (nằm ở các trang sau). Sau khi Save xong, trang web tải lại Trang 1 (chỉ hiện các dòng cũ), dẫn đến việc người dùng tưởng rằng dòng mới không được lưu vào DB.
-* **Kết luận kiến trúc:** Giữ nguyên mô hình ổn định ban đầu (`tableData.unshift(newRow)` và `ORDER BY UPLOAD_TIME DESC`) là phương án tối ưu, đồng bộ và ổn định 100% cho toàn bộ hệ thống!
+### 4.2. Giải mã hiện tượng "tưởng không lưu được" khi nhập trùng số công việc (KEYID):
+* **Nguyên nhân gốc rễ:** Dưới Backend sử dụng lệnh `MERGE INTO LOCAL_AI.MEP_PAYMENT_ANALYSIS T USING (...) ON (T.KEYID = S.KEYID)`.
+  * Khi người dùng nhập một mã WO **đã tồn tại sẵn** trong bảng, Oracle hiểu đây là hành động **UPDATE** đè lên dòng cũ chứ không phải **INSERT** dòng mới.
+  * Vì vậy, số lượng dòng trong bảng không tăng lên, nhưng Backend vẫn báo *"Đã lưu thành công"*, khiến người dùng nhìn vào bảng không thấy dòng thứ 4 xuất hiện và tưởng rằng nút Save bị hỏng.
+* **Hệ thống 2 lớp phòng thủ chống trùng mã (Duplicate Defense System):**
+  1. **Lớp 1 (Phòng thủ Giao diện Vue.js - Client Side):**
+     * Trong `handleSave()`, duyệt qua `tableData.value`: Nếu phát hiện dòng mới thêm (`isNew`) có `KEYID` trùng với bất kỳ dòng nào khác trên bảng, lập tức chặn lại và báo lỗi đỏ:
+       `ElMessage.error('Số công việc (KEYID) "..." đã tồn tại! Vui lòng nhập mã khác.')`
+  2. **Lớp 2 (Phòng thủ Dữ liệu FastAPI & Oracle - Server Side):**
+     * Trong `backend/sql.py`, hàm `check_keyid_exists(keyid)` truy vấn `SELECT COUNT(*) FROM LOCAL_AI.MEP_PAYMENT_ANALYSIS WHERE KEYID = :KEYID`.
+     * Tại endpoint `POST /mep_payment/save_rows` (`backend/api.py`), nếu phát hiện dòng `isNew` có `KEYID` đã nằm trong DB, máy chủ lập tức trả về lỗi HTTP 400 kèm thông báo:
+       `"Số công việc (KEYID) '...' đã tồn tại trong Database! Không thể thêm trùng."`
+     * Nhờ 2 lớp chắn này, người dùng sẽ không bao giờ bị nhầm lẫn giữa thêm mới và cập nhật!
 
 ---
 

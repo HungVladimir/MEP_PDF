@@ -95,9 +95,9 @@ sequenceDiagram
 | Vị trí triển khai | Tên file | Trạng thái | Nhiệm vụ chính |
 | :--- | :--- | :---: | :--- |
 | **Oracle Database** | `LOCAL_AI.MEP_PAYMENT_ANALYSIS` | **Tạo mới (SQL)** | Bảng lưu trữ trung tâm các lượt kiểm tra đối soát |
-| **OneAI Portal (Core Backend)** | `mep_payment_analysis.py` | **Tạo mới** | Cấu hình `QuerySettings` cho cổng OneAI Gateway `/crud/ui` |
-| **OneAI Portal (Frontend JS)** | `src/js/mepPayment.js` | **Tạo mới** | Đóng gói API gọi Gateway phân trang và gọi Worker lưu/xóa |
-| **OneAI Portal (Frontend Vue)** | `src/views/MepOperation.vue` | **Tạo mới** | Giao diện Dark Theme: Toolbar Insert/Delete/Save, Checkbox, Blob Download |
+| **OneAI Portal (Core Backend)** | `menu_operation/mep_payment/mep_payment_analysis.py` | **Tạo mới** | Cấu hình `QuerySettings` cho cổng OneAI Gateway `/crud/ui` (DNS: `MBLDB`) |
+| **OneAI Portal (Frontend JS)** | `operation/js/mep_payment.js` | **Tạo mới** | Đóng gói API gọi Gateway phân trang và gọi Worker lưu/xóa (alias: `mepPayment.js`) |
+| **OneAI Portal (Frontend Vue)** | `operation/main.vue` & `tab/operation.vue` | **Tạo mới** | Giao diện Dark Theme: Toolbar Insert vào cuối, Delete, Save chống trùng mã, Blob Download |
 | **Payment_PDF (Worker Engine)** | `backend/engine.py` | **Nâng cấp** | Nhúng thuật toán OLE CFB của sếp để giải mã sector nhị phân |
 | **Payment_PDF (Worker Engine)** | `backend/pdf_extractor.py` | **Nâng cấp** | Thị giác OpenCV, RAM chunking, chỉ lưu 1-2 ảnh JPG bằng chứng |
 | **Payment_PDF (Worker Engine)** | `backend/excel_reconciler.py`| **Hoàn thiện** | Não bộ đối soát 2 Vòng (Bản vẽ & Gate Pass), tô màu xen kẽ |
@@ -149,12 +149,12 @@ COMMIT;
 
 ## 4. BƯỚC 2: CẤU HÌNH BACKEND ONEAI PORTAL (`mep_payment_analysis.py`)
 
-Đặt file này vào thư mục backend của OneAI (cùng vị trí với `cdm_analysis.py`). File này cung cấp các câu truy vấn SQL chuẩn hóa cho OneAI Gateway:
+Đặt file này vào đúng đường dẫn: `backend/menu_operation/mep_payment/mep_payment_analysis.py` trong OneAI Backend. File này cung cấp các câu truy vấn SQL chuẩn hóa cho OneAI Gateway:
 
 ```python
 # ====================================================================
 # ONEAI BACKEND QUERY SETTINGS (MEP PAYMENT ANALYSIS)
-# Đường dẫn: backend/mep_payment_analysis.py
+# Đường dẫn: backend/menu_operation/mep_payment/mep_payment_analysis.py
 # ====================================================================
 from database.query_utils import QuerySettings
 
@@ -168,7 +168,7 @@ searchTotalRow = QuerySettings(
         AND (:PAYMENT_MONTH = 'ALL' OR PAYMENT_MONTH = :PAYMENT_MONTH)
         AND (:KEYID = 'ALL' OR KEYID LIKE '%' || :KEYID || '%' OR TASK_NAME LIKE '%' || :KEYID || '%')
     """,
-    dns="MBAYMS",  # Chuỗi kết nối Oracle của công ty
+    dns="MBLDB",  # Tên cấu hình DNS kết nối DB Oracle của công ty
     note="Đếm tổng số dòng quản lý thanh toán MEP"
 )
 
@@ -194,7 +194,7 @@ getdata_page = QuerySettings(
         TO_CHAR(RESULT_TIME, 'YYYY-MM-DD HH24:MI') AS RESULT_TIME
     FROM (
         SELECT A.*,
-               ROW_NUMBER() OVER(ORDER BY UPLOAD_TIME DESC NULLS LAST, KEYID DESC) RN
+               ROW_NUMBER() OVER(ORDER BY UPLOAD_TIME ASC NULLS LAST, KEYID ASC) RN
         FROM LOCAL_AI.MEP_PAYMENT_ANALYSIS A
         WHERE 1 = 1
         AND (:STATUS = 'ALL' OR STATUS = :STATUS)
@@ -204,21 +204,21 @@ getdata_page = QuerySettings(
     WHERE RN BETWEEN :start_row AND :end_row
     ORDER BY RN
     """,
-    dns="MBAYMS",
+    dns="MBLDB",
     note="Lấy danh sách phân trang bảng MEP"
 )
 ```
 
 ---
 
-## 5. BƯỚC 3: CẤU HÌNH JAVASCRIPT GỌI API GATEWAY (`mepPayment.js`)
+## 5. BƯỚC 3: CẤU HÌNH JAVASCRIPT GỌI API GATEWAY (`mep_payment.js`)
 
-Đặt file này tại `src/js/mepPayment.js` trên OneAI Frontend:
+Đặt file này tại `src/views/operation/js/mep_payment.js` (đồng thời tạo alias `mepPayment.js`) trên OneAI Frontend:
 
 ```javascript
 // ====================================================================
 // JAVASCRIPT API GỌI GATEWAY /crud/ui CỦA ONEAI
-// Đường dẫn: src/js/mepPayment.js
+// Đường dẫn: src/views/operation/js/mep_payment.js (hoặc mepPayment.js)
 // ====================================================================
 import { api } from '@/aiPlugins/aiApiConfig'
 
@@ -547,7 +547,7 @@ const handleSelectionChange = (selection) => {
   selectedRows.value = selection
 }
 
-// 1. THAO TÁC INSERT
+// 1. THAO TÁC INSERT (THÊM VÀO CUỐI BẢNG)
 const handleInsert = () => {
   const newRow = {
     STT: tableData.value.length + 1,
@@ -562,12 +562,12 @@ const handleInsert = () => {
     isNew: true,
     isEditing: true
   }
-  tableData.value.unshift(newRow)
+  tableData.value.push(newRow)
   total.value += 1
-  ElMessage.info("Đã thêm 1 dòng mới. Vui lòng nhập thông tin và bấm [Save].")
+  ElMessage.info("Đã thêm 1 dòng mới vào cuối bảng. Vui lòng nhập thông tin và bấm [Save].")
 }
 
-// 2. THAO TÁC SAVE
+// 2. THAO TÁC SAVE (LƯU XUỐNG DB & CHẶN TRÙNG MÃ)
 const handleSave = async () => {
   const modifiedRows = tableData.value.filter(r => r.isNew || r.isEditing)
   if (modifiedRows.length === 0) {
@@ -575,10 +575,24 @@ const handleSave = async () => {
     return
   }
 
+  // 1. Kiểm tra không để trống KEYID
   for (const r of modifiedRows) {
     if (!r.KEYID || !r.KEYID.trim()) {
       ElMessage.warning("Vui lòng nhập Số Công Việc (KEYID) trước khi lưu!")
       return
+    }
+  }
+
+  // 2. Kiểm tra trùng lặp Số Công Việc (KEYID) ngay trên bảng
+  for (const r of modifiedRows) {
+    if (r.isNew) {
+      const isDuplicate = tableData.value.some(
+        item => item !== r && String(item.KEYID).trim().toUpperCase() === String(r.KEYID).trim().toUpperCase()
+      )
+      if (isDuplicate) {
+        ElMessage.error(`Số công việc (KEYID) "${r.KEYID}" đã tồn tại! Vui lòng nhập mã khác.`)
+        return
+      }
     }
   }
 
@@ -592,7 +606,8 @@ const handleSave = async () => {
         PIC: r.PIC,
         PART_NAME: r.PART_NAME,
         GROUP_NAME: r.GROUP_NAME,
-        STATUS: r.STATUS || 'WAITING'
+        STATUS: r.STATUS || 'WAITING',
+        isNew: !!r.isNew
       }))
     })
 

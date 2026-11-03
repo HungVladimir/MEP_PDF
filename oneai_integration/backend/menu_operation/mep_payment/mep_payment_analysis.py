@@ -1,10 +1,6 @@
-# ====================================================================
-# ONEAI BACKEND QUERY SETTINGS (MEP PAYMENT ANALYSIS)
-# Copy file này vào thư mục backend của OneAI (cùng chỗ cdm_analysis.py)
-# ====================================================================
 from database.query_utils import QuerySettings
 
-# 1. ĐẾM TỔNG SỐ DÒNG (PHỤC VỤ PHÂN TRANG TOTAL PAGE)
+# 1. QUERY ĐẾM TỔNG SỐ DÒNG (PHỤC VỤ PHÂN TRANG TOTAL PAGE)
 searchTotalRow = QuerySettings(
     query="""
         SELECT COUNT(*) AS TOTAL
@@ -14,14 +10,14 @@ searchTotalRow = QuerySettings(
         AND (:PAYMENT_MONTH = 'ALL' OR PAYMENT_MONTH = :PAYMENT_MONTH)
         AND (:KEYID = 'ALL' OR KEYID LIKE '%' || :KEYID || '%' OR TASK_NAME LIKE '%' || :KEYID || '%')
     """,
-    dns="MBAYMS",  # Tên cấu hình kết nối DB Oracle của công ty
+    dns="MBLDB",
     note="Đếm tổng số dòng quản lý thanh toán MEP"
 )
 
-# 2. LẤY DỮ LIỆU TỪNG TRANG (PHÂN TRANG ROW_NUMBER ĐỘNG)
+# 2. QUERY LẤY DỮ LIỆU TỪNG TRANG (PHÂN TRANG DỰA THEO ROW_NUMBER)
 getdata_page = QuerySettings(
     query="""
-    SELECT 
+    SELECT
         RN AS STT,
         KEYID,
         TASK_NAME,
@@ -40,7 +36,7 @@ getdata_page = QuerySettings(
         TO_CHAR(RESULT_TIME, 'YYYY-MM-DD HH24:MI') AS RESULT_TIME
     FROM (
         SELECT A.*,
-               ROW_NUMBER() OVER(ORDER BY UPLOAD_TIME ASC NULLS LAST, KEYID ASC) RN
+            ROW_NUMBER() OVER(ORDER BY UPLOAD_TIME ASC NULLS LAST, KEYID ASC) RN
         FROM LOCAL_AI.MEP_PAYMENT_ANALYSIS A
         WHERE 1 = 1
         AND (:STATUS = 'ALL' OR STATUS = :STATUS)
@@ -50,7 +46,6 @@ getdata_page = QuerySettings(
     WHERE RN BETWEEN :start_row AND :end_row
     ORDER BY RN
     """,
-    dns="MBAYMS",
+    dns="MBLDB",
     note="Lấy danh sách phân trang bảng MEP"
 )
-

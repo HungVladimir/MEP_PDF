@@ -1,6 +1,3 @@
-# ==========================================
-# TRÁI TIM THỊ GIÁC AI (PDF EXTRACTOR) - FULL FIDELITY
-# ==========================================
 import os
 import re
 import time
@@ -12,10 +9,11 @@ import concurrent.futures
 
 import fitz          # PyMuPDF
 import cv2           # OpenCV
-import numpy as np 
+import numpy as np
 import pandas as pd
-import config     
+import config
 import utils as ut
+
 
 def debug_show(img, title="Debug Window"):
     """Hàm hiển thị ảnh debug cho phép co giãn chuột, không bị tràn màn hình."""
@@ -29,6 +27,7 @@ def debug_show(img, title="Debug Window"):
     # cv2.waitKey(0)
     # cv2.destroyWindow(title)
     return
+
 
 def debug_show_all(image_dict):
     """Hiển thị tất cả ảnh trong Dictionary cùng một lúc lên các cửa sổ khác nhau."""
@@ -50,16 +49,19 @@ def debug_show_all(image_dict):
 def _score_horizontal_lines(img):
     """Hàm phụ trợ: Chấm điểm mật độ đường kẻ ngang để xác nhận ảnh là Bảng."""
     gray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
-    thresh = cv2.adaptiveThreshold(~gray, 255, cv2.ADAPTIVE_THRESH_MEAN_C, cv2.THRESH_BINARY, 15, -2)
+    thresh = cv2.adaptiveThreshold(
+        ~gray, 255, cv2.ADAPTIVE_THRESH_MEAN_C, cv2.THRESH_BINARY, 15, -2)
     horizontal_kernel = cv2.getStructuringElement(cv2.MORPH_RECT, (50, 1))
-    horizontal_lines = cv2.morphologyEx(thresh, cv2.MORPH_OPEN, horizontal_kernel)
+    horizontal_lines = cv2.morphologyEx(
+        thresh, cv2.MORPH_OPEN, horizontal_kernel)
     return np.sum(horizontal_lines > 0)
 
 
 def _render_bbox_to_cv2(page, rect, dpi=250):
     """Hàm phụ trợ: Cắt và render một vùng Rect trên PDF sang ảnh OpenCV BGR."""
     pix = page.get_pixmap(clip=rect, dpi=dpi)
-    img_np = np.frombuffer(pix.samples, dtype=np.uint8).reshape(pix.height, pix.width, pix.n)
+    img_np = np.frombuffer(pix.samples, dtype=np.uint8).reshape(
+        pix.height, pix.width, pix.n)
     return cv2.cvtColor(img_np, cv2.COLOR_RGBA2BGR) if pix.n == 4 else cv2.cvtColor(img_np, cv2.COLOR_RGB2BGR)
 
 
@@ -82,7 +84,8 @@ def extract_table_from_embedded_image(doc, page):
         if rect.width >= 50 and rect.height >= 50 and (rect.width * rect.height) / page_area <= 0.8:
             img_fast = _render_bbox_to_cv2(page, rect, dpi=250)
             if _score_horizontal_lines(img_fast) >= 1000:
-                print("   ✅ Kích hoạt Case 1 (Fast-Mode image[1]): Đã bắt được bảng OLE!")
+                print(
+                    "   ✅ Kích hoạt Case 1 (Fast-Mode image[1]): Đã bắt được bảng OLE!")
                 return [img_fast]
 
     # 🛡️ NHÁNH 2: FALLBACK QUÉT TOÀN BỘ ẢNH NHÚNG
@@ -123,7 +126,8 @@ def extract_table_native_cad(doc, page, is_gate_pass=False):
     if is_gate_pass:
         anchor_keywords = ["Item code", "Tên Vật Tư", "Số Lượng", "Tình Trạng"]
     else:
-        anchor_keywords = ["Specification", "Q'TY", "Item Code", "Item code", "Phụ trội", "Remark"]
+        anchor_keywords = ["Specification", "Q'TY",
+                           "Item Code", "Item code", "Phụ trội", "Remark"]
 
     dpi = 200
     pix = page.get_pixmap(dpi=dpi)
@@ -134,43 +138,49 @@ def extract_table_native_cad(doc, page, is_gate_pass=False):
     for kw in anchor_keywords:
         text_instances = page.search_for(kw)
         if text_instances:
-            print(f"      📍 Đã bắt được {len(text_instances)} Mỏ neo Text: '{kw}'")
+            print(
+                f"      📍 Đã bắt được {len(text_instances)} Mỏ neo Text: '{kw}'")
             for rect in text_instances:
                 cx = (rect.x0 + rect.x1) / 2 * scale_x
                 cy = (rect.y0 + rect.y1) / 2 * scale_y
                 anchor_centers.append((cx, cy))
 
-    img_np = np.frombuffer(pix.samples, dtype=np.uint8).reshape(pix.height, pix.width, pix.n)
-    img = cv2.cvtColor(img_np, cv2.COLOR_RGBA2BGR) if pix.n == 4 else cv2.cvtColor(img_np, cv2.COLOR_RGB2BGR)
+    img_np = np.frombuffer(pix.samples, dtype=np.uint8).reshape(
+        pix.height, pix.width, pix.n)
+    img = cv2.cvtColor(img_np, cv2.COLOR_RGBA2BGR) if pix.n == 4 else cv2.cvtColor(
+        img_np, cv2.COLOR_RGB2BGR)
     h_img, w_img = img.shape[:2]
 
     # KHỞI TẠO BỘ DEBUG Y HỆT BẢN GỐC
     debug_images = {}
     gray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
     debug_images["NativeCad 0. Anh Gray"] = gray
-    thresh = cv2.adaptiveThreshold(~gray, 255, cv2.ADAPTIVE_THRESH_MEAN_C, cv2.THRESH_BINARY, 15, -2)
+    thresh = cv2.adaptiveThreshold(
+        ~gray, 255, cv2.ADAPTIVE_THRESH_MEAN_C, cv2.THRESH_BINARY, 15, -2)
     debug_images["NativeCad 1. Anh X-Quang"] = thresh
     h_kernel = cv2.getStructuringElement(cv2.MORPH_RECT, (150, 1))
     h_lines = cv2.morphologyEx(thresh, cv2.MORPH_OPEN, h_kernel)
     debug_images["NativeCad 2. Net Ngang"] = h_lines
-   
+
     # Xóa viền khung bao ngoài trang giấy
-    contours_h, _ = cv2.findContours(h_lines, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+    contours_h, _ = cv2.findContours(
+        h_lines, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
     for cnt in contours_h:
         x, y, w, h = cv2.boundingRect(cnt)
         if w > w_img * 0.85:
             cv2.drawContours(h_lines, [cnt], -1, 0, -1)
-       
+
     debug_images["NativeCad 3. Loc Net Ngang (Chi con duong ke ngang)"] = h_lines
 
     fuse_kernel = cv2.getStructuringElement(cv2.MORPH_RECT, (50, 80))
     table_mask = cv2.dilate(h_lines, fuse_kernel, iterations=1)
     debug_images["NativeCad 4. Khuon Dilate"] = table_mask
 
-    contours, _ = cv2.findContours(table_mask, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
-   
+    contours, _ = cv2.findContours(
+        table_mask, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+
     valid_bboxes = []
-   
+
     if anchor_centers:
         for ax, ay in anchor_centers:
             for cnt in contours:
@@ -178,7 +188,8 @@ def extract_table_native_cad(doc, page, is_gate_pass=False):
                 if w < 300 or h < 50:
                     continue
                 if (x - 80 <= ax <= x + w + 80) and (y - 80 <= ay <= y + h + 80):
-                    valid_bboxes.append({"bbox": (x, y, w, h), "anchor": (ax, ay)})
+                    valid_bboxes.append(
+                        {"bbox": (x, y, w, h), "anchor": (ax, ay)})
                     break
     else:
         max_area = 0
@@ -204,7 +215,7 @@ def extract_table_native_cad(doc, page, is_gate_pass=False):
         return []
 
     extracted_tables = []
-   
+
     # XỬ LÝ MAGIC CROP CHO TỪNG BẢNG
     for idx, item in enumerate(unique_bboxes):
         x, y, w, h = item["bbox"]
@@ -213,11 +224,14 @@ def extract_table_native_cad(doc, page, is_gate_pass=False):
         # ✂️ THUẬT TOÁN MAGIC CROP (Giữ nguyên logic kiểm tra anchor_center gốc)
         shave = 15
         if h > shave * 3:
-            roi_h_internal = h_lines[y+shave : y+h-shave, x:x+w]
-            h_cnts, _ = cv2.findContours(roi_h_internal, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+            roi_h_internal = h_lines[y+shave: y+h-shave, x:x+w]
+            h_cnts, _ = cv2.findContours(
+                roi_h_internal, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
 
-            start_xs = [cv2.boundingRect(c)[0] for c in h_cnts if cv2.boundingRect(c)[2] > 150]
-            end_xs = [cv2.boundingRect(c)[0] + cv2.boundingRect(c)[2] for c in h_cnts if cv2.boundingRect(c)[2] > 150]
+            start_xs = [cv2.boundingRect(
+                c)[0] for c in h_cnts if cv2.boundingRect(c)[2] > 150]
+            end_xs = [cv2.boundingRect(c)[0] + cv2.boundingRect(c)[2]
+                      for c in h_cnts if cv2.boundingRect(c)[2] > 150]
 
             def get_consensus(values, tolerance=20):
                 if not values:
@@ -225,7 +239,8 @@ def extract_table_native_cad(doc, page, is_gate_pass=False):
                 max_count = 0
                 best_val = None
                 for v in values:
-                    count = sum(1 for other in values if abs(v - other) <= tolerance)
+                    count = sum(1 for other in values if abs(
+                        v - other) <= tolerance)
                     if count > max_count:
                         max_count = count
                         best_val = v
@@ -242,15 +257,17 @@ def extract_table_native_cad(doc, page, is_gate_pass=False):
                         new_x_global = x + true_sx
                         new_ex_global = x + true_ex
                         if (new_x_global - 50 <= ax_global <= new_ex_global + 50):
-                            print(f"      ✂️ Magic Crop: Đã gọt sạch {true_sx}px viền rác thừa!")
+                            print(
+                                f"      ✂️ Magic Crop: Đã gọt sạch {true_sx}px viền rác thừa!")
                             x, w = new_x_global, new_w
                     else:
                         x, w = x + true_sx, new_w
 
         pad = 20
         x_crop, y_crop = max(0, x - pad), max(0, y - pad)
-        w_crop, h_crop = min(img.shape[1] - x_crop, w + 2 * pad), min(img.shape[0] - y_crop, h + 2 * pad)
-      
+        w_crop, h_crop = min(
+            img.shape[1] - x_crop, w + 2 * pad), min(img.shape[0] - y_crop, h + 2 * pad)
+
         final_crop = img[y_crop:y_crop+h_crop, x_crop:x_crop+w_crop]
         debug_images[f"NativeCad 5. Thanh qua sau Magic Crop (Bang {idx+1})"] = final_crop
         extracted_tables.append(final_crop)
@@ -258,7 +275,8 @@ def extract_table_native_cad(doc, page, is_gate_pass=False):
     debug_show_all(debug_images)
 
     label_mode = "Gate Pass PDF" if is_gate_pass else "Case 2 (Native CAD)"
-    print(f"   ✅ Kích hoạt {label_mode}: Bắt thành công {len(extracted_tables)} Bảng!")
+    print(
+        f"   ✅ Kích hoạt {label_mode}: Bắt thành công {len(extracted_tables)} Bảng!")
     return extracted_tables
 
 
@@ -314,22 +332,27 @@ def get_table_image_from_page(doc, page, force_mode=None):
 def capture_roi_image(page):
     rect = page.rect
     roi = config.ROI_DRAWING_NO
-    clip_rect = fitz.Rect(rect.width * roi[0], rect.height * roi[1], rect.width * roi[2], rect.height * roi[3])
+    clip_rect = fitz.Rect(
+        rect.width * roi[0], rect.height * roi[1], rect.width * roi[2], rect.height * roi[3])
     pix = page.get_pixmap(clip=clip_rect, dpi=150)
-    img_np = np.frombuffer(pix.samples, dtype=np.uint8).reshape(pix.height, pix.width, pix.n)
+    img_np = np.frombuffer(pix.samples, dtype=np.uint8).reshape(
+        pix.height, pix.width, pix.n)
     return cv2.cvtColor(img_np, cv2.COLOR_RGBA2BGR) if pix.n == 4 else cv2.cvtColor(img_np, cv2.COLOR_RGB2BGR)
 
 
 def extract_drawing_no_tier1(page):
     rect = page.rect
     roi = config.ROI_DRAWING_NO
-    clip_rect = fitz.Rect(rect.width * roi[0], rect.height * roi[1], rect.width * roi[2], rect.height * roi[3])
+    clip_rect = fitz.Rect(
+        rect.width * roi[0], rect.height * roi[1], rect.width * roi[2], rect.height * roi[3])
     text = page.get_text("text", clip=clip_rect)
 
     if text.strip():
-        print(f"   [Debug] Text dò được ở vùng ROI:\n   >>> {repr(text.strip())}")
+        print(
+            f"   [Debug] Text dò được ở vùng ROI:\n   >>> {repr(text.strip())}")
 
-    match = re.search(r"DRAWING\s*NO\.?([\s\S]+)", text, re.IGNORECASE) or re.search(r"BẢN\s*VẼ([\s\S]+)", text, re.IGNORECASE)
+    match = re.search(r"DRAWING\s*NO\.?([\s\S]+)", text, re.IGNORECASE) or re.search(
+        r"BẢN\s*VẼ([\s\S]+)", text, re.IGNORECASE)
     if match:
         for line in match.group(1).split('\n'):
             line = line.strip()
@@ -350,8 +373,10 @@ def encode_image(img):
     if new_w > config.MAX_IMG_WIDTH:
         scale = config.MAX_IMG_WIDTH / w
         new_w, new_h = int(w * scale), int(h * scale)
-    img_resized = cv2.resize(img, (new_w, new_h), interpolation=cv2.INTER_CUBIC)
-    _, buffer = cv2.imencode('.jpg', img_resized, [int(cv2.IMWRITE_JPEG_QUALITY), config.JPEG_QUALITY])
+    img_resized = cv2.resize(
+        img, (new_w, new_h), interpolation=cv2.INTER_CUBIC)
+    _, buffer = cv2.imencode('.jpg', img_resized, [int(
+        cv2.IMWRITE_JPEG_QUALITY), config.JPEG_QUALITY])
     return base64.b64encode(buffer).decode('utf-8')
 
 
@@ -360,9 +385,11 @@ def clean_ai_dataframe(df):
         return df
     df_clean = df.copy()
     if 'SDAC_CODE' in df_clean.columns:
-        df_clean['SDAC_CODE'] = df_clean['SDAC_CODE'].astype(str).str.strip().str.upper()
+        df_clean['SDAC_CODE'] = df_clean['SDAC_CODE'].astype(
+            str).str.strip().str.upper()
         df_clean = df_clean[df_clean['SDAC_CODE'].str.len() > 5]
-        df_clean = df_clean[df_clean['SDAC_CODE'].str.contains(r'-', regex=True)]
+        df_clean = df_clean[df_clean['SDAC_CODE'].str.contains(
+            r'-', regex=True)]
     return df_clean
 
 
@@ -397,7 +424,7 @@ def call_ai_vision(task_data):
         prompt = """
         Bạn là chuyên gia bóc tách khối lượng MEP. Các cột trong bảng có thể không cố định thứ tự và chứa nhiều cột phụ (From, To, Calculator...).
         Hãy phớt lờ mọi cột phụ, dùng khả năng suy luận để ĐỊNH VỊ CHÍNH XÁC 4 giá trị sau dựa vào tiêu đề cột:
-        
+       
         1. "SDAC_CODE": Nằm dưới cột Item code / Code.
             - Mã LUÔN LUÔN CÓ ĐÚNG 12 KÝ TỰ (Ví dụ: M03-21668484). Chữ + 2 chữ số + Dấu gạch "-" + 8 chữ số.
             - BẮT BUỘC BẠN PHẢI ĐẾM LẠI : Nếu AI đọc ra 11 ký tự -> Bị dính nét, hãy nhìn kỹ lại để tách ra cho đủ 12.
@@ -420,13 +447,15 @@ def call_ai_vision(task_data):
                 "role": "user",
                 "content": [
                     {"type": "text", "text": prompt},
-                    {"type": "image_url", "image_url": {"url": f"data:image/jpeg;base64,{base64_image}", "detail": "high"}}
+                    {"type": "image_url", "image_url": {
+                        "url": f"data:image/png;base64,{base64_image}", "detail": "high"}}
                 ]
             }
         ],
         "temperature": config.TEMPERATURE
     }
-    headers = {"Content-Type": "application/json", "Authorization": f"Bearer {config.API_KEY}"}
+    headers = {"Content-Type": "application/json",
+               "Authorization": f"Bearer {config.API_KEY}"}
 
     for attempt in range(config.MAX_RETRIES):
         try:
@@ -434,13 +463,16 @@ def call_ai_vision(task_data):
                 config.API_URL, headers=headers, json=payload, timeout=120, proxies={"http": None, "https": None}
             )
             response.raise_for_status()
-            result_text = response.json()['choices'][0]['message']['content'].replace("```json", "").replace("```", "").strip()
+            result_text = response.json()['choices'][0]['message']['content'].replace(
+                "```json", "").replace("```", "").strip()
 
             if task_type == "drawing_no":
                 return {"type": "drawing_no", "data": result_text}
 
-            start_idx = min([i for i in [result_text.find('['), result_text.find('{')] if i >= 0] or [0])
-            parsed_json, _ = json.JSONDecoder().raw_decode(result_text[start_idx:])
+            start_idx = min([i for i in [result_text.find(
+                '['), result_text.find('{')] if i >= 0] or [0])
+            parsed_json, _ = json.JSONDecoder().raw_decode(
+                result_text[start_idx:])
 
             if isinstance(parsed_json, dict):
                 list_found = False
@@ -458,15 +490,20 @@ def call_ai_vision(task_data):
             if not df.empty:
                 if 'QTY' in df.columns:
                     # Xử lý trường hợp AI đọc số có dấu phẩy ngăn cách hàng nghìn
-                    df['QTY'] = df['QTY'].astype(str).str.replace(',', '').str.strip()
-                    df['QTY'] = pd.to_numeric(df['QTY'], errors='coerce').fillna(0)
+                    df['QTY'] = df['QTY'].astype(
+                        str).str.replace(',', '').str.strip()
+                    df['QTY'] = pd.to_numeric(
+                        df['QTY'], errors='coerce').fillna(0)
 
                 if case_type == "gate_pass":
-                    df = df.reindex(columns=["SDAC_CODE", "QTY"]).fillna({"SDAC_CODE": "", "QTY": 0})
+                    df = df.reindex(columns=["SDAC_CODE", "QTY"]).fillna(
+                        {"SDAC_CODE": "", "QTY": 0})
                 else:
                     if 'REMARK' in df.columns:
-                        df['REMARK'] = df['REMARK'].apply(lambda x: "SDV" if "SDV" in str(x).upper() else "")
-                    df = df.reindex(columns=["SDAC_CODE", "QTY", "PHU_TROI", "REMARK"]).fillna("")
+                        df['REMARK'] = df['REMARK'].apply(
+                            lambda x: "SDV" if "SDV" in str(x).upper() else "")
+                    df = df.reindex(
+                        columns=["SDAC_CODE", "QTY", "PHU_TROI", "REMARK"]).fillna("")
 
                 df = clean_ai_dataframe(df)
 
@@ -489,11 +526,14 @@ def get_smart_cut_points_case1(img, max_chunk_height):
     h, w = img.shape[:2]
     gray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
     debug_images["Cut Case1 : 0. Anh Gray"] = gray
-    thresh = cv2.adaptiveThreshold(~gray, 255, cv2.ADAPTIVE_THRESH_MEAN_C, cv2.THRESH_BINARY, 15, -2)
+    thresh = cv2.adaptiveThreshold(
+        ~gray, 255, cv2.ADAPTIVE_THRESH_MEAN_C, cv2.THRESH_BINARY, 15, -2)
     debug_images["Cut Case1 : 1. Anh X-Quang"] = thresh
     kernel_len = max(100, w // 4)
-    horizontal_kernel = cv2.getStructuringElement(cv2.MORPH_RECT, (kernel_len, 1))
-    horizontal_lines = cv2.morphologyEx(thresh, cv2.MORPH_OPEN, horizontal_kernel)
+    horizontal_kernel = cv2.getStructuringElement(
+        cv2.MORPH_RECT, (kernel_len, 1))
+    horizontal_lines = cv2.morphologyEx(
+        thresh, cv2.MORPH_OPEN, horizontal_kernel)
     debug_images["Cut Case1 : 2. Loc Net Ngang (Chi con duong ke ngang)"] = horizontal_lines
     row_sums = np.sum(horizontal_lines, axis=1)
     line_y_coords = np.where(row_sums > 0)[0]
@@ -501,7 +541,8 @@ def get_smart_cut_points_case1(img, max_chunk_height):
     cut_points, current_y = [0], 0
     while current_y + max_chunk_height < h:
         target_y = current_y + max_chunk_height
-        valid_lines = line_y_coords[(line_y_coords >= target_y - 60) & (line_y_coords <= target_y + 60)]
+        valid_lines = line_y_coords[(
+            line_y_coords >= target_y - 60) & (line_y_coords <= target_y + 60)]
         if len(valid_lines) > 0:
             best_y = valid_lines[np.argmin(np.abs(valid_lines - target_y))]
             cut_points.append(best_y)
@@ -515,7 +556,7 @@ def get_smart_cut_points_case1(img, max_chunk_height):
     for y_cut in cut_points:
         # Lệnh vẽ đường thẳng màu Xanh lá (0, 255, 0) đè lên đường kẻ ngang của Excel
         cv2.line(debug_img, (0, y_cut), (w, y_cut), (0, 255, 0), 2)
-   
+
     debug_images["Cut Case1 : 3. Vet Dao Chem (Case 1 - Cat Tren Duong Ke"] = debug_img
     debug_show_all(debug_images)
 
@@ -528,9 +569,11 @@ def get_smart_cut_points_case2(img, max_chunk_height):
     h, w = img.shape[:2]
     gray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
     debug_images["Cut Case2 : 0. Anh Gray"] = gray
-    _, thresh = cv2.threshold(gray, 0, 255, cv2.THRESH_BINARY_INV + cv2.THRESH_OTSU)
+    _, thresh = cv2.threshold(
+        gray, 0, 255, cv2.THRESH_BINARY_INV + cv2.THRESH_OTSU)
     debug_images["Cut Case2 : 1. Anh X-Quang"] = thresh
-    thresh_dilated = cv2.dilate(thresh, cv2.getStructuringElement(cv2.MORPH_RECT, (15, 5)), iterations=1)
+    thresh_dilated = cv2.dilate(thresh, cv2.getStructuringElement(
+        cv2.MORPH_RECT, (15, 5)), iterations=1)
     debug_images["Cut Case2 : 2. Anh thresh_dilated"] = thresh_dilated
     row_sums = np.sum(thresh_dilated, axis=1)
 
@@ -556,21 +599,20 @@ def get_smart_cut_points_case2(img, max_chunk_height):
     for y_cut in cut_points:
         # Lệnh vẽ đường thẳng màu Đỏ (0, 0, 255), dày 2px vắt ngang qua ảnh
         cv2.line(debug_img, (0, y_cut), (w, y_cut), (0, 0, 255), 2)
-       
+
     # Xem tận mắt lưỡi dao lách qua các dòng chữ như thế nào
     debug_images["Cut Case2 : 3. Vet Dao Chem (Case 2 - Tim Khe Ho)"] = debug_img
     debug_show_all(debug_images)
-   
+
     return cut_points
 
 
 # ==========================================
 # HÀM XỬ LÝ CHÍNH (HỖ TRỢ GỌI TỪ CLI HOẶC WEB SERVER)
 # ==========================================
-def process_single_pdf(pdf_path, force_mode=None, out_drawing_dir=None, out_gatepass_dir=None, evidence_dir=None):
+def process_single_pdf(pdf_path, force_mode=None, out_drawing_dir=None, out_gatepass_dir=None):
     """
     Xử lý 1 file PDF bất kỳ (Bản vẽ hoặc Gate Pass).
-    Tối ưu: Chunks được giữ trực tiếp trên RAM để gửi AI, chỉ lưu ảnh bằng chứng JPEG.
     """
     file_name = os.path.basename(pdf_path)
     print(f"\n{'='*50}\n⚙ BẮT ĐẦU XỬ LÝ FILE: {file_name}\n{'='*50}")
@@ -579,21 +621,19 @@ def process_single_pdf(pdf_path, force_mode=None, out_drawing_dir=None, out_gate
     base_name = ut.clean_vietnamese_filename(os.path.splitext(file_name)[0])
 
     dir_csv_drawings = out_drawing_dir or config.DIR_CSV_EXTRACTED
-    dir_csv_gatepass = out_gatepass_dir or getattr(config, 'DIR_GATEPASS_CSV', config.DIR_CSV_EXTRACTED)
-    dir_img_evidence = evidence_dir or config.DIR_IMG_EXTRACTED
-
+    dir_csv_gatepass = out_gatepass_dir or getattr(
+        config, 'DIR_GATEPASS_CSV', config.DIR_CSV_EXTRACTED)
     os.makedirs(dir_csv_drawings, exist_ok=True)
     os.makedirs(dir_csv_gatepass, exist_ok=True)
-    os.makedirs(dir_img_evidence, exist_ok=True)
-
-    jpeg_opts = [int(cv2.IMWRITE_JPEG_QUALITY), config.JPEG_QUALITY]
+    os.makedirs(config.DIR_IMG_EXTRACTED, exist_ok=True)
 
     for page_num in range(len(doc)):
         page = doc[page_num]
         print(f"\n📄 Đang quét Trang {page_num + 1}/{len(doc)}...")
 
         # 1. Trạm điều phối trả về DANH SÁCH ẢNH BẢNG
-        table_imgs, case_type = get_table_image_from_page(doc, page, force_mode=force_mode)
+        table_imgs, case_type = get_table_image_from_page(
+            doc, page, force_mode=force_mode)
         if not table_imgs:
             print("-> ⏭️ Trang này không chứa Bảng hợp lệ. Bỏ qua.")
             continue
@@ -603,86 +643,106 @@ def process_single_pdf(pdf_path, force_mode=None, out_drawing_dir=None, out_gate
 
         if case_type != "gate_pass":
             roi_img = capture_roi_image(page)
-            # Lưu ảnh bằng chứng Số bản vẽ (định dạng JPG nén nhẹ)
-            cv2.imwrite(os.path.join(dir_img_evidence, f"{base_name}_page{page_num+1}_drawing_no.jpg"), roi_img, jpeg_opts)
+            cv2.imwrite(os.path.join(config.DIR_IMG_EXTRACTED,
+                        f"{base_name}_page{page_num+1}_roi_debug.png"), roi_img)
             drawing_no = extract_drawing_no_tier1(page)
             if not drawing_no:
-                print("-> ⚠️ Tầng 1 không dò được Số Bản Vẽ. Kích hoạt AI Vision đọc ảnh ROI...")
-                tasks.append({"type": "drawing_no", "img": roi_img, "label": "Đọc Số Bản Vẽ"})
+                print(
+                    "-> ⚠️ Tầng 1 không dò được Số Bản Vẽ. Kích hoạt AI Vision đọc ảnh ROI...")
+                tasks.append(
+                    {"type": "drawing_no", "img": roi_img, "label": "Đọc Số Bản Vẽ"})
             else:
                 print(f"-> ✅ Chốt Số Bản Vẽ (Tầng 1): '{drawing_no}'")
 
         # 2. VÒNG LẶP XỬ LÝ NHIỀU BẢNG (MULTI-TABLE CHUNKING)
         for tbl_idx, table_img in enumerate(table_imgs):
             h, w = table_img.shape[:2]
-            # Lưu ảnh bằng chứng Bảng khối lượng gốc
-            cv2.imwrite(os.path.join(dir_img_evidence, f"{base_name}_page{page_num+1}_table{tbl_idx+1}_{case_type}.jpg"), table_img, jpeg_opts)
-           
+            cv2.imwrite(os.path.join(config.DIR_IMG_EXTRACTED,
+                        f"{base_name}_page{page_num+1}_table{tbl_idx+1}_{case_type}.png"), table_img)
+
             if h > config.MAX_CHUNK_HEIGHT:
                 if case_type == "case1":
-                    cut_points = get_smart_cut_points_case1(table_img, config.MAX_CHUNK_HEIGHT)
+                    cut_points = get_smart_cut_points_case1(
+                        table_img, config.MAX_CHUNK_HEIGHT)
                 else:
-                    cut_points = get_smart_cut_points_case2(table_img, config.MAX_CHUNK_HEIGHT)
+                    cut_points = get_smart_cut_points_case2(
+                        table_img, config.MAX_CHUNK_HEIGHT)
 
                 for i in range(len(cut_points) - 1):
                     y_start, y_end = cut_points[i], cut_points[i+1]
                     img_chunk = table_img[y_start:y_end, :]
                     if np.std(img_chunk) < 5:
                         continue
-                    # Cắt khúc chuyển thẳng lên RAM (không ghi đĩa làm phình bộ nhớ)
-                    tasks.append({"type": "table", "case_type": case_type, "img": img_chunk, "label": f"Bảng {tbl_idx+1} - Khúc {i+1}"})
+
+                    cv2.imwrite(os.path.join(
+                        config.DIR_IMG_EXTRACTED, f"{base_name}_page{page_num+1}_table{tbl_idx+1}_chunk_{i+1}.png"), img_chunk)
+                    tasks.append({"type": "table", "case_type": case_type,
+                                 "img": img_chunk, "label": f"Bảng {tbl_idx+1} - Khúc {i+1}"})
             else:
-                tasks.append({"type": "table", "case_type": case_type, "img": table_img, "label": f"Bảng {tbl_idx+1} - Toàn Bộ"})
+                tasks.append({"type": "table", "case_type": case_type,
+                             "img": table_img, "label": f"Bảng {tbl_idx+1} - Toàn Bộ"})
 
         # 3. Bắn Đa luồng lên AI Server
         dfs_to_combine = []
         if tasks:
-            print(f"-> 🚀 Bắn Đa luồng ({len(tasks)} nhiệm vụ) lên AI Server...")
+            print(
+                f"-> 🚀 Bắn Đa luồng ({len(tasks)} nhiệm vụ) lên AI Server...")
             with concurrent.futures.ThreadPoolExecutor(max_workers=config.MAX_AI_WORKERS) as executor:
-                future_to_task = {executor.submit(call_ai_vision, task): task for task in tasks}
+                future_to_task = {executor.submit(
+                    call_ai_vision, task): task for task in tasks}
                 for future in concurrent.futures.as_completed(future_to_task):
                     task_info = future_to_task[future]
                     try:
                         res = future.result()
                         if res["type"] == "drawing_no" and res["data"]:
                             drawing_no = res["data"]
-                            print(f"-> ✅ AI đã đọc được Số Bản Vẽ (Tầng 2): '{drawing_no}'")
+                            print(
+                                f"-> ✅ AI đã đọc được Số Bản Vẽ (Tầng 2): '{drawing_no}'")
                         elif res["type"] == "table" and not res["data"].empty:
-                            dfs_to_combine.append((task_info["label"], res["data"]))
+                            dfs_to_combine.append(
+                                (task_info["label"], res["data"]))
                     except Exception as e:
                         print(f"❌ {task_info['label']} bị lỗi: {e}")
 
         # 4. Lưu kết quả ra CSV
         if dfs_to_combine:
             # Sắp xếp đúng thứ tự: Bảng 1 Khúc 1 -> Bảng 1 Khúc 2 -> Bảng 2 Khúc 1
-            dfs_to_combine.sort(key=lambda x: [int(s) if s.isdigit() else s for s in re.split(r'(\d+)', x[0])])
-            final_df = pd.concat([df for _, df in dfs_to_combine], ignore_index=True)
-            final_df = final_df.replace(r'^\s*$', pd.NA, regex=True).dropna(how='all')
+            dfs_to_combine.sort(
+                key=lambda x: [int(s) if s.isdigit() else s for s in re.split(r'(\d+)', x[0])])
+            final_df = pd.concat(
+                [df for _, df in dfs_to_combine], ignore_index=True)
+            final_df = final_df.replace(
+                r'^\s*$', pd.NA, regex=True).dropna(how='all')
 
             if case_type == "gate_pass":
                 out_name = f"GATEPASS_{base_name}_p{page_num+1}.csv"
                 out_path = os.path.join(dir_csv_gatepass, out_name)
                 final_df.to_csv(out_path, index=False, encoding='utf-8-sig')
-                print(f"🎉 [Gate Pass] Bóc tách thành công -> Lưu CSV: '{out_name}'")
+                print(
+                    f"🎉 [Gate Pass] Bóc tách thành công -> Lưu CSV: '{out_name}'")
             else:
                 if not drawing_no:
                     drawing_no = f"{base_name}_p{page_num+1}"
                 else:
-                    drawing_no = re.sub(r'[\\/*?:"<>|]', "", str(drawing_no)).strip()
+                    drawing_no = re.sub(
+                        r'[\\/*?:"<>|]', "", str(drawing_no)).strip()
 
-                final_df = final_df.drop_duplicates(subset=["SDAC_CODE", "QTY", "PHU_TROI", "REMARK"], keep='first')
+                final_df = final_df.drop_duplicates(
+                    subset=["SDAC_CODE", "QTY", "PHU_TROI", "REMARK"], keep='first')
                 out_name = f"{drawing_no}.csv"
                 out_path = os.path.join(dir_csv_drawings, out_name)
                 final_df.to_csv(out_path, index=False, encoding='utf-8-sig')
-                print(f"🎉 [Bản Vẽ] Bóc tách thành công {len(table_imgs)} Bảng -> Lưu chung vào 1 CSV: '{out_name}'")
+                print(
+                    f"🎉 [Bản Vẽ] Bóc tách thành công {len(table_imgs)} Bảng -> Lưu chung vào 1 CSV: '{out_name}'")
         else:
             print("⚠️ Không bóc tách được dữ liệu bảng nào ở trang này.")
 
-    print(f"⏱️ HOÀN TẤT FILE {file_name} (Thời gian: {time.time() - start_time:.2f}s)")
+    print(
+        f"⏱️ HOÀN TẤT FILE {file_name} (Thời gian: {time.time() - start_time:.2f}s)")
 
 
 def run_extraction_pipeline():
-    """Hàm gom toàn bộ PDF từ các thư mục cấu hình và chạy trích xuất (CLI Runner)."""
+    """Hàm gom toàn bộ PDF từ các thư mục cấu hình và chạy trích xuất."""
     total_start = time.time()
     tasks_queue = []
 
@@ -696,17 +756,19 @@ def run_extraction_pipeline():
 
     if hasattr(config, 'DIR_PDF_INPUT') and os.path.exists(config.DIR_PDF_INPUT):
         for p in glob.glob(os.path.join(config.DIR_PDF_INPUT, "*.pdf")):
-            tasks_queue.append((p, None))
+            tasks_queue.append((p, None))  # None = Tự động phân loại bằng Text
 
     if not tasks_queue:
         print("⚠️ Không tìm thấy file PDF nào trong các thư mục Input!")
         return
 
-    print(f"🚀 Tìm thấy {len(tasks_queue)} file PDF. Bắt đầu quy trình bóc tách...\n")
+    print(
+        f"🚀 Tìm thấy {len(tasks_queue)} file PDF. Bắt đầu quy trình bóc tách...\n")
     for pdf_path, mode in tasks_queue:
         process_single_pdf(pdf_path, force_mode=mode)
 
-    print(f"\n🏁 XONG TOÀN BỘ BƯỚC BÓC TÁCH PDF! Tổng thời gian: {(time.time() - total_start):.2f} giây")
+    print(
+        f"\n🏁 XONG TOÀN BỘ BƯỚC BÓC TÁCH PDF! Tổng thời gian: {(time.time() - total_start):.2f} giây")
 
 
 if __name__ == "__main__":

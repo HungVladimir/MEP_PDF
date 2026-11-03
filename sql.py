@@ -1,315 +1,371 @@
-# ====================================================================
-# THAO TÁC CƠ SỞ DỮ LIỆU ORACLE (ORACLE SQL HELPER)
-# Dự án: MEP Payment AI - Chuẩn hóa 100% theo kiến trúc OneAI công ty
-# Sử dụng trực tiếp Oracle DB (Schema LOCAL_AI.MEP_PAYMENT_ANALYSIS)
-# ====================================================================
+
+from dotenv import load_dotenv, find_dotenv
 import os
-import sys
 from pathlib import Path
+import pandas as pd
 import oracledb
+from datetime import datetime, timedelta
+from oneai_sdv import oracle_conn, result_type
 
-# Đảm bảo console Windows chạy đúng UTF-8
-if sys.stdout and hasattr(sys.stdout, 'reconfigure'):
-    try:
-        sys.stdout.reconfigure(encoding='utf-8')
-        sys.stderr.reconfigure(encoding='utf-8')
-    except Exception:
-        pass
-
-# 1. NẠP CẤU HÌNH BIẾN MÔI TRƯỜNG TỪ .ENV
-try:
-    from dotenv import load_dotenv, find_dotenv
-    env_file = find_dotenv()
-    if env_file:
-        load_dotenv(env_file)
-    else:
-        load_dotenv()
-except ImportError:
-    pass
-
+load_dotenv(find_dotenv())
 DB_USER_YMS = os.getenv("DB_USER_YMS")
 DB_PASSWORD_YMS = os.getenv("DB_PASSWORD_YMS")
 TNS_YMS = os.getenv("TNS_YMS")
 
-# Tài khoản Local AI chuyên trách
+# local AI
 DB_USER_YMS_AI = os.getenv("DB_USER_YMS_AI")
 DB_PASSWORD_YMS_AI = os.getenv("DB_PASSWORD_YMS_AI")
 
-# 2. TỰ ĐỘNG TÌM THƯ MỤC ORACLE INSTANT CLIENT (CHỨA OCI.DLL)
+# ==========================
+# Oracle
+# ==========================
+BASE_FOLDER = Path(__file__).resolve().parent / "init_data"
 oracle_client_path = os.getenv("ORACLE_CLIENT_LIB_DIR")
-if not oracle_client_path or not os.path.exists(oracle_client_path):
-    # Quét tự động các vị trí phổ biến chứa oracle_client
-    candidates = [
-        Path(__file__).resolve().parent / "oracle_client",
-        Path(__file__).resolve().parent.parent / "oracle_client",
-        Path(r"C:\oracle_client"),
-        Path(r"C:\instantclient_19_19"),
-        Path(r"C:\instantclient_23_7"),
-        Path("/opt/oracle/instantclient_23_7"),
-        Path("/service/oracle_client"),
+
+oracledb.init_oracle_client(lib_dir=oracle_client_path)
+
+conn = oracledb.connect(user=DB_USER_YMS, password=DB_PASSWORD_YMS, dsn=TNS_YMS)
+
+cell_ng_sql = """
+                SELECT GLASSID,PRODUCTID,EVENTVALUE FROM YMS_DW.DW_GLASSCELL_EVENTHIST
+                WHERE ACTIVITY ='Rework'
+                AND EVENTVALUE NOT IN ('-')
+                AND EVENTTIME >= TO_DATE(:STARTTIME,'YYYYMMDD')
+                AND EVENTTIME < TO_DATE(:ENDTIME,'YYYYMMDD')
+                """
+
+trackin_sql = """
+                SELECT GLASSID,TKINTIME,EQPID,STEPID,CURRENTSITE,AREANAME FROM YMS_DW.DW_GLASSCELL_EVENTHIST
+                WHERE ACTIVITY ='TrackIn'
+                AND EVENTTIME >= TO_DATE(:STARTTIME,'YYYYMMDD')
+                AND EVENTTIME < TO_DATE(:ENDTIME,'YYYYMMDD')
+                """
+
+err_sql = """
+                SELECT DISTINCT ATTR10 STEPID,ATTR12 ERR_CODE  FROM BN3SPC_STD.I_USER_PRM
+                WHERE INDEX_ID ='IB_FEEDBACK_WCON'
+                AND INDEX_TYPE  = 'BAD'
+                AND ATTR10 !='*'
+                """              
+
+def init_data(save_folder, query, day_range=1, batch_size=100000):
+
+    BATCH_SIZE = batch_size
+    save_path = os.path.join(BASE_FOLDER, save_folder)
+    print(f"-----------------------------GET DATA-----------------------------------")
+    print(f"\nĐang thao thác tại thư mục: {save_path}")
+   
+    os.makedirs(save_path, exist_ok=True)
+
+    # lấy tên các file trong thư mục (8 ký tự đầu)
+    file_list = [
+        file.stem[:8]  # lấy tên file (không gồm phần mở rộng) rồi lấy 8 ký tự đầu
+        for file in Path(save_path).iterdir()
+        if file.is_file()
     ]
-    for cand in candidates:
-        if cand.exists():
-            oracle_client_path = str(cand)
-            break
 
-# 3. KHỞI TẠO ORACLE THICK CLIENT (BẮT BUỘC ĐỂ TRÁNH LỖI DPY-3015)
-if oracle_client_path and os.path.exists(oracle_client_path):
+    batch_no = 1
+    total_rows = 0
+
+    end_date = datetime.now()
+    time_list = []
+
+    for i in range(day_range):
+        start_date = end_date - timedelta(days=day_range - i)
+        next_date = start_date + timedelta(days=1)
+        start_date_str = start_date.strftime("%Y%m%d")
+        next_date_str = next_date.strftime("%Y%m%d")
+        time_list.append(start_date_str)
+
+        if start_date_str in file_list:
+            print(f"Đã có dữ liệu ngày: {start_date_str}")
+            continue
+
+        if day_range > 1:
+            params = {"STARTTIME": start_date_str, "ENDTIME": next_date_str}
+        else:
+            params = {}
+           
+        cursor = conn.cursor()
+        cursor.arraysize = BATCH_SIZE
+        cursor.execute(query, parameters=params)
+        columns = [c[0] for c in cursor.description]
+
+        while True:
+            rows = cursor.fetchmany(BATCH_SIZE)
+
+            if not rows:
+                break
+
+            print(f"Thêm dữ liệu cho ngày: {start_date_str}")
+            df = pd.DataFrame(rows, columns=columns)
+            filename = os.path.join(
+                save_path, f"{start_date_str}_{batch_no:04d}.parquet"
+            )
+
+            df.to_parquet(filename, engine="pyarrow", compression="snappy", index=False)
+
+            total_rows += len(df)
+
+            print(f"Saved {filename} ({len(df):,} rows)")
+
+            batch_no += 1
+
+        cursor.close()
+
+    # xóa dữ liệu không cần thiết
+    time_set = set(time_list)
+
+    for file_name in os.listdir(save_path):
+        file_path = os.path.join(save_path, file_name)
+
+        if not os.path.isfile(file_path):
+            continue
+
+        file_date = os.path.splitext(file_name)[0][:8]
+
+        if file_date not in time_set:
+            print(f"Delete: {file_name}")
+            os.remove(file_path)
+
+    print(f"\nTotal rows = {total_rows:,} \n\n")
+
+
+def insert_cmd_data_table(data_insert):
     try:
-        oracledb.init_oracle_client(lib_dir=oracle_client_path)
-        print(f"[Oracle] Da khoi tao Oracle Thick Client tai: {oracle_client_path}")
-    except Exception as e:
-        pass
-else:
-    print(f"[CANH BAO] Chua tim thay thu muc Oracle Client tai: {oracle_client_path}")
-
-# 4. KIỂM TRA THƯ VIỆN NỘI BỘ ONEAI SDV
-try:
-    from oneai_sdv import oracle_conn, result_type
-    HAS_ONEAI_SDV = True
-except ImportError:
-    oracle_conn = None
-    HAS_ONEAI_SDV = False
-
-# 5. HÀM LẤY KẾT NỐI DỰ PHÒNG NẾU KHÔNG CÓ ONEAI_SDV
-def get_native_conn():
-    """Dùng oracledb native Thick Client kết nối qua TNS_YMS."""
-    if not oracle_client_path or not os.path.exists(oracle_client_path):
-        raise RuntimeError(
-            f"Không tìm thấy thư mục Oracle Client chứa oci.dll tại: '{oracle_client_path}'. "
-            "Vui lòng kiểm tra lại đường dẫn ORACLE_CLIENT_LIB_DIR trong file .env!"
+        SQL_Insert = """
+           INSERT INTO LOCAL_AI.CDM_DATA_ANALYSIS
+                  (
+                   KEYID,
+                   PROCESS,
+                   EQPID,
+                   ERR_CODE,
+                   NG_QTY,
+                   RANGETIME_ERR,
+                   RANGETIME_REQ,
+                   AI_TIME,
+                   PRODUCTID,
+                   ERR_TIME,
+                   STATUS,
+                   GLASSID_LIST,
+                   DESCRIPTION,
+                   SITE
+                  )
+                  VALUES
+                  (
+                   :KEYID,
+                   :PROCESS,
+                   :EQPID,
+                   :ERR_CODE,
+                   :NG_QTY,
+                   :RANGETIME_ERR,
+                   :RANGETIME_REQ,
+                   :AI_TIME,
+                   :PRODUCTID,
+                   :ERR_TIME,
+                   :STATUS,
+                   :GLASSID_LIST,
+                   :DESCRIPTION,
+                   :SITE
+                  ) 
+           """
+        cur = oracle_conn(
+            dns="MBAYMS",
+            user_name=DB_USER_YMS_AI,
+            password=DB_PASSWORD_YMS_AI,
+            oracle_client_dir=oracle_client_path,
         )
-    return oracledb.connect(user=DB_USER_YMS, password=DB_PASSWORD_YMS, dsn=TNS_YMS)
+        cur.execute(SQL_Insert, data_insert.to_dict("records"))
+    except oracledb.DatabaseError as e:
+        print("Error insert_cmd_data_table Oracle:", e)
 
-# 6. CÁC NGHIỆP VỤ DATABASE PHỤC VỤ BẢNG LOCAL_AI.MEP_PAYMENT_ANALYSIS
-def update_task_status(keyid: str, status: str, error_count: int = 0, result_link: str = None, reason: str = ""):
-    """Cập nhật trạng thái tiến độ vào bảng LOCAL_AI.MEP_PAYMENT_ANALYSIS."""
-    sql = """
-        UPDATE LOCAL_AI.MEP_PAYMENT_ANALYSIS
-        SET STATUS       = :STATUS,
-            ERROR_COUNT  = :ERROR_COUNT,
-            RESULT_LINK  = :RESULT_LINK,
-            REASON       = :REASON,
-            RESULT_TIME  = CASE WHEN :STATUS IN ('COMPLETED', 'CANCEL') THEN SYSDATE ELSE RESULT_TIME END,
-            UPLOAD_TIME  = CASE WHEN :STATUS = 'WAITING' THEN SYSDATE ELSE UPLOAD_TIME END
-        WHERE KEYID = :KEYID
+
+def update_status(keyid, status):
+    try:
+        sql_update = """
+                UPDATE LOCAL_AI.CDM_DATA_ANALYSIS
+                SET
+                    STATUS = :STATUS,
+                    RESULT_TIME = SYSDATE
+                WHERE KEYID = :KEYID
+            """
+        params = {"KEYID": keyid, "STATUS": status}
+        cur = oracle_conn(
+            dns="MBAYMS",
+            user_name=DB_USER_YMS_AI,
+            password=DB_PASSWORD_YMS_AI,
+            oracle_client_dir=oracle_client_path,
+        )
+        cur.execute(sql_update, params=params)
+
+    except oracledb.DatabaseError as e:
+        print("Error update_status Oracle:", e)
+
+
+def update_status_reason(keyid, status, reason):
+    try:
+        sql_update = """
+                UPDATE LOCAL_AI.CDM_DATA_ANALYSIS
+                SET
+                    STATUS = :STATUS,
+                    REASON = :REASON,
+                    RESULT_TIME = SYSDATE
+                WHERE
+                    KEYID = :KEYID
+            """
+        params = {"KEYID": keyid, "STATUS": status, "REASON": reason}
+        cur = oracle_conn(
+            dns="MBAYMS",
+            user_name=DB_USER_YMS_AI,
+            password=DB_PASSWORD_YMS_AI,
+            oracle_client_dir=oracle_client_path,
+        )
+        cur.execute(sql_update, params=params)
+
+    except oracledb.DatabaseError as e:
+        print("Error update_status_reason Oracle:", e)
+
+
+def update_status_link(keyid, status, result_link,reason):
+    try:
+        sql_update = """
+                UPDATE LOCAL_AI.CDM_DATA_ANALYSIS
+                SET
+                    STATUS = :STATUS,
+                    RESULT_LINK = :RESULT_LINK,
+                    RESULT_TIME = SYSDATE,
+                    REASON = :REASON
+                WHERE
+                    KEYID = :KEYID
+            """
+        params = {"KEYID": keyid, "STATUS": status, "RESULT_LINK": result_link,"REASON": reason }
+        cur = oracle_conn(
+            dns="MBAYMS",
+            user_name=DB_USER_YMS_AI,
+            password=DB_PASSWORD_YMS_AI,
+            oracle_client_dir=oracle_client_path,
+        )
+        cur.execute(sql_update, params=params)
+
+    except oracledb.DatabaseError as e:
+        print("Error update_status_link Oracle:", e)
+
+
+def get_cmd_data_by_key(keyid):
+    try:
+        query = """
+           SELECT EQPID,ERR_TIME,STATUS FROM LOCAL_AI.CDM_DATA_ANALYSIS
+            WHERE AI_TIME > SYSDATE - 30
+            AND KEYID = :KEYID
+           """
+        cur = oracle_conn(
+            dns="MBAYMS",
+            user_name=DB_USER_YMS_AI,
+            password=DB_PASSWORD_YMS_AI,
+            oracle_client_dir=oracle_client_path,
+        )
+        data = cur.execute(
+            sql=query, params={"KEYID": keyid}, res=result_type.DATAFRAME
+        )
+        return data
+
+    except oracledb.DatabaseError as e:
+        print("Error get_cmd_data_by_key:", e)
+
+
+def get_exits_plan():
+    try:
+        query = """
+           SELECT EQPID, ERR_CODE, GLASSID_LIST FROM LOCAL_AI.CDM_DATA_ANALYSIS
+           WHERE AI_TIME > SYSDATE - 30
+           """
+        cur = oracle_conn(
+            dns="MBAYMS",
+            user_name=DB_USER_YMS_AI,
+            password=DB_PASSWORD_YMS_AI,
+            oracle_client_dir=oracle_client_path,
+        )
+        data = cur.execute(sql=query, res=result_type.DATAFRAME)
+        return data
+
+    except oracledb.DatabaseError as e:
+        print("Error get_exits_plan:", e)
+
+def get_description():
+    try:
+        query = """
+           SELECT CODEID ERR_CODE,DESCRIPTION_VE DESCRIPTION FROM LOCAL_AI.CODE_CODE_MD
+           WHERE CATEGORY = 'MD_DETAIL'
+           """
+        cur = oracle_conn(
+            dns="MBAYMS",
+            user_name=DB_USER_YMS_AI,
+            password=DB_PASSWORD_YMS_AI,
+            oracle_client_dir=oracle_client_path,
+        )
+        data = cur.execute(sql=query, res=result_type.DATAFRAME)
+        return data
+
+    except oracledb.DatabaseError as e:
+        print("Error get_description Oracle:", e)
+
+def get_ng_lots_from_db(keyid):
     """
-    params = {
-        "STATUS": status,
-        "ERROR_COUNT": error_count,
-        "RESULT_LINK": result_link,
-        "REASON": reason,
-        "KEYID": str(keyid).strip()
-    }
-    try:
-        if HAS_ONEAI_SDV and oracle_conn is not None:
-            cur = oracle_conn(
-                dns="MBAYMS",
-                user_name=DB_USER_YMS_AI,
-                password=DB_PASSWORD_YMS_AI,
-                oracle_client_dir=oracle_client_path,
-            )
-            cur.execute(sql, params=params)
-            try:
-                if hasattr(cur, 'commit'):
-                    cur.commit()
-                elif hasattr(cur, 'connection') and hasattr(cur.connection, 'commit'):
-                    cur.connection.commit()
-            except Exception:
-                pass
-        else:
-            conn = get_native_conn()
-            c = conn.cursor()
-            c.execute(sql, params)
-            conn.commit()
-            c.close()
-            conn.close()
-        print(f"[Oracle DB] Da cap nhat KEYID={keyid} -> STATUS={status}")
-    except Exception as e:
-        print(f"[Oracle DB Error] update_task_status: {e}")
-        raise
-
-def update_review_decision(keyid: str, decision: str, note: str, reviewer: str):
-    """Cập nhật quyết định phê duyệt (Approve / Reject) của kỹ sư."""
-    sql = """
-        UPDATE LOCAL_AI.MEP_PAYMENT_ANALYSIS
-        SET REVIEW_DECISION = :DECISION,
-            REVIEW_NOTE     = :NOTE,
-            REVIEW_BY       = :REVIEWER
-        WHERE KEYID = :KEYID
+    Hàm chuyên dụng để kết nối DB và lấy dữ liệu thô theo KEYID.
+    Trả về DataFrame với cột 'glass_ids' hoặc DataFrame rỗng nếu không có dữ liệu.
     """
-    params = {
-        "DECISION": decision,
-        "NOTE": note,
-        "REVIEWER": reviewer,
-        "KEYID": str(keyid).strip()
-    }
     try:
-        if HAS_ONEAI_SDV and oracle_conn is not None:
-            cur = oracle_conn(
-                dns="MBAYMS",
-                user_name=DB_USER_YMS_AI,
-                password=DB_PASSWORD_YMS_AI,
-                oracle_client_dir=oracle_client_path,
-            )
-            cur.execute(sql, params=params)
-            try:
-                if hasattr(cur, 'commit'):
-                    cur.commit()
-                elif hasattr(cur, 'connection') and hasattr(cur.connection, 'commit'):
-                    cur.connection.commit()
-            except Exception:
-                pass
-        else:
-            conn = get_native_conn()
-            c = conn.cursor()
-            c.execute(sql, params)
-            conn.commit()
-            c.close()
-            conn.close()
-        print(f"[Oracle DB] Da luu Review cho KEYID={keyid} -> {decision}")
+        query = """
+            SELECT GLASSID_LIST AS glass_ids
+            FROM LOCAL_AI.CDM_DATA_ANALYSIS
+            WHERE AI_TIME > SYSDATE - 30
+              AND KEYID = :KEYID
+              AND GLASSID_LIST IS NOT NULL
+        """       
+        cur = oracle_conn(
+            dns="MBAYMS",
+            user_name=DB_USER_YMS_AI,
+            password=DB_PASSWORD_YMS_AI,
+            oracle_client_dir=oracle_client_path,
+        )
+       
+        df_raw = cur.execute(
+            sql=query,
+            params={"KEYID": keyid},
+            res=result_type.DATAFRAME
+        )
+       
+        if df_raw is None or df_raw.empty:
+            return pd.DataFrame(columns=['glass_ids'])
+           
+        return df_raw
+           
+    except oracledb.DatabaseError as e:
+        error_code, error_msg = e.args[0].code, e.args[0].message
+        raise Exception(f"Lỗi truy vấn Oracle ORA-{error_code}: {error_msg}")
     except Exception as e:
-        print(f"[Oracle DB Error] update_review_decision: {e}")
         raise
 
-def check_keyid_exists(keyid: str) -> bool:
-    """Kiểm tra xem KEYID đã tồn tại trong bảng LOCAL_AI.MEP_PAYMENT_ANALYSIS hay chưa."""
-    if not keyid or not str(keyid).strip():
-        return False
-    sql = "SELECT COUNT(*) FROM LOCAL_AI.MEP_PAYMENT_ANALYSIS WHERE KEYID = :KEYID"
-    params = {"KEYID": str(keyid).strip()}
+def update_status_spec(keyid, status, result_link, reason):
     try:
-        if HAS_ONEAI_SDV and oracle_conn is not None:
-            cur = oracle_conn(
-                dns="MBAYMS",
-                user_name=DB_USER_YMS_AI,
-                password=DB_PASSWORD_YMS_AI,
-                oracle_client_dir=oracle_client_path,
-            )
-            cur.execute(sql, params=params)
-            res = cur.fetchall()
-            count = res[0][0] if res else 0
-            return count > 0
-        else:
-            conn = get_native_conn()
-            c = conn.cursor()
-            c.execute(sql, params)
-            res = c.fetchone()
-            count = res[0] if res else 0
-            c.close()
-            conn.close()
-            return count > 0
-    except Exception as e:
-        print(f"[Oracle DB Warning] check_keyid_exists: {e}")
-        return False
+        print("reason:="+reason)
+        sql_update = """
+                UPDATE LOCAL_AI.CDM_DATA_ANALYSIS
+                SET
+                    STATUS_SPEC = :STATUS,
+                    RESULT_SPEC = :RESULT_LINK,
+                    REASON_SPEC = :REASON
+                WHERE
+                    KEYID = :KEYID
+            """
+        params = {"KEYID": keyid, "STATUS": status, "RESULT_LINK": result_link, "REASON": reason}
+        cur = oracle_conn(
+            dns="MBAYMS",
+            user_name=DB_USER_YMS_AI,
+            password=DB_PASSWORD_YMS_AI,
+            oracle_client_dir=oracle_client_path,
+        )
+        cur.execute(sql_update, params=params)
 
-def batch_upsert_tasks(rows: list) -> int:
-    """MERGE INTO bảng LOCAL_AI.MEP_PAYMENT_ANALYSIS (Insert dòng mới & Update dòng cũ)."""
-    if not rows:
-        return 0
-
-    sql = """
-        MERGE INTO LOCAL_AI.MEP_PAYMENT_ANALYSIS T
-        USING (
-            SELECT :KEYID AS KEYID,
-                   :TASK_NAME AS TASK_NAME,
-                   :PAYMENT_MONTH AS PAYMENT_MONTH,
-                   :PIC AS PIC,
-                   :PART_NAME AS PART_NAME,
-                   :GROUP_NAME AS GROUP_NAME,
-                   :STATUS AS STATUS
-            FROM DUAL
-        ) S
-        ON (T.KEYID = S.KEYID)
-        WHEN MATCHED THEN
-            UPDATE SET T.TASK_NAME     = S.TASK_NAME,
-                       T.PAYMENT_MONTH = S.PAYMENT_MONTH,
-                       T.PIC           = S.PIC,
-                       T.PART_NAME     = S.PART_NAME,
-                       T.GROUP_NAME    = S.GROUP_NAME
-        WHEN NOT MATCHED THEN
-            INSERT (KEYID, TASK_NAME, PAYMENT_MONTH, PIC, PART_NAME, GROUP_NAME, STATUS, UPLOAD_TIME)
-            VALUES (S.KEYID, S.TASK_NAME, S.PAYMENT_MONTH, S.PIC, S.PART_NAME, S.GROUP_NAME, S.STATUS, SYSDATE)
-    """
-    params_list = [
-        {
-            "KEYID": str(r.get("KEYID", "")).strip(),
-            "TASK_NAME": str(r.get("TASK_NAME", "")).strip(),
-            "PAYMENT_MONTH": str(r.get("PAYMENT_MONTH", "")).strip(),
-            "PIC": str(r.get("PIC", "")).strip(),
-            "PART_NAME": str(r.get("PART_NAME", "")).strip(),
-            "GROUP_NAME": str(r.get("GROUP_NAME", "")).strip(),
-            "STATUS": str(r.get("STATUS", "WAITING")).strip()
-        }
-        for r in rows
-    ]
-    try:
-        if HAS_ONEAI_SDV and oracle_conn is not None:
-            cur = oracle_conn(
-                dns="MBAYMS",
-                user_name=DB_USER_YMS_AI,
-                password=DB_PASSWORD_YMS_AI,
-                oracle_client_dir=oracle_client_path,
-            )
-            for p in params_list:
-                cur.execute(sql, params=p)
-            try:
-                if hasattr(cur, 'commit'):
-                    cur.commit()
-                elif hasattr(cur, 'connection') and hasattr(cur.connection, 'commit'):
-                    cur.connection.commit()
-            except Exception:
-                pass
-        else:
-            conn = get_native_conn()
-            c = conn.cursor()
-            for p in params_list:
-                c.execute(sql, p)
-            conn.commit()
-            c.close()
-            conn.close()
-
-        print(f"[Oracle DB] Da MERGE thanh cong {len(rows)} dong vao MEP_PAYMENT_ANALYSIS.")
-        return len(rows)
-    except Exception as e:
-        print(f"[Oracle DB Error] batch_upsert_tasks: {e}")
-        raise
-
-def delete_tasks(keyids: list) -> int:
-    """Xóa các dòng được chọn khỏi bảng LOCAL_AI.MEP_PAYMENT_ANALYSIS."""
-    if not keyids:
-        return 0
-
-    sql = "DELETE FROM LOCAL_AI.MEP_PAYMENT_ANALYSIS WHERE KEYID = :KEYID"
-    params_list = [{"KEYID": str(k).strip()} for k in keyids]
-    try:
-        if HAS_ONEAI_SDV and oracle_conn is not None:
-            cur = oracle_conn(
-                dns="MBAYMS",
-                user_name=DB_USER_YMS_AI,
-                password=DB_PASSWORD_YMS_AI,
-                oracle_client_dir=oracle_client_path,
-            )
-            for p in params_list:
-                cur.execute(sql, params=p)
-            try:
-                if hasattr(cur, 'commit'):
-                    cur.commit()
-                elif hasattr(cur, 'connection') and hasattr(cur.connection, 'commit'):
-                    cur.connection.commit()
-            except Exception:
-                pass
-        else:
-            conn = get_native_conn()
-            c = conn.cursor()
-            for p in params_list:
-                c.execute(sql, p)
-            conn.commit()
-            c.close()
-            conn.close()
-
-        print(f"[Oracle DB] Da xoa {len(keyids)} dong khoi MEP_PAYMENT_ANALYSIS.")
-        return len(keyids)
-    except Exception as e:
-        print(f"[Oracle DB Error] delete_tasks: {e}")
-        raise
+    except oracledb.DatabaseError as e:
+        print("Error update_status_link Oracle:", e)

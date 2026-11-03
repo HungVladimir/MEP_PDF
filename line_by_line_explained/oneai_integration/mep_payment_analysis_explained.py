@@ -24,7 +24,7 @@ searchTotalRow = QuerySettings(
         -- Tìm kiếm gần đúng (LIKE) theo Mã số WO (KEYID) hoặc Tên công việc (TASK_NAME)
         AND (:KEYID = 'ALL' OR KEYID LIKE '%' || :KEYID || '%' OR TASK_NAME LIKE '%' || :KEYID || '%')
     """,
-    dns="MBAYMS",  # Tên Data Source Name (DNS) kết nối vào cụm Oracle DB của công ty
+    dns="MBLDB",  # Tên Data Source Name (DNS) kết nối vào cụm Oracle DB của công ty
     note="Đếm tổng số dòng quản lý thanh toán MEP"
 )
 
@@ -65,7 +65,7 @@ getdata_page = QuerySettings(
     WHERE RN BETWEEN :start_row AND :end_row
     ORDER BY RN
     """,
-    dns="MBAYMS",
+    dns="MBLDB",
     note="Lấy danh sách phân trang bảng MEP"
 )
 

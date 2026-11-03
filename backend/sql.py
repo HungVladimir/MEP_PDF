@@ -1,8 +1,3 @@
-# ====================================================================
-# THAO TÁC CƠ SỞ DỮ LIỆU ORACLE (ORACLE SQL HELPER)
-# Dự án: MEP Payment AI - Chuẩn hóa 100% theo kiến trúc OneAI công ty
-# Sử dụng trực tiếp Oracle DB (Schema LOCAL_AI.MEP_PAYMENT_ANALYSIS)
-# ====================================================================
 import os
 import sys
 from pathlib import Path
@@ -57,11 +52,13 @@ if not oracle_client_path or not os.path.exists(oracle_client_path):
 if oracle_client_path and os.path.exists(oracle_client_path):
     try:
         oracledb.init_oracle_client(lib_dir=oracle_client_path)
-        print(f"[Oracle] Da khoi tao Oracle Thick Client tai: {oracle_client_path}")
+        print(
+            f"[Oracle] Da khoi tao Oracle Thick Client tai: {oracle_client_path}")
     except Exception as e:
         pass
 else:
-    print(f"[CANH BAO] Chua tim thay thu muc Oracle Client tai: {oracle_client_path}")
+    print(
+        f"[CANH BAO] Chua tim thay thu muc Oracle Client tai: {oracle_client_path}")
 
 # 4. KIỂM TRA THƯ VIỆN NỘI BỘ ONEAI SDV
 try:
@@ -72,6 +69,8 @@ except ImportError:
     HAS_ONEAI_SDV = False
 
 # 5. HÀM LẤY KẾT NỐI DỰ PHÒNG NẾU KHÔNG CÓ ONEAI_SDV
+
+
 def get_native_conn():
     """Dùng oracledb native Thick Client kết nối qua TNS_YMS."""
     if not oracle_client_path or not os.path.exists(oracle_client_path):
@@ -82,6 +81,8 @@ def get_native_conn():
     return oracledb.connect(user=DB_USER_YMS, password=DB_PASSWORD_YMS, dsn=TNS_YMS)
 
 # 6. CÁC NGHIỆP VỤ DATABASE PHỤC VỤ BẢNG LOCAL_AI.MEP_PAYMENT_ANALYSIS
+
+
 def update_task_status(keyid: str, status: str, error_count: int = 0, result_link: str = None, reason: str = ""):
     """Cập nhật trạng thái tiến độ vào bảng LOCAL_AI.MEP_PAYMENT_ANALYSIS."""
     sql = """
@@ -104,7 +105,7 @@ def update_task_status(keyid: str, status: str, error_count: int = 0, result_lin
     try:
         if HAS_ONEAI_SDV and oracle_conn is not None:
             cur = oracle_conn(
-                dns="MBAYMS",
+                dns="MBLDB",
                 user_name=DB_USER_YMS_AI,
                 password=DB_PASSWORD_YMS_AI,
                 oracle_client_dir=oracle_client_path,
@@ -129,6 +130,7 @@ def update_task_status(keyid: str, status: str, error_count: int = 0, result_lin
         print(f"[Oracle DB Error] update_task_status: {e}")
         raise
 
+
 def update_review_decision(keyid: str, decision: str, note: str, reviewer: str):
     """Cập nhật quyết định phê duyệt (Approve / Reject) của kỹ sư."""
     sql = """
@@ -147,7 +149,7 @@ def update_review_decision(keyid: str, decision: str, note: str, reviewer: str):
     try:
         if HAS_ONEAI_SDV and oracle_conn is not None:
             cur = oracle_conn(
-                dns="MBAYMS",
+                dns="MBLDB",
                 user_name=DB_USER_YMS_AI,
                 password=DB_PASSWORD_YMS_AI,
                 oracle_client_dir=oracle_client_path,
@@ -172,6 +174,7 @@ def update_review_decision(keyid: str, decision: str, note: str, reviewer: str):
         print(f"[Oracle DB Error] update_review_decision: {e}")
         raise
 
+
 def check_keyid_exists(keyid: str) -> bool:
     """Kiểm tra xem KEYID đã tồn tại trong bảng LOCAL_AI.MEP_PAYMENT_ANALYSIS hay chưa."""
     if not keyid or not str(keyid).strip():
@@ -181,7 +184,7 @@ def check_keyid_exists(keyid: str) -> bool:
     try:
         if HAS_ONEAI_SDV and oracle_conn is not None:
             cur = oracle_conn(
-                dns="MBAYMS",
+                dns="MBLDB",
                 user_name=DB_USER_YMS_AI,
                 password=DB_PASSWORD_YMS_AI,
                 oracle_client_dir=oracle_client_path,
@@ -203,6 +206,7 @@ def check_keyid_exists(keyid: str) -> bool:
         print(f"[Oracle DB Warning] check_keyid_exists: {e}")
         return False
 
+
 def batch_upsert_tasks(rows: list) -> int:
     """MERGE INTO bảng LOCAL_AI.MEP_PAYMENT_ANALYSIS (Insert dòng mới & Update dòng cũ)."""
     if not rows:
@@ -212,21 +216,21 @@ def batch_upsert_tasks(rows: list) -> int:
         MERGE INTO LOCAL_AI.MEP_PAYMENT_ANALYSIS T
         USING (
             SELECT :KEYID AS KEYID,
-                   :TASK_NAME AS TASK_NAME,
-                   :PAYMENT_MONTH AS PAYMENT_MONTH,
-                   :PIC AS PIC,
-                   :PART_NAME AS PART_NAME,
-                   :GROUP_NAME AS GROUP_NAME,
-                   :STATUS AS STATUS
+                :TASK_NAME AS TASK_NAME,
+                :PAYMENT_MONTH AS PAYMENT_MONTH,
+                :PIC AS PIC,
+                :PART_NAME AS PART_NAME,
+                :GROUP_NAME AS GROUP_NAME,
+                :STATUS AS STATUS
             FROM DUAL
         ) S
         ON (T.KEYID = S.KEYID)
         WHEN MATCHED THEN
             UPDATE SET T.TASK_NAME     = S.TASK_NAME,
-                       T.PAYMENT_MONTH = S.PAYMENT_MONTH,
-                       T.PIC           = S.PIC,
-                       T.PART_NAME     = S.PART_NAME,
-                       T.GROUP_NAME    = S.GROUP_NAME
+                    T.PAYMENT_MONTH = S.PAYMENT_MONTH,
+                    T.PIC           = S.PIC,
+                    T.PART_NAME     = S.PART_NAME,
+                    T.GROUP_NAME    = S.GROUP_NAME
         WHEN NOT MATCHED THEN
             INSERT (KEYID, TASK_NAME, PAYMENT_MONTH, PIC, PART_NAME, GROUP_NAME, STATUS, UPLOAD_TIME)
             VALUES (S.KEYID, S.TASK_NAME, S.PAYMENT_MONTH, S.PIC, S.PART_NAME, S.GROUP_NAME, S.STATUS, SYSDATE)
@@ -246,7 +250,7 @@ def batch_upsert_tasks(rows: list) -> int:
     try:
         if HAS_ONEAI_SDV and oracle_conn is not None:
             cur = oracle_conn(
-                dns="MBAYMS",
+                dns="MBLDB",
                 user_name=DB_USER_YMS_AI,
                 password=DB_PASSWORD_YMS_AI,
                 oracle_client_dir=oracle_client_path,
@@ -269,11 +273,13 @@ def batch_upsert_tasks(rows: list) -> int:
             c.close()
             conn.close()
 
-        print(f"[Oracle DB] Da MERGE thanh cong {len(rows)} dong vao MEP_PAYMENT_ANALYSIS.")
+        print(
+            f"[Oracle DB] Da MERGE thanh cong {len(rows)} dong vao MEP_PAYMENT_ANALYSIS.")
         return len(rows)
     except Exception as e:
         print(f"[Oracle DB Error] batch_upsert_tasks: {e}")
         raise
+
 
 def delete_tasks(keyids: list) -> int:
     """Xóa các dòng được chọn khỏi bảng LOCAL_AI.MEP_PAYMENT_ANALYSIS."""
@@ -285,7 +291,7 @@ def delete_tasks(keyids: list) -> int:
     try:
         if HAS_ONEAI_SDV and oracle_conn is not None:
             cur = oracle_conn(
-                dns="MBAYMS",
+                dns="MBLDB",
                 user_name=DB_USER_YMS_AI,
                 password=DB_PASSWORD_YMS_AI,
                 oracle_client_dir=oracle_client_path,
@@ -308,7 +314,8 @@ def delete_tasks(keyids: list) -> int:
             c.close()
             conn.close()
 
-        print(f"[Oracle DB] Da xoa {len(keyids)} dong khoi MEP_PAYMENT_ANALYSIS.")
+        print(
+            f"[Oracle DB] Da xoa {len(keyids)} dong khoi MEP_PAYMENT_ANALYSIS.")
         return len(keyids)
     except Exception as e:
         print(f"[Oracle DB Error] delete_tasks: {e}")

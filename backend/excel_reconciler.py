@@ -1,4 +1,3 @@
-
 import os
 import re
 import glob
@@ -6,6 +5,7 @@ import pandas as pd
 from openpyxl import load_workbook
 from openpyxl.styles import PatternFill, Alignment, Border, Side, Font
 import config
+
 
 def get_unique_path(base_path):
     """Tự động đổi tên file báo cáo nếu file cũ đang mở để chống lỗi PermissionError."""
@@ -25,6 +25,8 @@ def get_unique_path(base_path):
 # ==========================================
 # 1A. HÀM GOM NHÓM DỮ LIỆU BẢN VẼ TỪ NHIỀU FILE CSV (PIVOT)
 # ==========================================
+
+
 def aggregate_ai_data(csv_dir):
     """Đọc hàng loạt file CSV Bản vẽ từ AI bóc ra, gom chung lại thành 1 bảng ngang (Pivot)."""
     if not os.path.exists(csv_dir):
@@ -40,11 +42,13 @@ def aggregate_ai_data(csv_dir):
 
     all_files = sorted(
         raw_files,
-        key=lambda x: [int(s) if s.isdigit() else s.lower() for s in re.split(r'(\d+)', os.path.basename(x))]
+        key=lambda x: [int(s) if s.isdigit() else s.lower()
+                       for s in re.split(r'(\d+)', os.path.basename(x))]
     )
 
     if not all_files:
-        raise FileNotFoundError(f"❌ Không tìm thấy file CSV Bản vẽ nào trong {csv_dir}")
+        raise FileNotFoundError(
+            f"❌ Không tìm thấy file CSV Bản vẽ nào trong {csv_dir}")
 
     df_list = []
     drawing_names = []
@@ -85,6 +89,8 @@ def aggregate_ai_data(csv_dir):
 # ==========================================
 # 1B. HÀM GOM NHÓM DỮ LIỆU GATE PASS (VẬT TƯ MANG VÀO)
 # ==========================================
+
+
 def aggregate_gate_pass_data(gatepass_csv_dir):
     """
     Đọc tất cả các file CSV bóc từ Biên bản vật tư mang vào (Gate Pass).
@@ -98,20 +104,24 @@ def aggregate_gate_pass_data(gatepass_csv_dir):
     # Tìm tất cả file CSV trong thư mục Gate Pass (hoặc file có tiền tố GATEPASS_)
     all_files = glob.glob(os.path.join(gatepass_csv_dir, "*.csv"))
     if gatepass_csv_dir == config.DIR_CSV_EXTRACTED:
-        all_files = [f for f in all_files if os.path.basename(f).upper().startswith("GATEPASS_")]
+        all_files = [f for f in all_files if os.path.basename(
+            f).upper().startswith("GATEPASS_")]
 
     if not all_files:
         print("ℹ️ Chưa có file CSV Gate Pass nào để đối soát Vòng 2.")
         return {}
 
-    print(f"📦 Đang gom nhóm dữ liệu từ {len(all_files)} trang Gate Pass CSV...")
+    print(
+        f"📦 Đang gom nhóm dữ liệu từ {len(all_files)} trang Gate Pass CSV...")
     df_list = []
     for f in all_files:
         try:
             df = pd.read_csv(f, dtype={'SDAC_CODE': str})
             if 'SDAC_CODE' in df.columns and 'QTY' in df.columns:
-                df['SDAC_CODE'] = df['SDAC_CODE'].astype(str).str.strip().str.upper()
-                df['QTY'] = pd.to_numeric(df['QTY'], errors='coerce').fillna(0.0)
+                df['SDAC_CODE'] = df['SDAC_CODE'].astype(
+                    str).str.strip().str.upper()
+                df['QTY'] = pd.to_numeric(
+                    df['QTY'], errors='coerce').fillna(0.0)
                 df_list.append(df[['SDAC_CODE', 'QTY']])
         except Exception as e:
             print(f"   ⚠️ Lỗi đọc file Gate Pass {f}: {e}")
@@ -122,6 +132,7 @@ def aggregate_gate_pass_data(gatepass_csv_dir):
     df_gp_all = pd.concat(df_list, ignore_index=True)
     gp_grouped = df_gp_all.groupby('SDAC_CODE')['QTY'].sum().round(2)
     return gp_grouped.to_dict()
+
 
 def get_actual_sheet_name(excel_path, target_sheet_name):
     """Hàm so khớp mờ (Fuzzy Match) tên Sheet."""
@@ -134,7 +145,8 @@ def get_actual_sheet_name(excel_path, target_sheet_name):
             sheet_clean = str(sheet).lower().replace(" ", "")
             if target_clean == sheet_clean:
                 if sheet != target_sheet_name:
-                    print(f"💡 Tự động nắn tên Sheet từ '{target_sheet_name}' thành '{sheet}'")
+                    print(
+                        f"💡 Tự động nắn tên Sheet từ '{target_sheet_name}' thành '{sheet}'")
                 return sheet
         return target_sheet_name
     except Exception:
@@ -143,12 +155,16 @@ def get_actual_sheet_name(excel_path, target_sheet_name):
 # ==========================================
 # 2. HÀM QUÉT RADAR ĐỘNG (BẢNG KHỐI LƯỢNG VENDOR)
 # ==========================================
+
+
 def load_vendor_data_dynamic(excel_path, sheet_name, drawing_names, code_col_name):
     """Rải Radar tìm tọa độ các cột trên file Vendor."""
     actual_sheet = get_actual_sheet_name(excel_path, sheet_name)
-    print(f"-> Đang quét Radar tìm cột trên file Vendor (Sheet: {actual_sheet})...")
+    print(
+        f"-> Đang quét Radar tìm cột trên file Vendor (Sheet: {actual_sheet})...")
 
-    df_raw = pd.read_excel(excel_path, sheet_name=actual_sheet, header=None, nrows=20, engine="calamine")
+    df_raw = pd.read_excel(excel_path, sheet_name=actual_sheet,
+                           header=None, nrows=20, engine="calamine")
 
     code_idx = None
     code_row = None
@@ -157,8 +173,8 @@ def load_vendor_data_dynamic(excel_path, sheet_name, drawing_names, code_col_nam
     drawing_indices = {}
     max_header_row = 0
 
-    search_code   = str(config.VENDOR_COL_CODE).lower().replace(' ', '')
-    search_extra  = str(config.VENDOR_COL_EXTRA).lower().replace(' ', '')
+    search_code = str(config.VENDOR_COL_CODE).lower().replace(' ', '')
+    search_extra = str(config.VENDOR_COL_EXTRA).lower().replace(' ', '')
     search_remark = str(config.VENDOR_COL_REMARK).lower().replace(' ', '')
 
     remaining_drawings = set(drawing_names)
@@ -175,7 +191,8 @@ def load_vendor_data_dynamic(excel_path, sheet_name, drawing_names, code_col_nam
             if pd.isna(df_raw.iloc[row_idx, col_idx]):
                 continue
 
-            cell_val_clean = str(df_raw.iloc[row_idx, col_idx]).lower().replace('\n', '').replace(' ', '')
+            cell_val_clean = str(df_raw.iloc[row_idx, col_idx]).lower().replace(
+                '\n', '').replace(' ', '')
             # Xử lý trường hợp Pandas đọc số 1 thành "1.0" trên dòng header
             if cell_val_clean.endswith('.0') and cell_val_clean[:-2].isdigit():
                 cell_val_clean = cell_val_clean[:-2]
@@ -217,7 +234,8 @@ def load_vendor_data_dynamic(excel_path, sheet_name, drawing_names, code_col_nam
                     or f"bv{core_num}" in cell_val_clean
                 )
                 # Điều kiện 2: Khớp chính xác chuỗi chữ (không phải số thuần túy)
-                is_exact_text = (clean_name == cell_val_clean) and not clean_name.isdigit()
+                is_exact_text = (
+                    clean_name == cell_val_clean) and not clean_name.isdigit()
                 # Điều kiện 3 (Phòng hộ): Nếu Vendor quên ghi chữ "Bảnvẽ" mà chỉ gõ số "1", "2"
                 # Chỉ nhận nếu nằm cùng dòng (hoặc lệch 1 dòng) với ô chứa chữ "Code"
                 is_anchored_number = (
@@ -230,7 +248,8 @@ def load_vendor_data_dynamic(excel_path, sheet_name, drawing_names, code_col_nam
                 if is_keyword or is_exact_text or is_anchored_number:
                     drawing_indices[d_name] = col_idx
                     max_header_row = max(max_header_row, row_idx)
-                    print(f"+ Tóm được cột bản vẽ '{d_name}' tại vị trí cột số {col_idx}")
+                    print(
+                        f"+ Tóm được cột bản vẽ '{d_name}' tại vị trí cột số {col_idx}")
                     found_drawing = d_name
                     break
 
@@ -238,13 +257,15 @@ def load_vendor_data_dynamic(excel_path, sheet_name, drawing_names, code_col_nam
                 remaining_drawings.remove(found_drawing)
 
     if code_idx is None:
-        raise ValueError(f"❌ Không tìm thấy cột '{code_col_name}' trong 20 dòng đầu của file Vendor!")
+        raise ValueError(
+            f"❌ Không tìm thấy cột '{code_col_name}' trong 20 dòng đầu của file Vendor!")
 
     base_pairs = [(code_idx, config.VENDOR_COL_CODE)]
     if extra_idx is not None:
         base_pairs.append((extra_idx, 'VENDOR_EXTRA'))
     else:
-        print("ℹ️ Bản Vendor hiện tại CHƯA có cột Phụ trội -> Tự động gộp chung khi đối soát.")
+        print(
+            "ℹ️ Bản Vendor hiện tại CHƯA có cột Phụ trội -> Tự động gộp chung khi đối soát.")
 
     if remark_idx is not None:
         base_pairs.append((remark_idx, 'VENDOR_REMARK'))
@@ -273,6 +294,8 @@ def load_vendor_data_dynamic(excel_path, sheet_name, drawing_names, code_col_nam
 # ==========================================
 # 3. ĐỊNH DẠNG FORM & ÁNH XẠ SINGLE MAPPING (MAPDATA)
 # ==========================================
+
+
 def format_master_report(df_pivot, drawing_columns, master_data_path):
     """Đắp thêm các cột Thông tin (Mô tả, Đơn giá...) từ file MapData.xlsx."""
     print("📝 Đang thiết lập Form Báo cáo và Ánh xạ Master Mapping...")
@@ -283,30 +306,37 @@ def format_master_report(df_pivot, drawing_columns, master_data_path):
     ]
 
     df_report = df_pivot.copy()
-    df_report['SDAC Code'] = df_report['SDAC_CODE'].astype(str).str.strip().str.upper()
+    df_report['SDAC Code'] = df_report['SDAC_CODE'].astype(
+        str).str.strip().str.upper()
     valid_codes = set(df_report['SDAC Code'].unique())
 
     if master_data_path and os.path.exists(master_data_path):
         print("-> Đang ánh xạ thông tin vật tư & Giá từ MapData...")
         target_master_sheet = getattr(config, 'MASTER_SHEET_NAME', 0)
-        actual_master_sheet = get_actual_sheet_name(master_data_path, target_master_sheet)
-        print(f"   [+] Radar dò Master: Chốt đọc dữ liệu từ Sheet '{actual_master_sheet}'")
+        actual_master_sheet = get_actual_sheet_name(
+            master_data_path, target_master_sheet)
+        print(
+            f"   [+] Radar dò Master: Chốt đọc dữ liệu từ Sheet '{actual_master_sheet}'")
 
-        master_key_col = config.MASTER_COL_MAP.get("Code_Master", "Code_Master")
+        master_key_col = config.MASTER_COL_MAP.get(
+            "Code_Master", "Code_Master")
         search_key = str(master_key_col).lower().replace(" ", "")
 
         header_row_idx = 0
         is_header_found = False
 
         try:
-            df_raw = pd.read_excel(master_data_path, sheet_name=actual_master_sheet, header=None, nrows=20, engine="calamine")
+            df_raw = pd.read_excel(
+                master_data_path, sheet_name=actual_master_sheet, header=None, nrows=20, engine="calamine")
             for r_idx in range(len(df_raw)):
                 for c_idx in range(len(df_raw.columns)):
-                    cell_val = str(df_raw.iloc[r_idx, c_idx]).lower().replace(" ", "")
+                    cell_val = str(
+                        df_raw.iloc[r_idx, c_idx]).lower().replace(" ", "")
                     if search_key == cell_val:
                         header_row_idx = r_idx
                         is_header_found = True
-                        print(f"   [+] Radar Master: Chốt cột '{master_key_col}' nằm tại dòng số {r_idx + 1}")
+                        print(
+                            f"   [+] Radar Master: Chốt cột '{master_key_col}' nằm tại dòng số {r_idx + 1}")
                         break
                 if is_header_found:
                     break
@@ -323,20 +353,27 @@ def format_master_report(df_pivot, drawing_columns, master_data_path):
         df_master.columns = df_master.columns.astype(str).str.strip()
 
         if master_key_col in df_master.columns:
-            df_master[master_key_col] = df_master[master_key_col].astype(str).str.strip().str.upper()
-            df_master = df_master.drop_duplicates(subset=[master_key_col], keep='first')
-            df_master_sub = df_master[df_master[master_key_col].isin(valid_codes)].copy()
+            df_master[master_key_col] = df_master[master_key_col].astype(
+                str).str.strip().str.upper()
+            df_master = df_master.drop_duplicates(
+                subset=[master_key_col], keep='first')
+            df_master_sub = df_master[df_master[master_key_col].isin(
+                valid_codes)].copy()
 
-            rename_dict = {actual_col: std_col for std_col, actual_col in config.MASTER_COL_MAP.items() if std_col != "Code_Master"}
+            rename_dict = {actual_col: std_col for std_col,
+                           actual_col in config.MASTER_COL_MAP.items() if std_col != "Code_Master"}
             df_master_sub = df_master_sub.rename(columns=rename_dict)
 
             cols_to_keep = [master_key_col] + list(rename_dict.values())
-            existing_cols = [c for c in cols_to_keep if c in df_master_sub.columns]
+            existing_cols = [
+                c for c in cols_to_keep if c in df_master_sub.columns]
             df_master_sub = df_master_sub[existing_cols]
 
-            df_report = pd.merge(df_report, df_master_sub, left_on='SDAC Code', right_on=master_key_col, how='left')
+            df_report = pd.merge(
+                df_report, df_master_sub, left_on='SDAC Code', right_on=master_key_col, how='left')
         else:
-            print(f"⚠️ Lỗi: Không tìm thấy cột khóa '{master_key_col}' trong file Master!")
+            print(
+                f"⚠️ Lỗi: Không tìm thấy cột khóa '{master_key_col}' trong file Master!")
     else:
         print("⚠️ Chưa có file MapData. Bỏ qua bước ánh xạ giá.")
 
@@ -363,12 +400,15 @@ def format_master_report(df_pivot, drawing_columns, master_data_path):
     df_report['Note'] = ""
     df_report['No (STT)'] = range(1, len(df_report) + 1)
 
-    final_columns = base_cols + drawing_columns + ["Khối lượng tổng", "Phụ trội", "Remark", "Note"]
+    final_columns = base_cols + drawing_columns + \
+        ["Khối lượng tổng", "Phụ trội", "Remark", "Note"]
     return df_report[final_columns].copy()
 
 # ==========================================
 # 4. ĐỐI SOÁT VÒNG 2: BẢN VẼ CHUẨN AI VS GATE PASS PDF
 # ==========================================
+
+
 def build_gate_pass_reconciliation_df(df_ai, drawing_columns, dict_gatepass):
     """
     Tạo bảng đối soát Vòng 2 (Sheet 2):
@@ -401,12 +441,15 @@ def build_gate_pass_reconciliation_df(df_ai, drawing_columns, dict_gatepass):
                 "vendor_req_qty": 0.0
             }
 
-        drawing_summary[code]["total_drawing_qty"] = round(drawing_summary[code]["total_drawing_qty"] + row_qty, 2)
+        drawing_summary[code]["total_drawing_qty"] = round(
+            drawing_summary[code]["total_drawing_qty"] + row_qty, 2)
         if remark == "SDV":
-            drawing_summary[code]["sdv_qty"] = round(drawing_summary[code]["sdv_qty"] + row_qty, 2)
+            drawing_summary[code]["sdv_qty"] = round(
+                drawing_summary[code]["sdv_qty"] + row_qty, 2)
         else:
             # Chỉ cộng các dòng KHÔNG phải SDV
-            drawing_summary[code]["vendor_req_qty"] = round(drawing_summary[code]["vendor_req_qty"] + row_qty, 2)
+            drawing_summary[code]["vendor_req_qty"] = round(
+                drawing_summary[code]["vendor_req_qty"] + row_qty, 2)
 
     # Logic so sánh với tất cả các code trong file excel
     # # Hợp nhất danh sách mã từ cả Bản vẽ và Gate Pass (để không sót mã nào)
@@ -414,12 +457,13 @@ def build_gate_pass_reconciliation_df(df_ai, drawing_columns, dict_gatepass):
     # for gp_code in dict_gatepass.keys():
     #     if gp_code not in drawing_summary:
     #         all_codes.append(gp_code)
-   
-    #Logic so sánh với những code có trên file pdf BBVT
+
+    # Logic so sánh với những code có trên file pdf BBVT
     all_codes = list(dict_gatepass.keys())
 
     gp_rows = []
-    gp_error_row_indices = []  # Lưu dòng bị lỗi (bắt đầu từ dòng 2 trên Excel) để tô đỏ
+    # Lưu dòng bị lỗi (bắt đầu từ dòng 2 trên Excel) để tô đỏ
+    gp_error_row_indices = []
 
     for idx, code in enumerate(all_codes, start=1):
         info = drawing_summary.get(code, {
@@ -432,8 +476,9 @@ def build_gate_pass_reconciliation_df(df_ai, drawing_columns, dict_gatepass):
         })
 
         total_bv = info["total_drawing_qty"]
-        sdv_q    = info["sdv_qty"]
-        ven_req  = info["vendor_req_qty"]  # Đã loại trừ SDV (Nếu chỉ có SDV thì tự động = 0.0)
+        sdv_q = info["sdv_qty"]
+        # Đã loại trừ SDV (Nếu chỉ có SDV thì tự động = 0.0)
+        ven_req = info["vendor_req_qty"]
         gp_actual = round(float(dict_gatepass.get(code, 0.0)), 2)
         diff = round(gp_actual - ven_req, 2)
 
@@ -471,6 +516,8 @@ def build_gate_pass_reconciliation_df(df_ai, drawing_columns, dict_gatepass):
 # ==========================================
 # 5. ĐỐI SOÁT CHÉO ĐA ĐIỀU KIỆN & XUẤT BÁO CÁO 2 SHEET
 # ==========================================
+
+
 def reconcile_and_highlight(df_ai, df_vendor, output_excel_path, drawing_columns, dict_gatepass=None):
     """
     Thực hiện đồng thời:
@@ -481,9 +528,12 @@ def reconcile_and_highlight(df_ai, df_vendor, output_excel_path, drawing_columns
     use_remark = 'VENDOR_REMARK' in df_vendor.columns
 
     mode_desc = ["Code"]
-    if use_extra: mode_desc.append("Phụ trội")
-    if use_remark: mode_desc.append("Remark")
-    print(f"🔍 [Vòng 1] Bắt đầu đối soát Bản vẽ vs Excel theo tổ hợp khóa: [{' + '.join(mode_desc)}]...")
+    if use_extra:
+        mode_desc.append("Phụ trội")
+    if use_remark:
+        mode_desc.append("Remark")
+    print(
+        f"🔍 [Vòng 1] Bắt đầu đối soát Bản vẽ vs Excel theo tổ hợp khóa: [{' + '.join(mode_desc)}]...")
 
     def safe_float(val):
         try:
@@ -492,19 +542,23 @@ def reconcile_and_highlight(df_ai, df_vendor, output_excel_path, drawing_columns
             return 0.0
 
     def norm_extra(val):
-        if pd.isna(val): return ""
+        if pd.isna(val):
+            return ""
         s = str(val).strip().replace(" ", "")
-        if s.lower() in ['nan', 'none', '', '-', '0', '0.0', '0%', '0.0%']: return ""
+        if s.lower() in ['nan', 'none', '', '-', '0', '0.0', '0%', '0.0%']:
+            return ""
         if s.endswith('%'):
             try:
                 f = float(s[:-1])
-                if f == 0: return ""
+                if f == 0:
+                    return ""
                 return f"{int(f)}%" if f.is_integer() else f"{f}%"
             except:
                 return s.upper()
         try:
             f = float(s)
-            if f == 0: return ""
+            if f == 0:
+                return ""
             if 0 < abs(f) <= 1.0:
                 pct = round(f * 100, 2)
                 return f"{int(pct)}%" if pct.is_integer() else f"{pct}%"
@@ -513,7 +567,8 @@ def reconcile_and_highlight(df_ai, df_vendor, output_excel_path, drawing_columns
             return s.upper()
 
     def norm_remark(val):
-        if pd.isna(val): return ""
+        if pd.isna(val):
+            return ""
         return "SDV" if "SDV" in str(val).upper() else ""
 
     def build_key(code, extra_val="", remark_val=""):
@@ -524,8 +579,10 @@ def reconcile_and_highlight(df_ai, df_vendor, output_excel_path, drawing_columns
 
     def format_cond_label(e_val, r_val):
         parts = []
-        if use_extra: parts.append(f"PT:{e_val if e_val else 'Trống'}")
-        if use_remark: parts.append(f"RM:{r_val if r_val else 'Trống'}")
+        if use_extra:
+            parts.append(f"PT:{e_val if e_val else 'Trống'}")
+        if use_remark:
+            parts.append(f"RM:{r_val if r_val else 'Trống'}")
         return ", ".join(parts)
 
     vendor_dict = {}
@@ -533,14 +590,16 @@ def reconcile_and_highlight(df_ai, df_vendor, output_excel_path, drawing_columns
 
     for _, row in df_vendor.iterrows():
         raw_code = str(row[config.VENDOR_COL_CODE]).strip().upper()
-        key = build_key(raw_code, row.get('VENDOR_EXTRA', ""), row.get('VENDOR_REMARK', ""))
+        key = build_key(raw_code, row.get('VENDOR_EXTRA', ""),
+                        row.get('VENDOR_REMARK', ""))
 
         if key not in vendor_dict:
             vendor_dict[key] = {col: 0.0 for col in drawing_columns}
 
         for col in drawing_columns:
             if pd.notnull(row.get(col)):
-                vendor_dict[key][col] = round(vendor_dict[key][col] + safe_float(row.get(col, 0)), 2)
+                vendor_dict[key][col] = round(
+                    vendor_dict[key][col] + safe_float(row.get(col, 0)), 2)
 
         if raw_code not in vendor_code_details:
             vendor_code_details[raw_code] = {}
@@ -548,11 +607,13 @@ def reconcile_and_highlight(df_ai, df_vendor, output_excel_path, drawing_columns
 
     ai_group_totals = {}
     for _, row in df_ai.iterrows():
-        key = build_key(row['SDAC Code'], row.get('Phụ trội', ""), row.get('Remark', ""))
+        key = build_key(row['SDAC Code'], row.get(
+            'Phụ trội', ""), row.get('Remark', ""))
         if key not in ai_group_totals:
             ai_group_totals[key] = {col: 0.0 for col in drawing_columns}
         for col_name in drawing_columns:
-            ai_group_totals[key][col_name] = round(ai_group_totals[key][col_name] + safe_float(row[col_name]), 2)
+            ai_group_totals[key][col_name] = round(
+                ai_group_totals[key][col_name] + safe_float(row[col_name]), 2)
 
     error_cells = []
 
@@ -566,7 +627,8 @@ def reconcile_and_highlight(df_ai, df_vendor, output_excel_path, drawing_columns
             reconcile_logs.append("Mã mồ côi (Chỉ có ở bản vẽ)")
             error_cells.append(f"ROW:{index + 2}")
         else:
-            vendor_row_data = vendor_dict.get(key, {col: 0.0 for col in drawing_columns})
+            vendor_row_data = vendor_dict.get(
+                key, {col: 0.0 for col in drawing_columns})
             for col_name in drawing_columns:
                 total_ai_qty = ai_group_totals[key][col_name]
                 vendor_qty = vendor_row_data.get(col_name, 0.0)
@@ -578,15 +640,19 @@ def reconcile_and_highlight(df_ai, df_vendor, output_excel_path, drawing_columns
                         for (_, v_e, v_r), v_cols in vendor_code_details[code].items():
                             v_q = v_cols.get(col_name, 0.0)
                             if v_q != 0:
-                                ven_variants.append(f"[{format_cond_label(v_e, v_r)}]={v_q}")
+                                ven_variants.append(
+                                    f"[{format_cond_label(v_e, v_r)}]={v_q}")
 
                         if ven_variants:
                             ven_info = ", ".join(ven_variants)
-                            reconcile_logs.append(f"Lệch BV {col_name}: AI [{ai_cond_str}]={total_ai_qty} | Vendor {ven_info}")
+                            reconcile_logs.append(
+                                f"Lệch BV {col_name}: AI [{ai_cond_str}]={total_ai_qty} | Vendor {ven_info}")
                         else:
-                            reconcile_logs.append(f"Lệch BV {col_name}: AI [{ai_cond_str}]={total_ai_qty} | Ven=0.0 (Không có dòng [{ai_cond_str}])")
+                            reconcile_logs.append(
+                                f"Lệch BV {col_name}: AI [{ai_cond_str}]={total_ai_qty} | Ven=0.0 (Không có dòng [{ai_cond_str}])")
                     else:
-                        reconcile_logs.append(f"Lệch BV {col_name} (AI:{total_ai_qty} | Ven:{vendor_qty})")
+                        reconcile_logs.append(
+                            f"Lệch BV {col_name} (AI:{total_ai_qty} | Ven:{vendor_qty})")
 
                     col_excel_idx = df_ai.columns.get_loc(col_name) + 1
                     error_cells.append((index + 2, col_excel_idx))
@@ -597,27 +663,36 @@ def reconcile_and_highlight(df_ai, df_vendor, output_excel_path, drawing_columns
     df_gp_report = None
     gp_error_rows = []
     if dict_gatepass is not None:
-        print("🔍 [Vòng 2] Đang tính toán khối lượng chuẩn (Trừ SDV) và đối soát với Gate Pass...")
-        df_gp_report, gp_error_rows = build_gate_pass_reconciliation_df(df_ai, drawing_columns, dict_gatepass)
+        print(
+            "🔍 [Vòng 2] Đang tính toán khối lượng chuẩn (Trừ SDV) và đối soát với Gate Pass...")
+        df_gp_report, gp_error_rows = build_gate_pass_reconciliation_df(
+            df_ai, drawing_columns, dict_gatepass)
 
     # Xuất cả 2 bảng ra cùng 1 file Excel
     with pd.ExcelWriter(output_excel_path, engine='openpyxl') as writer:
         df_ai.to_excel(writer, sheet_name="1. Đối Soát Bản Vẽ", index=False)
         if df_gp_report is not None and not df_gp_report.empty:
-            df_gp_report.to_excel(writer, sheet_name="2. Đối Soát Gate Pass", index=False)
+            df_gp_report.to_excel(
+                writer, sheet_name="2. Đối Soát Gate Pass", index=False)
 
     print("🎨 Đang trang trí (Center, Borders, tô màu Group Code & Highlight lỗi 2 Sheet)...")
     wb = load_workbook(output_excel_path)
 
-    red_fill    = PatternFill(start_color="FFC7CE", end_color="FFC7CE", fill_type="solid")
-    yellow_fill = PatternFill(start_color="FFFF00", end_color="FFFF00", fill_type="solid")
-    green_fill  = PatternFill(start_color="E2EFDA", end_color="E2EFDA", fill_type="solid")
+    red_fill = PatternFill(start_color="FFC7CE",
+                           end_color="FFC7CE", fill_type="solid")
+    yellow_fill = PatternFill(start_color="FFFF00",
+                              end_color="FFFF00", fill_type="solid")
+    green_fill = PatternFill(start_color="E2EFDA",
+                             end_color="E2EFDA", fill_type="solid")
     group_fills = [
-        PatternFill(start_color="FCE4D6", end_color="FCE4D6", fill_type="solid"),
-        PatternFill(start_color="E2EFDA", end_color="E2EFDA", fill_type="solid")
+        PatternFill(start_color="FCE4D6",
+                    end_color="FCE4D6", fill_type="solid"),
+        PatternFill(start_color="E2EFDA",
+                    end_color="E2EFDA", fill_type="solid")
     ]
     bold_font = Font(bold=True)
-    center_middle = Alignment(horizontal='center', vertical='center', wrap_text=True)
+    center_middle = Alignment(
+        horizontal='center', vertical='center', wrap_text=True)
     thin_border = Border(
         left=Side(style='thin'), right=Side(style='thin'),
         top=Side(style='thin'), bottom=Side(style='thin')
@@ -636,8 +711,10 @@ def reconcile_and_highlight(df_ai, df_vendor, output_excel_path, drawing_columns
             color_toggle += 1
 
     cols_to_format_float = drawing_columns + ['Khối lượng tổng']
-    format_col_indices = [df_ai.columns.get_loc(c) + 1 for c in cols_to_format_float]
-    price_col_indices = [df_ai.columns.get_loc(c) + 1 for c in ['Material Cost', 'Labor Cost'] if c in df_ai.columns]
+    format_col_indices = [df_ai.columns.get_loc(
+        c) + 1 for c in cols_to_format_float]
+    price_col_indices = [df_ai.columns.get_loc(
+        c) + 1 for c in ['Material Cost', 'Labor Cost'] if c in df_ai.columns]
 
     for row_idx in range(1, len(df_ai) + 2):
         row_group_fill = None
@@ -703,14 +780,19 @@ def reconcile_and_highlight(df_ai, df_vendor, output_excel_path, drawing_columns
     print(f"✅ Hoàn tất! Báo cáo Final (2 Sheet) lưu tại: {output_excel_path}")
     return output_excel_path
 
+
 def run_reconciliation_pipeline():
     """Hàm khởi chạy toàn bộ quy trình đối soát Vòng 1 + Vòng 2."""
-    vendor_excel_path = os.path.join(config.DIR_VENDOR_EXCEL, config.VENDOR_FILE_NAME)
-    master_data_path  = os.path.join(config.DIR_VENDOR_EXCEL, config.MASTER_DATA_FILE_NAME)
-    gatepass_csv_dir  = getattr(config, 'DIR_GATEPASS_CSV', config.DIR_CSV_EXTRACTED)
+    vendor_excel_path = os.path.join(
+        config.DIR_VENDOR_EXCEL, config.VENDOR_FILE_NAME)
+    master_data_path = os.path.join(
+        config.DIR_VENDOR_EXCEL, config.MASTER_DATA_FILE_NAME)
+    gatepass_csv_dir = getattr(
+        config, 'DIR_GATEPASS_CSV', config.DIR_CSV_EXTRACTED)
 
     os.makedirs(config.DIR_FINAL_REPORT, exist_ok=True)
-    base_output_path  = os.path.join(config.DIR_FINAL_REPORT, "Consolidated_Report.xlsx")
+    base_output_path = os.path.join(
+        config.DIR_FINAL_REPORT, "Consolidated_Report.xlsx")
     output_excel_path = get_unique_path(base_output_path)
 
     try:
@@ -729,13 +811,16 @@ def run_reconciliation_pipeline():
         )
 
         # 4. Ánh xạ MapData & Định dạng chuẩn
-        df_formatted = format_master_report(df_pivot, drawing_list, master_data_path)
+        df_formatted = format_master_report(
+            df_pivot, drawing_list, master_data_path)
 
         # 5. Đối soát 2 Vòng & Xuất 2 Sheet Excel
-        reconcile_and_highlight(df_formatted, df_vendor, output_excel_path, drawing_list, dict_gatepass)
+        reconcile_and_highlight(df_formatted, df_vendor,
+                                output_excel_path, drawing_list, dict_gatepass)
 
     except Exception as e:
         print(f"\n❌ LỖI HỆ THỐNG: {e}")
+
 
 if __name__ == "__main__":
     run_reconciliation_pipeline()

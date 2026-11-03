@@ -84,7 +84,7 @@ else:
 # BỘ THỰC THI SQL ĐA NĂNG
 # ==============================================================================
 # Dòng 68-100: Hàm thực thi lệnh đơn (UPDATE/DELETE)
-# Ưu tiên 1: Dùng cur = oracle_conn(dns="MBAYMS", user_name=DB_USER_YMS_AI, ...)
+# Ưu tiên 1: Dùng cur = oracle_conn(dns="MBLDB", user_name=DB_USER_YMS_AI, ...)
 # Ưu tiên 2: Dùng conn = oracledb.connect(user=DB_USER_YMS, password=DB_PASSWORD_YMS, dsn=TNS_YMS)
 def execute_sql(sql_str: str, params: dict = None):
     if params is None:
@@ -93,7 +93,7 @@ def execute_sql(sql_str: str, params: dict = None):
     if HAS_ONEAI_SDV and oracle_conn is not None:
         try:
             cur = oracle_conn(
-                dns="MBAYMS",
+                dns="MBLDB",
                 user_name=DB_USER_YMS_AI,
                 password=DB_PASSWORD_YMS_AI,
                 oracle_client_dir=oracle_client_path,
@@ -123,7 +123,7 @@ def execute_batch_sql(sql_str: str, params_list: list) -> int:
     if HAS_ONEAI_SDV and oracle_conn is not None:
         try:
             cur = oracle_conn(
-                dns="MBAYMS",
+                dns="MBLDB",
                 user_name=DB_USER_YMS_AI,
                 password=DB_PASSWORD_YMS_AI,
                 oracle_client_dir=oracle_client_path,

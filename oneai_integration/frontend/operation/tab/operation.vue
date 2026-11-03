@@ -1,8 +1,3 @@
-<!-- ====================================================================
-     GIAO DIỆN DARK THEME ELEMENT PLUS CHO ĐỐI SOÁT THANH TOÁN MEP
-     Hỗ trợ đầy đủ: Toolbar Insert/Delete/Save, Inline Edit, Blob Download
-     Copy file này vào src/views/ (hoặc src/views/tab/) trong OneAI Frontend
-     ==================================================================== -->
 <template>
   <div class="mep-container">
     <!-- 1. THANH TÌM KIẾM & BỘ LỌC (TOP FILTER) -->
@@ -11,21 +6,11 @@
         <el-option v-for="item in statusList" :key="item" :label="item" :value="item" />
       </el-select>
 
-      <el-date-picker
-        v-model="selectedMonth"
-        type="month"
-        placeholder="Chọn Tháng Thanh Toán"
-        value-format="YYYY-MM"
-        style="width: 190px"
-      />
+      <el-date-picker v-model="selectedMonth" type="month" placeholder="Chọn Tháng Thanh Toán" value-format="YYYY-MM"
+        style="width: 190px" />
 
-      <el-input
-        v-model="searchKeyword"
-        placeholder="Nhập số WO hoặc tên công việc..."
-        clearable
-        style="width: 270px"
-        @keyup.enter="handleReload"
-      />
+      <el-input v-model="searchKeyword" placeholder="Nhập số WO hoặc tên công việc..." clearable style="width: 270px"
+        @keyup.enter="handleReload" />
 
       <el-button type="primary" @click="handleReload">
         Reload ({{ countdown }}s)
@@ -40,13 +25,8 @@
 
       <div class="action-buttons">
         <!-- NÚT DELETE (ĐỎ) -->
-        <el-button
-          type="danger"
-          size="small"
-          class="btn-delete"
-          :disabled="selectedRows.length === 0"
-          @click="handleDelete"
-        >
+        <el-button type="danger" size="small" class="btn-delete" :disabled="selectedRows.length === 0"
+          @click="handleDelete">
           <i class="el-icon-remove-outline"></i> Delete
         </el-button>
 
@@ -69,17 +49,8 @@
 
     <!-- 3. BẢNG DỮ LIỆU ĐỐI SOÁT (TABLE GRID HỖ TRỢ INLINE EDIT) -->
     <div class="table-container">
-      <el-table
-        ref="tableRef"
-        :data="tableData"
-        border
-        height="680"
-        size="small"
-        style="width: 100%"
-        show-overflow-tooltip
-        empty-text="Không có dữ liệu đối soát"
-        @selection-change="handleSelectionChange"
-      >
+      <el-table ref="tableRef" :data="tableData" border height="680" size="small" style="width: 100%"
+        show-overflow-tooltip empty-text="Không có dữ liệu đối soát" @selection-change="handleSelectionChange">
         <!-- CỘT CHECKBOX CHỌN DÒNG -->
         <el-table-column type="selection" width="45" align="center" />
 
@@ -89,13 +60,8 @@
         <!-- CỘT: SỐ CÔNG VIỆC (SỐ WO) -->
         <el-table-column prop="KEYID" label="Số Công Việc (WO)" width="160" sortable align="center">
           <template #default="{ row }">
-            <el-input
-              v-if="row.isNew"
-              v-model="row.KEYID"
-              placeholder="Nhập số WO..."
-              size="mini"
-              class="inline-input"
-            />
+            <el-input v-if="row.isNew" v-model="row.KEYID" placeholder="Nhập số WO..." size="mini"
+              class="inline-input" />
             <el-tag v-else type="info" effect="plain" class="font-bold">{{ row.KEYID }}</el-tag>
           </template>
         </el-table-column>
@@ -103,41 +69,28 @@
         <!-- CỘT: TÊN CÔNG VIỆC -->
         <el-table-column prop="TASK_NAME" label="Tên Công Việc" min-width="190">
           <template #default="{ row }">
-            <el-input
-              v-if="row.isNew || row.isEditing"
-              v-model="row.TASK_NAME"
-              placeholder="Tên công việc..."
-              size="mini"
-              class="inline-input"
-            />
-            <span v-else class="cell-text" @dblclick="row.isEditing = true">{{ row.TASK_NAME || '-' }}</span>
+            <el-input v-if="row.isNew || row.isEditing" v-model="row.TASK_NAME" placeholder="Tên công việc..."
+              size="mini" class="inline-input" />
+            <span v-else class="cell-text" @dblclick="row.isEditing = true">{{ row.TASK_NAME || '-'
+            }}</span>
           </template>
         </el-table-column>
 
         <!-- CỘT: THÁNG THANH TOÁN -->
         <el-table-column prop="PAYMENT_MONTH" label="Tháng TT" width="110" align="center" sortable>
           <template #default="{ row }">
-            <el-input
-              v-if="row.isNew || row.isEditing"
-              v-model="row.PAYMENT_MONTH"
-              placeholder="YYYY-MM"
-              size="mini"
-              class="inline-input"
-            />
-            <span v-else class="cell-text" @dblclick="row.isEditing = true">{{ row.PAYMENT_MONTH || '-' }}</span>
+            <el-input v-if="row.isNew || row.isEditing" v-model="row.PAYMENT_MONTH" placeholder="YYYY-MM" size="mini"
+              class="inline-input" />
+            <span v-else class="cell-text" @dblclick="row.isEditing = true">{{ row.PAYMENT_MONTH || '-'
+            }}</span>
           </template>
         </el-table-column>
 
         <!-- CỘT: NGƯỜI PHỤ TRÁCH (PIC) -->
         <el-table-column prop="PIC" label="Người Phụ Trách" width="130" align="center">
           <template #default="{ row }">
-            <el-input
-              v-if="row.isNew || row.isEditing"
-              v-model="row.PIC"
-              placeholder="PIC..."
-              size="mini"
-              class="inline-input"
-            />
+            <el-input v-if="row.isNew || row.isEditing" v-model="row.PIC" placeholder="PIC..." size="mini"
+              class="inline-input" />
             <span v-else class="cell-text" @dblclick="row.isEditing = true">{{ row.PIC || '-' }}</span>
           </template>
         </el-table-column>
@@ -145,28 +98,20 @@
         <!-- CỘT: PART -->
         <el-table-column prop="PART_NAME" label="Part" width="105" align="center">
           <template #default="{ row }">
-            <el-input
-              v-if="row.isNew || row.isEditing"
-              v-model="row.PART_NAME"
-              placeholder="Part..."
-              size="mini"
-              class="inline-input"
-            />
-            <span v-else class="cell-text" @dblclick="row.isEditing = true">{{ row.PART_NAME || '-' }}</span>
+            <el-input v-if="row.isNew || row.isEditing" v-model="row.PART_NAME" placeholder="Part..." size="mini"
+              class="inline-input" />
+            <span v-else class="cell-text" @dblclick="row.isEditing = true">{{ row.PART_NAME || '-'
+            }}</span>
           </template>
         </el-table-column>
 
         <!-- CỘT: GROUP -->
         <el-table-column prop="GROUP_NAME" label="Group" width="115" align="center">
           <template #default="{ row }">
-            <el-input
-              v-if="row.isNew || row.isEditing"
-              v-model="row.GROUP_NAME"
-              placeholder="Group..."
-              size="mini"
-              class="inline-input"
-            />
-            <span v-else class="cell-text" @dblclick="row.isEditing = true">{{ row.GROUP_NAME || '-' }}</span>
+            <el-input v-if="row.isNew || row.isEditing" v-model="row.GROUP_NAME" placeholder="Group..." size="mini"
+              class="inline-input" />
+            <span v-else class="cell-text" @dblclick="row.isEditing = true">{{ row.GROUP_NAME || '-'
+            }}</span>
           </template>
         </el-table-column>
 
@@ -183,19 +128,10 @@
         <!-- CỘT: TÀI LIỆU ĐÍNH KÈM (UPLOAD FILE EXCEL) -->
         <el-table-column label="Tài Liệu Đính Kèm" width="130" align="center">
           <template #default="{ row }">
-            <el-upload
-              :show-file-list="false"
-              :auto-upload="false"
-              accept=".xlsx,.xlsm"
-              :on-change="(file) => handleUploadExcel(file, row)"
-              :disabled="row.STATUS === 'RUNNING' || row.isNew"
-            >
-              <el-button
-                type="primary"
-                size="mini"
-                :loading="row.STATUS === 'RUNNING'"
-                :disabled="row.STATUS === 'RUNNING' || row.isNew"
-              >
+            <el-upload :show-file-list="false" :auto-upload="false" accept=".xlsx,.xlsm"
+              :on-change="(file) => handleUploadExcel(file, row)" :disabled="row.STATUS === 'RUNNING' || row.isNew">
+              <el-button type="primary" size="mini" :loading="row.STATUS === 'RUNNING'"
+                :disabled="row.STATUS === 'RUNNING' || row.isNew">
                 {{ row.STATUS === 'RUNNING' ? 'Đang chạy...' : '+ Upload File' }}
               </el-button>
             </el-upload>
@@ -225,20 +161,17 @@
           <template #default="{ row }">
             <div v-if="row.STATUS === 'COMPLETED'">
               <!-- Nút tải file báo cáo bằng Blob -->
-              <el-button
-                v-if="row.RESULT_LINK"
-                type="text"
-                size="small"
-                class="download-btn"
-                @click="handleDownloadFile(row)"
-              >
+              <el-button v-if="row.RESULT_LINK" type="text" size="small" class="download-btn"
+                @click="handleDownloadFile(row)">
                 📥 Tải Báo Cáo (.zip)
               </el-button>
 
               <!-- Phê duyệt / Từ chối -->
               <div style="margin-top: 4px;">
-                <el-tag v-if="row.REVIEW_DECISION === 'APPROVED'" type="success" size="mini">Đã Duyệt</el-tag>
-                <el-tag v-else-if="row.REVIEW_DECISION === 'REJECTED'" type="danger" size="mini">Từ Chối</el-tag>
+                <el-tag v-if="row.REVIEW_DECISION === 'APPROVED'" type="success" size="mini">Đã
+                  Duyệt</el-tag>
+                <el-tag v-else-if="row.REVIEW_DECISION === 'REJECTED'" type="danger" size="mini">Từ
+                  Chối</el-tag>
                 <div v-else style="display: inline-flex; gap: 4px;">
                   <el-button type="success" size="mini" @click="handleReview(row, 'APPROVED')">Duyệt</el-button>
                   <el-button type="danger" size="mini" @click="handleReview(row, 'REJECTED')">Hủy</el-button>
@@ -254,15 +187,9 @@
       <!-- 4. THANH PHÂN TRANG -->
       <div class="pagination-bar">
         <el-button size="small" @click="goFirst" :disabled="page === 1">First</el-button>
-        <el-pagination
-          v-model:current-page="page"
-          v-model:page-size="pageSize"
-          :page-sizes="[15, 30, 50, 100]"
-          :total="total"
-          layout="total, sizes, prev, pager, next, jumper"
-          @current-change="handlePageChange"
-          @size-change="handleSizeChange"
-        />
+        <el-pagination v-model:current-page="page" v-model:page-size="pageSize" :page-sizes="[15, 30, 50, 100]"
+          :total="total" layout="total, sizes, prev, pager, next, jumper" @current-change="handlePageChange"
+          @size-change="handleSizeChange" />
         <el-button size="small" @click="goLast" :disabled="page >= totalPages">Last</el-button>
       </div>
     </div>
@@ -273,10 +200,10 @@
 import { ref, computed, onMounted, onUnmounted, watch, nextTick } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import axios from 'axios'
-import { get_total_row, get_data_page, save_mep_rows, delete_mep_rows } from '@/js/mepPayment'
+import { get_total_row, get_data_page, save_mep_rows, delete_mep_rows } from '../js/mep_payment'
 
-// Địa chỉ Worker API (tự động thích ứng local hoặc reverse proxy)
-const FASTAPI_BASE_URL = window.location.port === '8000' ? '' : 'http://127.0.0.1:8000'
+// Địa chỉ Worker API
+const FASTAPI_BASE_URL = 'http://127.0.0.1:8000'
 
 // Bộ lọc
 const selectedStatus = ref('')
@@ -331,7 +258,7 @@ const loadTotal = async () => {
 const handleReload = async () => {
   await loadData()
   await loadTotal()
-  countdown.value = 10
+  countdown.value = 60
 }
 
 // 2. CHỌN DÒNG TRONG BẢNG (SELECTION)
@@ -463,8 +390,8 @@ const handleDownloadFile = async (row) => {
 
   try {
     ElMessage.info("Đang chuẩn bị tải file báo cáo...")
-    const url = row.RESULT_LINK.startsWith('http') 
-      ? row.RESULT_LINK 
+    const url = row.RESULT_LINK.startsWith('http')
+      ? row.RESULT_LINK
       : `${FASTAPI_BASE_URL}${row.RESULT_LINK}`
 
     // Tải mảng byte nhị phân Blob
@@ -572,9 +499,9 @@ onMounted(() => {
     if (!hasNewRow) {
       loadData()
       loadTotal()
-      countdown.value = 10
+      countdown.value = 60
     }
-  }, 10 * 1000)
+  }, 60 * 1000)
 
   countdownTimer = setInterval(() => {
     if (countdown.value > 0) countdown.value--
@@ -645,13 +572,15 @@ watch([selectedStatus, selectedMonth], () => {
   font-weight: 500;
 }
 
-.btn-insert, .btn-export {
+.btn-insert,
+.btn-export {
   background-color: #262727;
   border-color: #4C4D4F;
   color: #E5EAF3;
 }
 
-.btn-insert:hover, .btn-export:hover {
+.btn-insert:hover,
+.btn-export:hover {
   background-color: #363637;
   border-color: #606266;
   color: #409EFF;
@@ -714,11 +643,6 @@ watch([selectedStatus, selectedMonth], () => {
   margin-top: 14px;
 }
 
-/* =========================================================================
-   TÙY CHỈNH CHECKBOX ALL TRÊN HEADER BẢNG:
-   Khi chỉ chọn 1 hoặc vài dòng (Indeterminate), KHÔNG sáng xanh gây hiểu nhầm,
-   Chỉ khi CHỌN TẤT CẢ (Select All) thì mới sáng xanh và hiện biểu tượng dấu tích (✓).
-   ========================================================================= */
 :deep(.el-table th.el-table__cell .el-checkbox__input.is-indeterminate .el-checkbox__inner) {
   background-color: transparent !important;
   border-color: #4C4D4F !important;

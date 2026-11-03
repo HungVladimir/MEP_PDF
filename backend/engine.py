@@ -22,6 +22,7 @@ PDF_HEAD, PDF_EOF = b"%PDF-", b"%%EOF"
 CFB_SIG = bytes.fromhex("D0CF11E0A1B11AE1")
 ENDS = 0xFFFFFFFA
 
+
 def find_pdf_bytes(b: bytes):
     """Tìm chuỗi nhị phân PDF chuẩn trong stream dữ liệu."""
     if not b:
@@ -31,6 +32,7 @@ def find_pdf_bytes(b: bytes):
         return None
     e = b.rfind(PDF_EOF)
     return b[s:e + 5] if e > s else b[s:]
+
 
 def cfb_streams(data: bytes):
     """
@@ -42,8 +44,10 @@ def cfb_streams(data: bytes):
     try:
         ssz = 1 << struct.unpack_from("<H", data, 30)[0]
         mssz = 1 << struct.unpack_from("<H", data, 32)[0]
-        (n_fat, dir_start, _, mini_cutoff, minifat_start, n_minifat, difat_start, n_difat) = struct.unpack_from("<8I", data, 44)
-        sec = lambda i: data[(i + 1) * ssz:(i + 2) * ssz]
+        (n_fat, dir_start, _, mini_cutoff, minifat_start, n_minifat,
+         difat_start, n_difat) = struct.unpack_from("<8I", data, 44)
+
+        def sec(i): return data[(i + 1) * ssz:(i + 2) * ssz]
         per = ssz // 4
 
         difat = list(struct.unpack_from("<109I", data, 76))
@@ -65,7 +69,8 @@ def cfb_streams(data: bytes):
                 yield start
                 start = table[start]
 
-        read = lambda start, size=None: b"".join(sec(i) for i in chain(start, fat))[:size]
+        def read(start, size=None): return b"".join(sec(i)
+                                                    for i in chain(start, fat))[:size]
         dirs = read(dir_start)
         entries = []
         for off in range(0, len(dirs) - 127, 128):
@@ -83,14 +88,16 @@ def cfb_streams(data: bytes):
         minifat = []
         if n_minifat and minifat_start < ENDS:
             raw = read(minifat_start)
-            minifat = list(struct.unpack(f"<{len(raw) // 4}I", raw[:len(raw) // 4 * 4]))
+            minifat = list(struct.unpack(
+                f"<{len(raw) // 4}I", raw[:len(raw) // 4 * 4]))
 
         out = []
         for name, typ, start, size in entries[1:]:
             if typ != 2 or size == 0:
                 continue
             if size < mini_cutoff:
-                b = b"".join(mini_stream[i * mssz:(i + 1) * mssz] for i in chain(start, minifat))[:size]
+                b = b"".join(mini_stream[i * mssz:(i + 1) * mssz]
+                             for i in chain(start, minifat))[:size]
             else:
                 b = read(start, size)
             out.append((name, b))
@@ -101,9 +108,11 @@ def cfb_streams(data: bytes):
 # --------------------------------------------------------------------------
 # BƯỚC 0: TRÍCH XUẤT FILE PDF NHÚNG TỪ FILE EXCEL
 # --------------------------------------------------------------------------
+
+
 def extract_pdfs_from_excel(excel_path, out_drawings_dir, out_gatepass_dir):
     """
-    Rạch bụng file Excel (.xlsx), đọc cấu trúc quan hệ Sheet XML,
+    Tiền xử lý (Pre-processor): Giải nén file Excel, đọc cấu trúc XML,
     tìm và lôi các file PDF đính kèm (OLE Objects) trong các Sheet quy định.
     """
     if not os.path.exists(excel_path):
@@ -135,7 +144,8 @@ def extract_pdfs_from_excel(excel_path, out_drawings_dir, out_gatepass_dir):
                     sheet_map[r_id] = name
 
             # 2. Đọc workbook.xml.rels để map: sheetX.xml -> Tên Sheet
-            rels_root = ET.fromstring(zip_ref.read('xl/_rels/workbook.xml.rels'))
+            rels_root = ET.fromstring(
+                zip_ref.read('xl/_rels/workbook.xml.rels'))
             sheet_file_map = {}
             for rel in rels_root.findall('.//rels:Relationship', ns):
                 r_id = rel.attrib.get('Id')
@@ -147,7 +157,8 @@ def extract_pdfs_from_excel(excel_path, out_drawings_dir, out_gatepass_dir):
             # 3. Quét từng file .rels của các Sheet tìm embeddings
             for rel_file in file_list:
                 if rel_file.startswith('xl/worksheets/_rels/') and rel_file.endswith('.rels'):
-                    sheet_filename = rel_file.split('/')[-1].replace('.rels', '')
+                    sheet_filename = rel_file.split(
+                        '/')[-1].replace('.rels', '')
                     sheet_name = sheet_file_map.get(sheet_filename, "")
                     sheet_lower = sheet_name.lower()
 
@@ -187,19 +198,23 @@ def extract_pdfs_from_excel(excel_path, out_drawings_dir, out_gatepass_dir):
                                     pdf_data = find_pdf_bytes(raw_bytes)
 
                                 if pdf_data:
-                                    clean_sheet_name = ut.clean_vietnamese_filename(sheet_name)
+                                    clean_sheet_name = ut.clean_vietnamese_filename(
+                                        sheet_name)
                                     out_pdf_name = f"{prefix}_{clean_sheet_name}_File_{idx}.pdf"
-                                    out_pdf_path = os.path.join(target_dir, out_pdf_name)
+                                    out_pdf_path = os.path.join(
+                                        target_dir, out_pdf_name)
 
                                     with open(out_pdf_path, 'wb') as f_out:
                                         f_out.write(pdf_data)
 
-                                    print(f"   [+] Móc thành công PDF từ Sheet '{sheet_name}' -> {out_pdf_name}")
+                                    print(
+                                        f"   [+] Móc thành công PDF từ Sheet '{sheet_name}' -> {out_pdf_name}")
                                     extracted_count += 1
                                     idx += 1
 
             if extracted_count > 0:
-                print(f"🎉 Đã trích xuất thành công {extracted_count} file PDF từ file Excel.")
+                print(
+                    f"🎉 Đã trích xuất thành công {extracted_count} file PDF từ file Excel.")
             else:
                 print("ℹ️ Không tìm thấy file PDF nhúng trong các Sheet Bản vẽ / BBGN.")
 
@@ -211,15 +226,18 @@ def extract_pdfs_from_excel(excel_path, out_drawings_dir, out_gatepass_dir):
 # --------------------------------------------------------------------------
 # HÀM ĐIỀU PHỐI CHÍNH TOÀN BỘ QUY TRÌNH (RUN_MEP_PIPELINE)
 # --------------------------------------------------------------------------
+
+
 def run_mep_pipeline(
-    pdf_drawing_dir,
-    pdf_gatepass_dir,
-    vendor_excel_path,
-    master_data_path,
-    output_dir,
-    csv_drawing_dir,
-    csv_gatepass_dir,
-    skip_existing=False,
+    pdf_drawing_dir,  # Thư mục chứa các file PDF Bản vẽ CAD
+    pdf_gatepass_dir,       # Thư mục chứa các file PDF Biên bản vật tư mang vào
+    vendor_excel_path,      # Đường dẫn tới file Excel của nhà thầu (Vendor)
+    master_data_path,       # Đường dẫn tới file MapData.xlsx
+    output_dir,             # Thư mục sẽ lưu báo cáo Excel cuối cùng
+    csv_drawing_dir,        # Thư mục lưu các file CSV của Bản vẽ
+    csv_gatepass_dir,       # Thư mục lưu các file CSV của Gate Pass
+    skip_existing=False,    # Cờ: Có dùng lại CSV cũ để chạy cho nhanh không?
+    # Hàm gọi ngược (Callback) đẩy % lên thanh Loading của Web
     status_callback=None
 ):
     """
@@ -239,50 +257,68 @@ def run_mep_pipeline(
 
     try:
         # BƯỚC 0: TRÍCH XUẤT PDF
-        update_status("BƯỚC 0: Đang quét file Excel trích xuất PDF đính kèm...", 0.05)
-        extract_pdfs_from_excel(vendor_excel_path, pdf_drawing_dir, pdf_gatepass_dir)
+        update_status(
+            "BƯỚC 0: Đang quét file Excel trích xuất PDF đính kèm...", 0.05)
+        extract_pdfs_from_excel(
+            vendor_excel_path, pdf_drawing_dir, pdf_gatepass_dir)
 
         # BƯỚC 1: XỬ LÝ PDF VÀ GỌI AI VISION
         update_status("BƯỚC 1/4: Đang đọc hồ sơ PDF bằng AI Vision...", 0.15)
-        pdf_drawings = glob.glob(os.path.join(pdf_drawing_dir, "*.pdf")) if os.path.exists(pdf_drawing_dir) else []
-        pdf_gatepasses = glob.glob(os.path.join(pdf_gatepass_dir, "*.pdf")) if os.path.exists(pdf_gatepass_dir) else []
+        pdf_drawings = glob.glob(os.path.join(
+            pdf_drawing_dir, "*.pdf")) if os.path.exists(pdf_drawing_dir) else []
+        pdf_gatepasses = glob.glob(os.path.join(
+            pdf_gatepass_dir, "*.pdf")) if os.path.exists(pdf_gatepass_dir) else []
 
         if not pdf_drawings and not pdf_gatepasses:
-            raise FileNotFoundError("❌ Không tìm thấy file PDF Bản vẽ hay Gate Pass nào để xử lý!")
+            raise FileNotFoundError(
+                "❌ Không tìm thấy file PDF Bản vẽ hay Gate Pass nào để xử lý!")
 
         first_pdf_name = "MEP_Report"
         if pdf_drawings:
-            first_pdf_name = os.path.splitext(os.path.basename(pdf_drawings[0]))[0]
+            first_pdf_name = os.path.splitext(
+                os.path.basename(pdf_drawings[0]))[0]
         elif pdf_gatepasses:
-            first_pdf_name = os.path.splitext(os.path.basename(pdf_gatepasses[0]))[0]
+            first_pdf_name = os.path.splitext(
+                os.path.basename(pdf_gatepasses[0]))[0]
 
         # 1A. Xử lý Bản vẽ CAD
-        existing_csv_drawings = glob.glob(os.path.join(csv_drawing_dir, "*.csv"))
+        existing_csv_drawings = glob.glob(
+            os.path.join(csv_drawing_dir, "*.csv"))
         if skip_existing and len(existing_csv_drawings) > 0:
-            update_status(f"-> ⚡ Đã có {len(existing_csv_drawings)} CSV Bản vẽ. Bỏ qua gọi AI...", 0.25)
+            update_status(
+                f"-> ⚡ Đã có {len(existing_csv_drawings)} CSV Bản vẽ. Bỏ qua gọi AI...", 0.25)
         else:
             for i, pdf_path in enumerate(pdf_drawings):
                 progress = 0.15 + (i / max(1, len(pdf_drawings))) * 0.15
-                update_status(f"Đang bóc tách Bản vẽ ({i+1}/{len(pdf_drawings)}): {os.path.basename(pdf_path)}", progress)
-                pdf_extractor.process_single_pdf(pdf_path, force_mode="drawing", out_drawing_dir=csv_drawing_dir)
+                update_status(
+                    f"Đang bóc tách Bản vẽ ({i+1}/{len(pdf_drawings)}): {os.path.basename(pdf_path)}", progress)
+                pdf_extractor.process_single_pdf(
+                    pdf_path, force_mode="drawing", out_drawing_dir=csv_drawing_dir)
 
         # 1B. Xử lý Gate Pass (Biên bản vật tư mang vào)
         existing_csv_gp = glob.glob(os.path.join(csv_gatepass_dir, "*.csv"))
         if skip_existing and len(existing_csv_gp) > 0:
-            update_status(f"-> ⚡ Đã có {len(existing_csv_gp)} CSV Gate Pass. Bỏ qua gọi AI...", 0.40)
+            update_status(
+                f"-> ⚡ Đã có {len(existing_csv_gp)} CSV Gate Pass. Bỏ qua gọi AI...", 0.40)
         else:
             for i, pdf_path in enumerate(pdf_gatepasses):
                 progress = 0.30 + (i / max(1, len(pdf_gatepasses))) * 0.15
-                update_status(f"Đang bóc tách Gate Pass ({i+1}/{len(pdf_gatepasses)}): {os.path.basename(pdf_path)}", progress)
-                pdf_extractor.process_single_pdf(pdf_path, force_mode="gate_pass", out_gatepass_dir=csv_gatepass_dir)
+                update_status(
+                    f"Đang bóc tách Gate Pass ({i+1}/{len(pdf_gatepasses)}): {os.path.basename(pdf_path)}", progress)
+                pdf_extractor.process_single_pdf(
+                    pdf_path, force_mode="gate_pass", out_gatepass_dir=csv_gatepass_dir)
 
         # BƯỚC 2: GOM NHÓM DỮ LIỆU CSV
-        update_status("BƯỚC 2/4: Đang gom nhóm (Pivot & Groupby) dữ liệu AI...", 0.50)
-        df_pivot, drawing_list = excel_reconciler.aggregate_ai_data(csv_drawing_dir)
-        dict_gatepass = excel_reconciler.aggregate_gate_pass_data(csv_gatepass_dir)
+        update_status(
+            "BƯỚC 2/4: Đang gom nhóm (Pivot & Groupby) dữ liệu AI...", 0.50)
+        df_pivot, drawing_list = excel_reconciler.aggregate_ai_data(
+            csv_drawing_dir)
+        dict_gatepass = excel_reconciler.aggregate_gate_pass_data(
+            csv_gatepass_dir)
 
         # BƯỚC 3: QUÉT RADAR FILE VENDOR & MASTER DATA
-        update_status("BƯỚC 3/4: Đang quét Radar file Vendor và Ánh xạ Master Data...", 0.65)
+        update_status(
+            "BƯỚC 3/4: Đang quét Radar file Vendor và Ánh xạ Master Data...", 0.65)
         df_vendor = excel_reconciler.load_vendor_data_dynamic(
             vendor_excel_path,
             config.VENDOR_SHEET_NAME,
@@ -296,8 +332,10 @@ def run_mep_pipeline(
         )
 
         # BƯỚC 4: ĐỐI SOÁT CHÉO 2 VÒNG & XUẤT EXCEL 2 SHEET
-        update_status("BƯỚC 4/4: Đang đối soát 2 Vòng và tô màu báo cáo...", 0.85)
-        base_output_path = os.path.join(output_dir, f"{first_pdf_name}_Report.xlsx")
+        update_status(
+            "BƯỚC 4/4: Đang đối soát 2 Vòng và tô màu báo cáo...", 0.85)
+        base_output_path = os.path.join(
+            output_dir, f"{first_pdf_name}_Report.xlsx")
         final_excel_path = excel_reconciler.get_unique_path(base_output_path)
 
         excel_reconciler.reconcile_and_highlight(
@@ -321,9 +359,12 @@ def run_mep_pipeline(
             status_callback(error_msg, 0.0)
         raise e
 
+
 if __name__ == "__main__":
     print("🚀 Đang chạy Engine kiểm tra ở chế độ CLI Standalone...")
-    test_vendor = os.path.join(config.BASE_DIR, "data", "test_vendor.xlsx")
+    # test_vendor = os.path.join(config.BASE_DIR, "data", "test_vendor.xlsx")
+    test_vendor = os.path.join(
+        config.DIR_VENDOR_EXCEL, config.VENDOR_FILE_NAME)
     if os.path.exists(test_vendor):
         run_mep_pipeline(
             pdf_drawing_dir=config.DIR_PDF_DRAWINGS,
@@ -336,4 +377,3 @@ if __name__ == "__main__":
         )
     else:
         print(f"ℹ️ Đặt file vendor tại {test_vendor} để chạy thử nghiệm.")
-

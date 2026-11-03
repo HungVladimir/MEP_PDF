@@ -1,6 +1,21 @@
 # TỔNG MỤC TÀI LIỆU DỰ ÁN MEP ONEAI SYSTEM
 
-Thư mục tài liệu này đã được tinh gọn và quy hoạch thành **4 BỘ TÀI LIỆU MASTER HOÀN CHỈNH**, bao quát 100% tất cả các khía cạnh từ kiến trúc toàn cảnh, giải thích từng file & luồng dữ liệu, hướng dẫn triển khai thực tế, đến giải mã code của sếp và thuật toán thị giác máy tính:
+Thư mục tài liệu này đã được tinh gọn và quy hoạch thành **5 BỘ TÀI LIỆU MASTER HOÀN CHỈNH**, bao quát 100% tất cả các khía cạnh từ hướng dẫn thực chiến từng bước cho người mới, kiến trúc toàn cảnh, giải thích từng file & luồng dữ liệu, hướng dẫn triển khai thực tế, đến giải mã code của sếp và thuật toán thị giác máy tính:
+
+---
+
+### 🌟 [5. Cẩm Nang Thực Chiến Từng Bước: Từ Code AI Local Lên Màn Hình OneAI](./05_HUONG_DAN_CHI_TIET_TU_CODE_LOCAL_LEN_ONEAI_STEP_BY_STEP.md) 🚀 *(DÀNH CHO NGƯỜI CHƯA LÀM BAO GIỜ - COOKBOOK)*
+* **Tên file:** `05_HUONG_DAN_CHI_TIET_TU_CODE_LOCAL_LEN_ONEAI_STEP_BY_STEP.md`
+* **Nội dung:** Bản đồ thực thi chi tiết cầm tay chỉ việc:
+  * Điểm xuất phát: Trong tay chỉ có 5 file code AI chạy local terminal.
+  * **Bước 0:** Cách phân tích bài toán để xác định danh sách các cột/trường hiển thị trên màn hình.
+  * **Bước 1:** Thiết kế bảng Oracle DB `create_table.sql` và thao tác trên DBeaver.
+  * **Bước 2:** Cấu hình truy vấn tĩnh OneAI Gateway `mep_payment_analysis.py` (Bind Variable, phân trang `ROW_NUMBER()`).
+  * **Bước 3:** Đóng gói API Javascript `mep_payment.js` gọi Gateway `/crud/ui`.
+  * **Bước 4:** Xây dựng màn hình Vue 3 Dark Theme (`main.vue`, `tab/operation.vue`), cơ chế Insert vào cuối bảng (`push`), tính STT tự động, khóa timer Polling khi đang nhập, phòng thủ chống trùng mã `KEYID`.
+  * **Bước 5:** Dựng máy chủ FastAPI Worker (`main.py`, `api.py`, `sql.py`) xử lý ngầm bằng `BackgroundTasks` và đóng gói `.zip` lách tường lửa DLP.
+  * **Bước 6:** Tích hợp 5 file AI lõi vào Background Task.
+  * **Bước 7 & Cạm bẫy:** Checklist kiểm thử từng bước và bảng tổng hợp 6 cạm bẫy kinh điển (trùng mã `KEYID`, lỗi mật khẩu `0x939`, timer 10s xóa RAM, quên `commit()`...).
 
 ---
 
