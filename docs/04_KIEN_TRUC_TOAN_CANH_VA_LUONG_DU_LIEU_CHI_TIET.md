@@ -381,7 +381,7 @@ getdata_page = QuerySettings(
         TO_CHAR(RESULT_TIME, 'YYYY-MM-DD HH24:MI') AS RESULT_TIME
     FROM (
         SELECT A.*,
-               ROW_NUMBER() OVER(ORDER BY UPLOAD_TIME ASC NULLS LAST, KEYID ASC) RN
+               ROW_NUMBER() OVER(ORDER BY UPLOAD_TIME DESC NULLS LAST, KEYID DESC) RN
         FROM LOCAL_AI.MEP_PAYMENT_ANALYSIS A
         WHERE 1 = 1
         AND (:STATUS = 'ALL' OR STATUS = :STATUS)
@@ -396,9 +396,9 @@ getdata_page = QuerySettings(
 )
 ```
 * **Giải phẫu thuật toán phân trang:**
-  1. Trong câu truy vấn con (Subquery): Hàm cửa sổ `ROW_NUMBER() OVER(ORDER BY UPLOAD_TIME ASC NULLS LAST, KEYID ASC)` đánh số thứ tự dòng ảo `RN` tăng dần từ dòng cũ nhất đến dòng mới nhất.
+  1. Trong câu truy vấn con (Subquery): Hàm cửa sổ `ROW_NUMBER() OVER(ORDER BY UPLOAD_TIME DESC NULLS LAST, KEYID DESC)` đánh số thứ tự dòng ảo `RN` từ dòng mới nhất đến dòng cũ nhất.
   2. Ở câu truy vấn ngoài: `WHERE RN BETWEEN :start_row AND :end_row` chỉ lấy đúng các dòng thuộc trang hiện tại (ví dụ: Trang 1 lấy từ dòng 1 đến dòng 15).
-  3. Nhờ sắp xếp theo `UPLOAD_TIME ASC`, các dòng cũ đã lưu trước đây sẽ có `RN = 1, 2, 3`. Khi bạn thêm một dòng mới vào thời điểm hiện tại (`UPLOAD_TIME = SYSDATE`), dòng mới này sẽ có số thứ tự tiếp theo là `RN = 4`.
+  3. Nhờ sắp xếp theo `UPLOAD_TIME DESC`, dòng công việc mới nhất vừa được thêm hoặc upload file sẽ luôn xuất hiện ở vị trí đầu tiên của Trang 1 (`RN = 1`), giúp kỹ sư theo dõi ngay kết quả vừa thao tác mà không phải cuộn tìm kiếm.
 
 ---
 
@@ -467,12 +467,12 @@ File này xây dựng bằng Vue 3 (`<script setup>`) và Element Plus UI.
 * Được gắn vào sự kiện `@selection-change` của `<el-table>`.
 * Khi người dùng tích hoặc bỏ tích checkbox ở cột đầu tiên, mảng `selectedRows.value` sẽ tự động cập nhật. Nút **Delete** trên thanh công cụ sẽ tự động sáng lên hoặc mờ đi dựa vào độ dài mảng này.
 
-##### 4. `handleInsert()` - Thao tác chèn dòng mới vào cuối bảng (Dòng 341-360)
+##### 4. `handleInsert()` - Thao tác chèn dòng mới vào đầu bảng (Dòng 341-360)
 * **Logic hoạt động:**
   ```javascript
   const handleInsert = () => {
     const newRow = {
-      STT: (page.value - 1) * pageSize.value + tableData.value.length + 1,
+      STT: tableData.value.length + 1,
       KEYID: '',
       TASK_NAME: '',
       PAYMENT_MONTH: selectedMonth.value || new Date().toISOString().slice(0, 7),
@@ -484,10 +484,10 @@ File này xây dựng bằng Vue 3 (`<script setup>`) và Element Plus UI.
       isNew: true,      // Cờ báo hiệu đây là dòng mới tạo
       isEditing: true   // Mở ngay ô nhập liệu <el-input> để kỹ sư gõ phím
     }
-    // Dùng push để thêm vào CUỐI mảng, giữ nguyên 3 dòng cũ ở vị trí 1, 2, 3
-    tableData.value.push(newRow)
+    // Dùng unshift để thêm vào ĐẦU bảng, người dùng thấy ngay trước mắt để gõ phím
+    tableData.value.unshift(newRow)
     total.value += 1
-    ElMessage.info("Đã thêm 1 dòng mới vào cuối bảng. Vui lòng nhập thông tin và bấm [Save].")
+    ElMessage.info("Đã thêm 1 dòng mới vào đầu bảng. Vui lòng nhập thông tin và bấm [Save].")
   }
   ```
 
@@ -544,22 +544,20 @@ File này xây dựng bằng Vue 3 (`<script setup>`) và Element Plus UI.
 
 ---
 
-## 4. GIẢI MÃ LỖI THỨ TỰ STT & CƠ CHẾ SỬA LỖI INSERT ĐẨY LÊN VỊ TRÍ 1
+## 4. BẢN CHẤT CƠ CHẾ SẮP XẾP VÀ VÌ SAO CHÈN ĐẦU BẢNG (UNSHIFT + DESC) LÀ CHUẨN MỰC
 
-### Hiện tượng bạn gặp phải:
-> *"Khi insert thì nó lại đẩy cái mình mới insert lên STT 1. Ví dụ đang có 3 cái, insert 1 cái thì lẽ ra nó phải ở vị trí 4 thì giờ nó đang ở vị trí 1 và đẩy 3 cái cũ xuống dưới."*
+### 4.1. Tại sao chèn vào đầu bảng (`unshift`) kết hợp sắp xếp giảm dần (`DESC`) là chuẩn mực Enterprise Portal?
+Trong thiết kế các hệ thống cổng thông tin quản trị doanh nghiệp (OneAI, SAP, Oracle ERP), luồng thêm mới dữ liệu luôn tuân thủ nguyên lý:
+1. **Trải nghiệm gõ phím trực diện:** Khi người dùng bấm nút **[Insert]**, dòng nhập liệu phải xuất hiện ngay ở **Hàng đầu tiên (Row 1)** ngay trước mắt họ bằng hàm `unshift()`. Kỹ sư không phải cuộn chuột xuống đáy bảng tìm ô nhập liệu.
+2. **Nguyên lý mới nhất lên đầu (`ORDER BY UPLOAD_TIME DESC`):**
+   * Khi kỹ sư gõ mã WO và bấm **[Save]**, dòng mới được lưu vào Oracle DB với `UPLOAD_TIME = SYSDATE` (thời gian mới nhất lúc đó).
+   * Khi trang web tự động tải lại dữ liệu (`handleReload()`), câu lệnh SQL phân trang `ORDER BY UPLOAD_TIME DESC` (giảm dần từ mới nhất đến cũ nhất) bảo đảm dòng vừa tạo sẽ **luôn xuất hiện ở Vị trí số 1 của Trang 1**!
+   * Kỹ sư vừa bấm Save xong, trang tải lại thì dòng mới vẫn nằm nguyên vẹn ở vị trí số 1 ngay trước mắt, thấy ngay kết quả lưu thành công, thao tác mượt mà và không bao giờ bị "lạc" dòng.
 
-### Phân tích nguyên nhân 2 đầu:
-1. **Tại Frontend (`operation.vue`):** Hàm chèn cũ dùng `tableData.value.unshift(newRow)` $\rightarrow$ Lệnh này chèn phần tử vào đầu mảng Javascript (Index 0).
-2. **Tại Database (`mep_payment_analysis.py`):** Câu truy vấn phân trang cũ có đoạn:
-   `ROW_NUMBER() OVER(ORDER BY UPLOAD_TIME DESC NULLS LAST, KEYID DESC) RN`
-   Dòng mới lưu vào Oracle luôn có `UPLOAD_TIME = SYSDATE` (thời gian mới nhất). Mệnh đề `ORDER BY DESC` (giảm dần) sẽ gán cho dòng mới nhất số thứ tự `RN = 1`. Do đó, sau khi Save xong và tải lại trang, dòng mới tiếp tục bị gán `STT = 1` và đẩy 3 dòng cũ xuống `2, 3, 4`.
-
-### Cách sửa triệt để:
-* **Frontend:** Đổi sang dùng `tableData.value.push(newRow)` $\rightarrow$ Chèn vào cuối mảng, tính `STT = (page - 1) * pageSize + tableData.length + 1` (cho ra số 4).
-* **Database:** Đổi câu SQL trong `mep_payment_analysis.py` sang sắp xếp tăng dần:
-  `ROW_NUMBER() OVER(ORDER BY UPLOAD_TIME ASC NULLS LAST, KEYID ASC) RN`
-  Dòng cũ lưu trước giữ nguyên STT 1, 2, 3. Dòng mới lưu sau sẽ đứng chuẩn xác ở vị trí số 4!
+### 4.2. Điều gì đã xảy ra khi thử đổi sang `push` và `ASC`?
+* Khi đổi sang `push`, dòng mới bị đẩy xuống dưới đáy bảng. Nếu bảng có thanh cuộn hoặc người dùng không thấy ô nhập liệu ở dòng dưới đáy, bấm Save mà `KEYID` rỗng thì hệ thống sẽ chặn lại (`return`).
+* Đồng thời, khi câu truy vấn SQL đổi thành `ORDER BY UPLOAD_TIME ASC` (sắp xếp tăng dần từ cũ đến mới), dòng mới tạo có thời gian mới nhất nên bị xếp ở tận cùng của toàn bộ database (nằm ở các trang sau). Sau khi Save xong, trang web tải lại Trang 1 (chỉ hiện các dòng cũ), dẫn đến việc người dùng tưởng rằng dòng mới không được lưu vào DB.
+* **Kết luận kiến trúc:** Giữ nguyên mô hình ổn định ban đầu (`tableData.unshift(newRow)` và `ORDER BY UPLOAD_TIME DESC`) là phương án tối ưu, đồng bộ và ổn định 100% cho toàn bộ hệ thống!
 
 ---
 

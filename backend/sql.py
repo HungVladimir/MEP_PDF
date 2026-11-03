@@ -110,6 +110,13 @@ def update_task_status(keyid: str, status: str, error_count: int = 0, result_lin
                 oracle_client_dir=oracle_client_path,
             )
             cur.execute(sql, params=params)
+            try:
+                if hasattr(cur, 'commit'):
+                    cur.commit()
+                elif hasattr(cur, 'connection') and hasattr(cur.connection, 'commit'):
+                    cur.connection.commit()
+            except Exception:
+                pass
         else:
             conn = get_native_conn()
             c = conn.cursor()
@@ -146,6 +153,13 @@ def update_review_decision(keyid: str, decision: str, note: str, reviewer: str):
                 oracle_client_dir=oracle_client_path,
             )
             cur.execute(sql, params=params)
+            try:
+                if hasattr(cur, 'commit'):
+                    cur.commit()
+                elif hasattr(cur, 'connection') and hasattr(cur.connection, 'commit'):
+                    cur.connection.commit()
+            except Exception:
+                pass
         else:
             conn = get_native_conn()
             c = conn.cursor()
@@ -208,6 +222,13 @@ def batch_upsert_tasks(rows: list) -> int:
             )
             for p in params_list:
                 cur.execute(sql, params=p)
+            try:
+                if hasattr(cur, 'commit'):
+                    cur.commit()
+                elif hasattr(cur, 'connection') and hasattr(cur.connection, 'commit'):
+                    cur.connection.commit()
+            except Exception:
+                pass
         else:
             conn = get_native_conn()
             c = conn.cursor()
@@ -240,6 +261,13 @@ def delete_tasks(keyids: list) -> int:
             )
             for p in params_list:
                 cur.execute(sql, params=p)
+            try:
+                if hasattr(cur, 'commit'):
+                    cur.commit()
+                elif hasattr(cur, 'connection') and hasattr(cur.connection, 'commit'):
+                    cur.connection.commit()
+            except Exception:
+                pass
         else:
             conn = get_native_conn()
             c = conn.cursor()

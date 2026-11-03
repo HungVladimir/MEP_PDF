@@ -70,6 +70,7 @@
     <!-- 3. BẢNG DỮ LIỆU ĐỐI SOÁT (TABLE GRID HỖ TRỢ INLINE EDIT) -->
     <div class="table-container">
       <el-table
+        ref="tableRef"
         :data="tableData"
         border
         height="680"
@@ -269,7 +270,7 @@
 </template>
 
 <script setup>
-import { ref, computed, onMounted, onUnmounted, watch } from 'vue'
+import { ref, computed, onMounted, onUnmounted, watch, nextTick } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import axios from 'axios'
 import { get_total_row, get_data_page, save_mep_rows, delete_mep_rows } from '@/js/mepPayment'
@@ -284,6 +285,7 @@ const searchKeyword = ref('')
 const statusList = ['ALL', 'WAITING', 'RUNNING', 'COMPLETED', 'CANCEL']
 
 // Bảng dữ liệu & Phân trang
+const tableRef = ref(null)
 const tableData = ref([])
 const selectedRows = ref([])
 const page = ref(1)
@@ -337,8 +339,8 @@ const handleSelectionChange = (selection) => {
   selectedRows.value = selection
 }
 
-// 3. THAO TÁC INSERT (THÊM DÒNG MỚI THEO ẢNH 4.WEBP - THÊM VÀO CUỐI BẢNG)
-const handleInsert = () => {
+// 3. THAO TÁC INSERT (THÊM DÒNG MỚI VÀO CUỐI BẢNG)
+const handleInsert = async () => {
   const newRow = {
     STT: (page.value - 1) * pageSize.value + tableData.value.length + 1,
     KEYID: '',
@@ -352,10 +354,21 @@ const handleInsert = () => {
     isNew: true,
     isEditing: true
   }
-  // Thêm dòng mới vào CUỐI bảng hiện tại (Ví dụ đang có 3 dòng thì vào vị trí số 4, không đẩy dòng cũ)
+  // Thêm dòng mới vào cuối bảng
   tableData.value.push(newRow)
   total.value += 1
   ElMessage.info("Đã thêm 1 dòng mới vào cuối bảng. Vui lòng nhập thông tin và bấm [Save].")
+
+  // Tự động cuộn bảng xuống cuối cùng để thấy ngay dòng vừa tạo
+  await nextTick()
+  if (tableRef.value) {
+    const el = tableRef.value.$el?.querySelector('.el-table__body-wrapper')
+    if (el) {
+      el.scrollTop = el.scrollHeight
+    } else if (tableRef.value.setScrollTop) {
+      tableRef.value.setScrollTop(999999)
+    }
+  }
 }
 
 // 4. THAO TÁC SAVE (LƯU CÁC DÒNG MỚI HOẶC SỬA XUỐNG DB)
@@ -368,32 +381,47 @@ const handleSave = async () => {
 
   // Kiểm tra không để trống KEYID
   for (const r of modifiedRows) {
-    if (!r.KEYID || !r.KEYID.trim()) {
+    if (!r.KEYID || !String(r.KEYID).trim()) {
       ElMessage.warning("Vui lòng nhập Số Công Việc (KEYID) trước khi lưu!")
+      await nextTick()
+      if (tableRef.value) {
+        const el = tableRef.value.$el?.querySelector('.el-table__body-wrapper')
+        if (el) el.scrollTop = el.scrollHeight
+      }
       return
     }
   }
 
   isSaving.value = true
   try {
-    // Gửi danh sách dòng xuống backend
-    const res = await axios.post(`${FASTAPI_BASE_URL}/mep_payment/save_rows`, {
+    const payload = {
       rows: modifiedRows.map(r => ({
-        KEYID: r.KEYID,
-        TASK_NAME: r.TASK_NAME,
-        PAYMENT_MONTH: r.PAYMENT_MONTH,
-        PIC: r.PIC,
-        PART_NAME: r.PART_NAME,
-        GROUP_NAME: r.GROUP_NAME,
+        KEYID: String(r.KEYID).trim(),
+        TASK_NAME: String(r.TASK_NAME || '').trim(),
+        PAYMENT_MONTH: String(r.PAYMENT_MONTH || '').trim(),
+        PIC: String(r.PIC || '').trim(),
+        PART_NAME: String(r.PART_NAME || '').trim(),
+        GROUP_NAME: String(r.GROUP_NAME || '').trim(),
         STATUS: r.STATUS || 'WAITING'
       }))
-    })
+    }
+    console.log("👉 [Save] Đang gửi payload xuống backend:", payload)
+    const res = await axios.post(`${FASTAPI_BASE_URL}/mep_payment/save_rows`, payload)
+    console.log("👉 [Save] Phản hồi thành công từ backend:", res.data)
 
     ElMessage.success(res.data?.message || "Lưu dữ liệu thành công!")
     await handleReload()
+
+    // Cuộn xuống cuối bảng để hiển thị bản ghi vừa lưu
+    await nextTick()
+    if (tableRef.value) {
+      const el = tableRef.value.$el?.querySelector('.el-table__body-wrapper')
+      if (el) el.scrollTop = el.scrollHeight
+      else if (tableRef.value.setScrollTop) tableRef.value.setScrollTop(999999)
+    }
   } catch (err) {
     console.error("Lỗi khi lưu dòng:", err)
-    ElMessage.error(err.response?.data?.detail || "Lỗi khi lưu dữ liệu xuống Database!")
+    ElMessage.error(err.response?.data?.detail || err.message || "Lỗi khi lưu dữ liệu xuống Database!")
   } finally {
     isSaving.value = false
   }
@@ -549,13 +577,20 @@ const handleReview = async (row, decision) => {
 onMounted(() => {
   handleReload()
   timer = setInterval(() => {
-    loadData()
-    loadTotal()
-    countdown.value = 10
+    // Nếu người dùng đang thêm dòng mới (isNew) hoặc đang chỉnh sửa (isEditing), tạm dừng polling để tránh ghi đè làm mất dữ liệu đang gõ!
+    const isUserEditing = tableData.value.some(r => r.isNew || r.isEditing)
+    if (!isUserEditing) {
+      loadData()
+      loadTotal()
+      countdown.value = 10
+    }
   }, 10 * 1000)
 
   countdownTimer = setInterval(() => {
-    if (countdown.value > 0) countdown.value--
+    const isUserEditing = tableData.value.some(r => r.isNew || r.isEditing)
+    if (!isUserEditing && countdown.value > 0) {
+      countdown.value--
+    }
   }, 1000)
 })
 

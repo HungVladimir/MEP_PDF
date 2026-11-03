@@ -193,9 +193,11 @@ async def save_rows(req: SaveRowsRequest):
     if not req.rows:
         raise HTTPException(status_code=400, detail="Danh sách dòng rỗng.")
     try:
+        print(f"📥 [FastAPI Worker] Nhận yêu cầu /save_rows ({len(req.rows)} dòng): {req.rows}")
         count = batch_upsert_tasks(req.rows)
         return {"status": "ok", "message": f"Đã lưu thành công {count} bản ghi vào Database."}
     except Exception as e:
+        print(f"❌ [FastAPI Worker Error] save_rows: {e}")
         raise HTTPException(status_code=500, detail=f"Lỗi khi lưu vào Database: {str(e)}")
 
 @app.post("/mep_payment/delete_rows")

@@ -53,8 +53,8 @@ getdata_page = QuerySettings(
         TO_CHAR(RESULT_TIME, 'YYYY-MM-DD HH24:MI') AS RESULT_TIME
     FROM (
         SELECT A.*,
-               -- Đánh số thứ tự RN tự động, sắp xếp các task mới upload lên đầu
-               ROW_NUMBER() OVER(ORDER BY UPLOAD_TIME DESC NULLS LAST, KEYID DESC) RN
+               -- Đánh số thứ tự RN tự động: Các task cũ ở trước, task mới insert xuất hiện ở cuối cùng
+               ROW_NUMBER() OVER(ORDER BY NVL(UPLOAD_TIME, TO_DATE('1970-01-01', 'YYYY-MM-DD')) ASC, KEYID ASC) RN
         FROM LOCAL_AI.MEP_PAYMENT_ANALYSIS A
         WHERE 1 = 1
         AND (:STATUS = 'ALL' OR STATUS = :STATUS)
