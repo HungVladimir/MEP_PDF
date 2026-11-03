@@ -1,13 +1,23 @@
 # TỔNG MỤC TÀI LIỆU DỰ ÁN MEP ONEAI SYSTEM
 
-Thư mục tài liệu này đã được tinh gọn và quy hoạch thành **3 BỘ TÀI LIỆU MASTER HOÀN CHỈNH**, bao quát 100% tất cả các khía cạnh từ kiến trúc triển khai, giải mã code của sếp, đến thuật toán lõi thị giác máy tính:
+Thư mục tài liệu này đã được tinh gọn và quy hoạch thành **4 BỘ TÀI LIỆU MASTER HOÀN CHỈNH**, bao quát 100% tất cả các khía cạnh từ kiến trúc toàn cảnh, giải thích từng file & luồng dữ liệu, hướng dẫn triển khai thực tế, đến giải mã code của sếp và thuật toán thị giác máy tính:
+
+---
+
+### 📕 [4. Kiến Trúc Toàn Cảnh & Giải Mã Toàn Bộ Luồng Liên Kết Hệ Thống](./04_KIEN_TRUC_TOAN_CANH_VA_LUONG_DU_LIEU_CHI_TIET.md) ⭐ *(TÀI LIỆU QUAN TRỌNG NHẤT ĐỂ ĐI BÁO CÁO SẾP)*
+* **Tên file:** `04_KIEN_TRUC_TOAN_CANH_VA_LUONG_DU_LIEU_CHI_TIET.md`
+* **Nội dung:** Được biên soạn dưới góc nhìn của Senior System & Solution Architect:
+  * **Bức tranh toàn cảnh 4 tầng (4-Tier Enterprise Architecture):** OneAI Vue Frontend $\rightarrow$ OneAI Gateway (`/crud/ui`) $\rightarrow$ FastAPI Worker (:8000) $\rightarrow$ Oracle DB 19c (`LOCAL_AI`).
+  * **Từ điển từng file trong hệ thống:** Giải thích cặn kẽ từng file làm gì, vì sao phải có, kết nối với ai (Nhóm Core Pipeline: `config`, `utils`, `pdf_extractor`, `excel_reconciler`, `engine`; Nhóm Worker: `main`, `api`, `sql`; Nhóm OneAI: `create_table.sql`, `mep_payment_analysis.py`, `mepPayment.js`, `operation.vue`).
+  * **Ma trận dòng chảy dữ liệu End-to-End:** 4 Sequence diagram chi tiết từng bước (Tải phân trang, CRUD Insert/Edit/Delete/Save, Upload kích hoạt AI ngầm, Tải file báo cáo Blob ZIP).
+  * **Giải mã các quyết định kỹ thuật cốt lõi:** Tại sao cần 2 Backend? Tại sao dùng `BackgroundTasks`? Bản chất lỗi `DPY-3015: password verifier 0x939` và cơ chế cứu cánh của `Oracle Thick Client` (`oci.dll`). Vì sao phải nén `.zip` lách tường lửa DLP?
+  * **Kịch bản thuyết minh bảo vệ dự án trước Sếp:** Bài nói 2 phút (Elevator Pitch), kịch bản Demo trực tiếp và bộ câu hỏi vấn đáp hóc búa từ Sếp kèm câu trả lời mẫu chuẩn Senior Architect.
 
 ---
 
 ### 📘 [1. Hướng Dẫn Triển Khai OneAI Toàn Diện](./01_HUONG_DAN_TRIEN_KHAI_ONEAI_TOAN_DIEN.md)
 * **Tên file:** `01_HUONG_DAN_TRIEN_KHAI_ONEAI_TOAN_DIEN.md`
 * **Nội dung:** Cuốn cẩm nang thi công trọn gói từ A-Z:
-  * Kiến trúc hệ thống phân tán giữa OneAI Portal, Oracle Database và FastAPI Worker.
   * Toàn bộ mã nguồn DDL tạo bảng Oracle Database (`LOCAL_AI.MEP_PAYMENT_ANALYSIS`).
   * Cấu hình OneAI Backend QuerySettings (`mep_payment_analysis.py`).
   * Cấu hình Javascript gọi Gateway OneAI (`mepPayment.js`).
@@ -41,4 +51,3 @@ Thư mục tài liệu này đã được tinh gọn và quy hoạch thành **3 
 ---
 
 > 📂 **Thư mục lưu trữ lịch sử:** Các bản nháp hoặc tài liệu đơn lẻ trước đây đã được lưu trữ an toàn trong thư mục [`archive/`](./archive/) để tra cứu khi cần thiết.
-
