@@ -434,7 +434,7 @@ const handleDelete = async () => {
   } catch (err) {
     if (err !== 'cancel') {
       console.error("Lỗi xóa dòng:", err)
-      ElMessage.error("Không thể xóa dòng đã chọn!")
+      ElMessage.error(err.response?.data?.detail || err.message || "Không thể xóa dòng đã chọn!")
     }
   }
 }
@@ -690,5 +690,20 @@ watch([selectedStatus, selectedMonth], () => {
   align-items: center;
   gap: 8px;
   margin-top: 14px;
+}
+
+/* =========================================================================
+   TÙY CHỈNH CHECKBOX ALL TRÊN HEADER BẢNG:
+   Khi chỉ chọn 1 hoặc vài dòng (Indeterminate), KHÔNG sáng xanh gây hiểu nhầm,
+   Chỉ khi CHỌN TẤT CẢ (Select All) thì mới sáng xanh và hiện biểu tượng dấu tích (✓).
+   ========================================================================= */
+:deep(.el-table th.el-table__cell .el-checkbox__input.is-indeterminate .el-checkbox__inner) {
+  background-color: transparent !important;
+  border-color: #4C4D4F !important;
+}
+
+:deep(.el-table th.el-table__cell .el-checkbox__input.is-indeterminate .el-checkbox__inner::before),
+:deep(.el-table th.el-table__cell .el-checkbox__input.is-indeterminate .el-checkbox__inner::after) {
+  display: none !important;
 }
 </style>

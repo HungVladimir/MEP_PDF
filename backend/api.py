@@ -192,25 +192,34 @@ async def save_rows(req: SaveRowsRequest):
     """Tiếp nhận danh sách các dòng mới thêm hoặc chỉnh sửa từ Web để lưu vào Oracle DB."""
     if not req.rows:
         raise HTTPException(status_code=400, detail="Danh sách dòng rỗng.")
-    count = batch_upsert_tasks(req.rows)
-    return {"status": "ok", "message": f"Đã lưu thành công {count} bản ghi vào Database."}
+    try:
+        count = batch_upsert_tasks(req.rows)
+        return {"status": "ok", "message": f"Đã lưu thành công {count} bản ghi vào Database."}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Lỗi khi lưu vào Database: {str(e)}")
 
 @app.post("/mep_payment/delete_rows")
 async def delete_rows_endpoint(req: DeleteRowsRequest):
     """Tiếp nhận danh sách KEYID cần xóa khỏi Database."""
     if not req.keyids:
         raise HTTPException(status_code=400, detail="Vui lòng chọn ít nhất 1 dòng để xóa.")
-    count = delete_tasks(req.keyids)
-    return {"status": "ok", "message": f"Đã xóa thành công {count} bản ghi."}
+    try:
+        count = delete_tasks(req.keyids)
+        return {"status": "ok", "message": f"Đã xóa thành công {count} bản ghi khỏi Database."}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Lỗi khi xóa trong Database: {str(e)}")
 
 @app.post("/mep_payment/review")
 async def submit_review(req: ReviewRequest):
     """Tiếp nhận quyết định phê duyệt (Approve / Reject) từ Kỹ sư."""
-    update_review_decision(req.keyid, req.decision, req.note, req.reviewer)
-    return {"status": "ok", "message": f"Đã lưu quyết định: {req.decision}"}
+    try:
+        update_review_decision(req.keyid, req.decision, req.note, req.reviewer)
+        return {"status": "ok", "message": f"Đã lưu quyết định: {req.decision}"}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Lỗi khi lưu phê duyệt: {str(e)}")
 
 if __name__ == "__main__":
     import uvicorn
-    print("🚀 Khởi động MEP Payment AI Worker tại cổng 8386...")
-    uvicorn.run("api:app", host="0.0.0.0", port=8386, reload=False)
+    print("🚀 Khởi động MEP Payment AI Worker tại cổng 8000...")
+    uvicorn.run("api:app", host="0.0.0.0", port=8000, reload=False)
 
