@@ -14,7 +14,7 @@ import pandas as pd
 
 import config
 from engine import run_mep_pipeline
-from sql import update_task_status, update_review_decision, batch_upsert_tasks, delete_tasks
+from sql import update_task_status, update_review_decision, batch_upsert_tasks, delete_tasks, check_keyid_exists
 
 app = FastAPI(title="MEP Payment AI Worker Service", version="2.0")
 
@@ -192,10 +192,23 @@ async def save_rows(req: SaveRowsRequest):
     """Tiếp nhận danh sách các dòng mới thêm hoặc chỉnh sửa từ Web để lưu vào Oracle DB."""
     if not req.rows:
         raise HTTPException(status_code=400, detail="Danh sách dòng rỗng.")
+
+    # Kiểm tra nếu là dòng mới thêm (isNew) mà KEYID đã tồn tại trong DB -> Báo lỗi trùng
+    for r in req.rows:
+        if r.get("isNew"):
+            keyid = str(r.get("KEYID", "")).strip()
+            if keyid and check_keyid_exists(keyid):
+                raise HTTPException(
+                    status_code=400,
+                    detail=f"Số công việc (KEYID) '{keyid}' đã tồn tại trong Database! Không thể thêm trùng."
+                )
+
     try:
         print(f"📥 [FastAPI Worker] Nhận yêu cầu /save_rows ({len(req.rows)} dòng): {req.rows}")
         count = batch_upsert_tasks(req.rows)
         return {"status": "ok", "message": f"Đã lưu thành công {count} bản ghi vào Database."}
+    except HTTPException:
+        raise
     except Exception as e:
         print(f"❌ [FastAPI Worker Error] save_rows: {e}")
         raise HTTPException(status_code=500, detail=f"Lỗi khi lưu vào Database: {str(e)}")

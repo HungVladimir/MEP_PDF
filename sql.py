@@ -172,6 +172,37 @@ def update_review_decision(keyid: str, decision: str, note: str, reviewer: str):
         print(f"[Oracle DB Error] update_review_decision: {e}")
         raise
 
+def check_keyid_exists(keyid: str) -> bool:
+    """Kiểm tra xem KEYID đã tồn tại trong bảng LOCAL_AI.MEP_PAYMENT_ANALYSIS hay chưa."""
+    if not keyid or not str(keyid).strip():
+        return False
+    sql = "SELECT COUNT(*) FROM LOCAL_AI.MEP_PAYMENT_ANALYSIS WHERE KEYID = :KEYID"
+    params = {"KEYID": str(keyid).strip()}
+    try:
+        if HAS_ONEAI_SDV and oracle_conn is not None:
+            cur = oracle_conn(
+                dns="MBAYMS",
+                user_name=DB_USER_YMS_AI,
+                password=DB_PASSWORD_YMS_AI,
+                oracle_client_dir=oracle_client_path,
+            )
+            cur.execute(sql, params=params)
+            res = cur.fetchall()
+            count = res[0][0] if res else 0
+            return count > 0
+        else:
+            conn = get_native_conn()
+            c = conn.cursor()
+            c.execute(sql, params)
+            res = c.fetchone()
+            count = res[0] if res else 0
+            c.close()
+            conn.close()
+            return count > 0
+    except Exception as e:
+        print(f"[Oracle DB Warning] check_keyid_exists: {e}")
+        return False
+
 def batch_upsert_tasks(rows: list) -> int:
     """MERGE INTO bảng LOCAL_AI.MEP_PAYMENT_ANALYSIS (Insert dòng mới & Update dòng cũ)."""
     if not rows:

@@ -340,9 +340,9 @@ const handleSelectionChange = (selection) => {
 }
 
 // 3. THAO TÁC INSERT (THÊM DÒNG MỚI VÀO CUỐI BẢNG)
-const handleInsert = async () => {
+const handleInsert = () => {
   const newRow = {
-    STT: (page.value - 1) * pageSize.value + tableData.value.length + 1,
+    STT: tableData.value.length + 1,
     KEYID: '',
     TASK_NAME: '',
     PAYMENT_MONTH: selectedMonth.value || new Date().toISOString().slice(0, 7),
@@ -358,17 +358,6 @@ const handleInsert = async () => {
   tableData.value.push(newRow)
   total.value += 1
   ElMessage.info("Đã thêm 1 dòng mới vào cuối bảng. Vui lòng nhập thông tin và bấm [Save].")
-
-  // Tự động cuộn bảng xuống cuối cùng để thấy ngay dòng vừa tạo
-  await nextTick()
-  if (tableRef.value) {
-    const el = tableRef.value.$el?.querySelector('.el-table__body-wrapper')
-    if (el) {
-      el.scrollTop = el.scrollHeight
-    } else if (tableRef.value.setScrollTop) {
-      tableRef.value.setScrollTop(999999)
-    }
-  }
 }
 
 // 4. THAO TÁC SAVE (LƯU CÁC DÒNG MỚI HOẶC SỬA XUỐNG DB)
@@ -379,16 +368,24 @@ const handleSave = async () => {
     return
   }
 
-  // Kiểm tra không để trống KEYID
+  // 1. Kiểm tra không để trống KEYID
   for (const r of modifiedRows) {
     if (!r.KEYID || !String(r.KEYID).trim()) {
       ElMessage.warning("Vui lòng nhập Số Công Việc (KEYID) trước khi lưu!")
-      await nextTick()
-      if (tableRef.value) {
-        const el = tableRef.value.$el?.querySelector('.el-table__body-wrapper')
-        if (el) el.scrollTop = el.scrollHeight
-      }
       return
+    }
+  }
+
+  // 2. Kiểm tra trùng lặp Số Công Việc (KEYID) ngay trên bảng giao diện
+  for (const r of modifiedRows) {
+    if (r.isNew) {
+      const isDuplicate = tableData.value.some(
+        item => item !== r && String(item.KEYID).trim().toUpperCase() === String(r.KEYID).trim().toUpperCase()
+      )
+      if (isDuplicate) {
+        ElMessage.error(`Số công việc (KEYID) "${r.KEYID}" đã tồn tại! Vui lòng nhập mã khác.`)
+        return
+      }
     }
   }
 
@@ -402,7 +399,8 @@ const handleSave = async () => {
         PIC: String(r.PIC || '').trim(),
         PART_NAME: String(r.PART_NAME || '').trim(),
         GROUP_NAME: String(r.GROUP_NAME || '').trim(),
-        STATUS: r.STATUS || 'WAITING'
+        STATUS: r.STATUS || 'WAITING',
+        isNew: !!r.isNew
       }))
     }
     console.log("👉 [Save] Đang gửi payload xuống backend:", payload)
@@ -411,14 +409,6 @@ const handleSave = async () => {
 
     ElMessage.success(res.data?.message || "Lưu dữ liệu thành công!")
     await handleReload()
-
-    // Cuộn xuống cuối bảng để hiển thị bản ghi vừa lưu
-    await nextTick()
-    if (tableRef.value) {
-      const el = tableRef.value.$el?.querySelector('.el-table__body-wrapper')
-      if (el) el.scrollTop = el.scrollHeight
-      else if (tableRef.value.setScrollTop) tableRef.value.setScrollTop(999999)
-    }
   } catch (err) {
     console.error("Lỗi khi lưu dòng:", err)
     ElMessage.error(err.response?.data?.detail || err.message || "Lỗi khi lưu dữ liệu xuống Database!")
@@ -577,9 +567,9 @@ const handleReview = async (row, decision) => {
 onMounted(() => {
   handleReload()
   timer = setInterval(() => {
-    // Nếu người dùng đang thêm dòng mới (isNew) hoặc đang chỉnh sửa (isEditing), tạm dừng polling để tránh ghi đè làm mất dữ liệu đang gõ!
-    const isUserEditing = tableData.value.some(r => r.isNew || r.isEditing)
-    if (!isUserEditing) {
+    // Không reload đè khi người dùng đang có dòng mới (isNew)
+    const hasNewRow = tableData.value.some(r => r.isNew)
+    if (!hasNewRow) {
       loadData()
       loadTotal()
       countdown.value = 10
@@ -587,10 +577,7 @@ onMounted(() => {
   }, 10 * 1000)
 
   countdownTimer = setInterval(() => {
-    const isUserEditing = tableData.value.some(r => r.isNew || r.isEditing)
-    if (!isUserEditing && countdown.value > 0) {
-      countdown.value--
-    }
+    if (countdown.value > 0) countdown.value--
   }, 1000)
 })
 
