@@ -76,6 +76,7 @@ Bạn muốn làm màn hình **Quản lý nghiệm thu thanh toán MEP**, bạn 
      * `RUNNING`: AI đang bóc tách bản vẽ và đối soát ngầm.
      * `COMPLETED`: AI chạy xong thành công 100%.
      * `CANCEL`: Lỗi trong quá trình chạy (file hỏng, mất mạng AI...).
+   * `PROGRESS`: Thanh tiến độ bóc tách của AI (`0` -> `100%`).
 4. **Kết quả AI xuất ra:**
    * `ERROR_COUNT`: Tổng số lỗi sai lệch mà AI tìm thấy (ví dụ: `2` lỗi lệch vật tư).
    * `RESULT_LINK`: Đường dẫn file kết quả để người dùng bấm tải về (ví dụ: `/mep_payment/files/Bao_cao_WOR2512.zip`).
@@ -96,10 +97,16 @@ Bạn muốn làm màn hình **Quản lý nghiệm thu thanh toán MEP**, bạn 
 
 Từ danh sách cột ở Bước 0, bạn viết script SQL để tạo bảng trên Schema của công ty (ở đây là schema `LOCAL_AI`).
 
+> [!TIP]
+> **Nếu bảng `LOCAL_AI.MEP_PAYMENT_ANALYSIS` đã tồn tại:** Bạn chỉ cần chạy lệnh sau để thêm cột `PROGRESS` mà không cần xóa bảng:
+> ```sql
+> ALTER TABLE LOCAL_AI.MEP_PAYMENT_ANALYSIS ADD (PROGRESS NUMBER DEFAULT 0);
+> ```
+
 ### 1.1. Viết file `database/create_table.sql`:
 ```sql
 -- ====================================================================
--- DDL KHỞI TẠO BẢNG LOCAL_AI.MEP_PAYMENT_ANALYSIS
+-- DDL KHỞI TẠO BẢNG LOCAL_AI.MEP_PAYMENT_ANALYSIS (NẾU TẠO MỚI)
 -- Chạy trên DBeaver (Schema: LOCAL_AI, Database Service: MBLDB_SVC)
 -- ====================================================================
 
@@ -111,6 +118,7 @@ CREATE TABLE LOCAL_AI.MEP_PAYMENT_ANALYSIS (
     PART_NAME       VARCHAR2(100),                   -- Part
     GROUP_NAME      VARCHAR2(100),                   -- Group
     STATUS          VARCHAR2(30) DEFAULT 'WAITING',  -- Máy trạng thái: WAITING, RUNNING, COMPLETED, CANCEL
+    PROGRESS        NUMBER DEFAULT 0,                -- Thanh tiến độ AI (0 -> 100%)
     ERROR_COUNT     NUMBER DEFAULT 0,                -- Số lỗi sai lệch
     RESULT_LINK     VARCHAR2(500),                   -- Đường dẫn tải file báo cáo (.zip)
     REASON          VARCHAR2(1000),                  -- Ghi chú kết quả / lỗi
@@ -196,6 +204,7 @@ getdata_page = QuerySettings(
         PART_NAME,
         GROUP_NAME,
         STATUS,
+        NVL(PROGRESS, 0) AS PROGRESS,
         ERROR_COUNT,
         RESULT_LINK,
         REASON,
@@ -334,16 +343,18 @@ export default {
   <el-date-picker v-model="selectedMonth" type="month" placeholder="Chọn Tháng" value-format="YYYY-MM" style="width: 190px" />
 
   <el-input v-model="searchKeyword" placeholder="Nhập số WO hoặc tên việc..." clearable style="width: 270px" @keyup.enter="handleReload" />
-
-  <el-button type="primary" @click="handleReload">Reload ({{ countdown }}s)</el-button>
 </div>
 ```
 
-#### 2. Thanh nút thao tác (Action Bar):
+#### 2. Thanh nút thao tác (Action Bar) - Nút Reload đã là nút cứng:
 ```vue
 <div class="table-action-bar">
   <div class="total-count">Total: <span class="count-number">{{ total }} rows</span></div>
   <div class="action-buttons">
+    <!-- Nút Reload cứng, có hiệu ứng loading khi bấm -->
+    <el-button size="small" class="btn-reload" :loading="isLoading" @click="handleReload">
+      <i class="el-icon-refresh"></i> Reload
+    </el-button>
     <el-button type="danger" size="small" :disabled="selectedRows.length === 0" @click="handleDelete">Delete</el-button>
     <el-button size="small" class="btn-insert" @click="handleInsert">Insert</el-button>
     <el-button size="small" @click="handleExportCsv">Export (.csv)</el-button>
@@ -429,24 +440,54 @@ const handleSave = async () => {
 }
 ```
 
-#### 5. Logic Polling an toàn không bị xóa mất dữ liệu đang gõ:
-```javascript
-onMounted(() => {
-  handleReload()
-  timer = setInterval(() => {
-    // Nếu người dùng đang có dòng mới (isNew) chưa kịp lưu -> TẠM DỪNG TỰ ĐỘNG RELOAD
-    const hasNewRow = tableData.value.some(r => r.isNew)
-    if (!hasNewRow) {
-      loadData()
-      loadTotal()
-      countdown.value = 60
-    }
-  }, 60 * 1000)
+#### 5. Logic Hiển Thị Thanh Tiến Độ (Progress Bar) & Smart Polling Thông Minh:
+```html
+<!-- Cột Trạng thái nhúng thanh Progress Bar khi AI đang phân tích -->
+<el-table-column prop="STATUS" label="Trạng Thái" width="135" align="center" sortable>
+  <template #default="{ row }">
+    <el-tag v-if="row.STATUS === 'COMPLETED'" type="success" effect="dark">Hoàn Tất</el-tag>
+    <div v-else-if="row.STATUS === 'RUNNING'" class="progress-cell">
+      <el-tag type="warning" effect="dark" size="mini">Đang Xử Lý</el-tag>
+      <el-progress :percentage="Number(row.PROGRESS) || 0" :stroke-width="6" :show-text="true" class="progress-bar-inline" />
+    </div>
+    <el-tag v-else-if="row.STATUS === 'WAITING'" type="info">Chờ Duyệt</el-tag>
+    <el-tag v-else type="danger">{{ row.STATUS || 'Mới' }}</el-tag>
+  </template>
+</el-table-column>
+```
 
-  countdownTimer = setInterval(() => {
-    if (countdown.value > 0) countdown.value--
-  }, 1000)
-})
+```javascript
+// Cơ chế Smart Polling: Chỉ kích hoạt thăm dò khi có ít nhất 1 dòng RUNNING
+const startSmartPollingIfNeeded = () => {
+  const hasRunning = tableData.value.some(r => r.STATUS === 'RUNNING')
+  if (!hasRunning) {
+    stopSmartPolling()
+    return
+  }
+  if (smartPollTimer) return // Đang chạy thì không tạo thêm
+
+  smartPollTimer = setInterval(async () => {
+    // Nếu người dùng đang nhập dòng mới (isNew) -> TẠM DỪNG, không tải đè
+    const hasNewRow = tableData.value.some(r => r.isNew)
+    if (hasNewRow) return
+
+    const data = await get_data_page(page.value, pageSize.value, selectedStatus.value, selectedMonth.value, searchKeyword.value)
+    if (data) {
+      // Merge dữ liệu mới vào bảng nhưng bảo toàn trạng thái chỉnh sửa
+      tableData.value = data.map(newRow => {
+        const oldRow = tableData.value.find(r => r.KEYID === newRow.KEYID)
+        return { ...newRow, isNew: false, isEditing: oldRow ? oldRow.isEditing : false }
+      })
+    }
+
+    // Khi AI chạy xong hết -> TỰ ĐỘNG TẮT POLLING để tiết kiệm tài nguyên
+    const stillRunning = tableData.value.some(r => r.STATUS === 'RUNNING')
+    if (!stillRunning) {
+      stopSmartPolling()
+      loadTotal()
+    }
+  }, 3000)
+}
 ```
 
 ---
@@ -522,16 +563,23 @@ def batch_upsert_tasks(rows: list) -> int:
         cur.connection.commit()
     return len(rows)
 
-# 4. Hàm cập nhật trạng thái tiến độ
-def update_task_status(keyid: str, status: str, error_count: int = 0, result_link: str = None, reason: str = ""):
-    sql = """
+# 4. Hàm cập nhật trạng thái & tiến độ bóc tách AI
+def update_task_status(keyid: str, status: str, error_count: int = 0, result_link: str = None, reason: str = "", progress: int = None):
+    progress_sql = "PROGRESS = :PROGRESS," if progress is not None else ""
+    sql = f"""
         UPDATE LOCAL_AI.MEP_PAYMENT_ANALYSIS
-        SET STATUS = :STATUS, ERROR_COUNT = :ERROR_COUNT, RESULT_LINK = :RESULT_LINK, REASON = :REASON,
+        SET STATUS = :STATUS,
+            {progress_sql}
+            ERROR_COUNT = :ERROR_COUNT,
+            RESULT_LINK = :RESULT_LINK,
+            REASON = :REASON,
             RESULT_TIME = CASE WHEN :STATUS IN ('COMPLETED', 'CANCEL') THEN SYSDATE ELSE RESULT_TIME END,
             UPLOAD_TIME = CASE WHEN :STATUS = 'WAITING' THEN SYSDATE ELSE UPLOAD_TIME END
         WHERE KEYID = :KEYID
     """
     params = {"STATUS": status, "ERROR_COUNT": error_count, "RESULT_LINK": result_link, "REASON": reason, "KEYID": str(keyid).strip()}
+    if progress is not None:
+        params["PROGRESS"] = int(progress)
     cur = oracle_conn(dns="MBLDB", user_name=os.getenv("DB_USER_YMS_AI"), password=os.getenv("DB_PASSWORD_YMS_AI"))
     cur.execute(sql, params=params)
     if hasattr(cur, 'commit'): cur.commit()
@@ -566,12 +614,20 @@ class SaveRowsRequest(BaseModel):
 # 1. HÀM CHẠY NGẦM BACKGROUND TASK (KHÔNG BLOCK GIAO DIỆN)
 def run_ai_task_background(keyid: str, session_dir: Path, excel_path: str):
     try:
-        update_task_status(keyid=keyid, status="RUNNING", reason="AI đang bóc tách bản vẽ...")
+        # Callback bắn % tiến độ từ lõi AI ghi trực tiếp vào DB
+        def on_pipeline_progress(msg: str, progress: float):
+            try:
+                update_task_status(keyid=keyid, status="RUNNING", reason=msg[:400], progress=int(round(progress * 100)))
+            except Exception as pe:
+                print(f"[Progress Warning] {pe}")
+
+        update_task_status(keyid=keyid, status="RUNNING", reason="AI đang bóc tách bản vẽ...", progress=5)
         
-        # Gọi thẳng vào hàm điều phối lõi của bạn (engine.py)
+        # Gọi thẳng vào hàm điều phối lõi của bạn (engine.py) kèm callback tiến độ
         final_excel_path = run_mep_pipeline(
             vendor_excel_path=excel_path,
-            output_dir=str(FINAL_REPORT_DIR)
+            output_dir=str(FINAL_REPORT_DIR),
+            status_callback=on_pipeline_progress
         )
         
         # Đếm số lỗi thực tế trong file Excel để báo lên web
@@ -586,9 +642,9 @@ def run_ai_task_background(keyid: str, session_dir: Path, excel_path: str):
             zf.write(final_excel_path, arcname=file_name)
         
         download_link = f"/mep_payment/files/{zip_name}"
-        update_task_status(keyid=keyid, status="COMPLETED", error_count=error_count, result_link=download_link, reason=f"Hoàn thành đối soát (Tìm thấy {error_count} sai lệch)")
+        update_task_status(keyid=keyid, status="COMPLETED", error_count=error_count, result_link=download_link, reason=f"Hoàn thành đối soát (Tìm thấy {error_count} sai lệch)", progress=100)
     except Exception as e:
-        update_task_status(keyid=keyid, status="CANCEL", error_count=0, result_link=None, reason=f"Lỗi: {str(e)[:900]}")
+        update_task_status(keyid=keyid, status="CANCEL", error_count=0, result_link=None, reason=f"Lỗi: {str(e)[:900]}", progress=0)
 
 # 2. ENDPOINT NẠP FILE EXCEL
 @app.post("/mep_payment/upload")

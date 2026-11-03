@@ -48,12 +48,14 @@ def get_cur():
 # CÁC HÀM NGHIỆP VỤ THAO TÁC VỚI BẢNG LOCAL_AI.MEP_PAYMENT_ANALYSIS
 # ==============================================================================
 
-def update_task_status(keyid: str, status: str, error_count: int = 0, result_link: str = None, reason: str = ""):
+def update_task_status(keyid: str, status: str, error_count: int = 0, result_link: str = None, reason: str = "", progress: int = None):
     """Cập nhật trạng thái tiến độ vào bảng LOCAL_AI.MEP_PAYMENT_ANALYSIS."""
     try:
-        sql = """
+        progress_sql = "PROGRESS = :PROGRESS," if progress is not None else ""
+        sql = f"""
             UPDATE LOCAL_AI.MEP_PAYMENT_ANALYSIS
             SET STATUS       = :STATUS,
+                {progress_sql}
                 ERROR_COUNT  = :ERROR_COUNT,
                 RESULT_LINK  = :RESULT_LINK,
                 REASON       = :REASON,
@@ -68,11 +70,13 @@ def update_task_status(keyid: str, status: str, error_count: int = 0, result_lin
             "REASON": reason,
             "KEYID": str(keyid).strip()
         }
+        if progress is not None:
+            params["PROGRESS"] = int(progress)
         cur = get_cur()
         cur.execute(sql, params=params)
         if hasattr(cur, 'commit'):
             cur.commit()
-        print(f"[Oracle DB] Da cap nhat KEYID={keyid} -> STATUS={status}")
+        print(f"[Oracle DB] Da cap nhat KEYID={keyid} -> STATUS={status}, PROGRESS={progress}%")
     except oracledb.DatabaseError as e:
         print(f"[Oracle DB Error] update_task_status: {e}")
         raise

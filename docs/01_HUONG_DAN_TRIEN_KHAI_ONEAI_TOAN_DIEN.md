@@ -110,8 +110,14 @@ sequenceDiagram
 
 Mở **DBeaver**, kết nối tới Oracle Database của công ty, mở **SQL Editor (F3)** và chạy script DDL sau để tạo bảng với đầy đủ các trường nghiệp vụ:
 
+> [!TIP]
+> **Nếu bảng đã tồn tại trên công ty:** Bạn chỉ cần chạy 1 dòng DDL sau để thêm cột tiến độ mà không mất dữ liệu:
+> ```sql
+> ALTER TABLE LOCAL_AI.MEP_PAYMENT_ANALYSIS ADD (PROGRESS NUMBER DEFAULT 0);
+> ```
+
 ```sql
--- 1. TẠO BẢNG CHÍNH THỨC LOCAL_AI.MEP_PAYMENT_ANALYSIS
+-- 1. TẠO BẢNG CHÍNH THỨC LOCAL_AI.MEP_PAYMENT_ANALYSIS (NẾU CHƯA CÓ)
 CREATE TABLE LOCAL_AI.MEP_PAYMENT_ANALYSIS (
     KEYID           VARCHAR2(100) NOT NULL,          -- Số công việc (Số WO / Task ID) - Khóa chính
     TASK_NAME       VARCHAR2(300),                   -- Tên công việc / hạng mục
@@ -120,6 +126,7 @@ CREATE TABLE LOCAL_AI.MEP_PAYMENT_ANALYSIS (
     PART_NAME       VARCHAR2(100),                   -- Part (MEP, Cơ điện, Xây dựng...)
     GROUP_NAME      VARCHAR2(100),                   -- Group (Infra Group, EHS...)
     STATUS          VARCHAR2(30) DEFAULT 'WAITING',  -- Trạng thái: WAITING, RUNNING, COMPLETED, CANCEL
+    PROGRESS        NUMBER DEFAULT 0,                -- Tiến độ AI (0 - 100%)
     ERROR_COUNT     NUMBER DEFAULT 0,                -- Tổng số lỗi phát sinh (0: Khớp 100%, >0: Lệch)
     RESULT_LINK     VARCHAR2(500),                   -- Đường dẫn file nén .zip báo cáo 2 sheet tải về
     REASON          VARCHAR2(1000),                  -- Ghi chú chi tiết kết quả hoặc lý do lỗi
@@ -184,6 +191,7 @@ getdata_page = QuerySettings(
         PART_NAME,
         GROUP_NAME,
         STATUS,
+        NVL(PROGRESS, 0) AS PROGRESS,
         ERROR_COUNT,
         RESULT_LINK,
         REASON,

@@ -26,6 +26,7 @@ getdata_page = QuerySettings(
         PART_NAME,
         GROUP_NAME,
         STATUS,
+        NVL(PROGRESS, 0) AS PROGRESS,
         ERROR_COUNT,
         RESULT_LINK,
         REASON,

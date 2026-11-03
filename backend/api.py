@@ -59,8 +59,22 @@ def run_ai_task_background(keyid: str, session_dir: Path, excel_path: str):
     """
     try:
         print(f"\n🚀 [TASK {keyid}] Bắt đầu thực thi Pipeline MEP AI...")
+
+        # Định nghĩa callback tiến độ để ghi trực tiếp % vào Oracle DB
+        def on_pipeline_progress(msg: str, progress: float):
+            try:
+                pct = int(round(progress * 100))
+                update_task_status(
+                    keyid=keyid,
+                    status="RUNNING",
+                    reason=msg[:400],
+                    progress=pct
+                )
+            except Exception as prog_err:
+                print(f"⚠️ [Progress Warning] Không thể cập nhật tiến độ: {prog_err}")
+
         update_task_status(keyid=keyid, status="RUNNING",
-                           reason="AI đang bóc tách bản vẽ & đối soát...")
+                           reason="AI đang bóc tách bản vẽ & đối soát...", progress=5)
 
         pdf_drawings = session_dir / "drawings"
         pdf_gatepass = session_dir / "gatepass"
@@ -76,7 +90,8 @@ def run_ai_task_background(keyid: str, session_dir: Path, excel_path: str):
             output_dir=str(FINAL_REPORT_DIR),
             csv_drawing_dir=str(csv_drawings),
             csv_gatepass_dir=str(csv_gatepass),
-            skip_existing=False
+            skip_existing=False,
+            status_callback=on_pipeline_progress
         )
 
         # ĐẾM SỐ LỖI THỰC TẾ TRONG SHEET 1 ĐỂ BÁO LÊN GIAO DIỆN
@@ -109,7 +124,8 @@ def run_ai_task_background(keyid: str, session_dir: Path, excel_path: str):
             status="COMPLETED",
             error_count=error_count,
             result_link=download_link,
-            reason=f"Hoàn thành đối soát 2 vòng (Phát hiện {error_count} sai lệch)"
+            reason=f"Hoàn thành đối soát 2 vòng (Phát hiện {error_count} sai lệch)",
+            progress=100
         )
         print(f"🎉 [TASK {keyid}] THÀNH CÔNG -> Lưu tại {final_excel_path}")
 
@@ -121,7 +137,8 @@ def run_ai_task_background(keyid: str, session_dir: Path, excel_path: str):
             status="CANCEL",
             error_count=0,
             result_link=None,
-            reason=error_msg[:900]
+            reason=error_msg[:900],
+            progress=0
         )
 
 # 4. CÁC ENDPOINT API GIAO TIẾP VỚI WEB
@@ -154,7 +171,7 @@ async def upload_excel_task(
             shutil.copyfileobj(file.file, buffer)
 
         update_task_status(keyid=KEYID, status="WAITING",
-                           reason="Đã nhận file, đang xếp hàng chạy...")
+                           reason="Đã nhận file, đang xếp hàng chạy...", progress=0)
         background_tasks.add_task(
             run_ai_task_background, KEYID, session_dir, str(excel_path))
 

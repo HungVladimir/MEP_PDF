@@ -3,10 +3,13 @@
 -- Thao tác trên DBeaver (Schema: LOCAL_AI)
 -- ====================================================================
 
--- 1. XÓA BẢNG CŨ NẾU CẦN RESET LẠI TỪ ĐẦU (UNCOMMENT ĐỂ DÙNG)
+-- 1. NẾU BẢNG ĐÃ TỒN TẠI TRÊN CÔNG TY, CHỈ CẦN CHẠY DÒNG NÀY ĐỂ THÊM CỘT TIẾN ĐỘ:
+-- ALTER TABLE LOCAL_AI.MEP_PAYMENT_ANALYSIS ADD (PROGRESS NUMBER DEFAULT 0);
+
+-- 2. XÓA BẢNG CŨ NẾU CẦN RESET LẠI TỪ ĐẦU (UNCOMMENT ĐỂ DÙNG)
 -- DROP TABLE LOCAL_AI.MEP_PAYMENT_ANALYSIS CASCADE CONSTRAINTS;
 
--- 2. TẠO BẢNG CHÍNH THỨC LOCAL_AI.MEP_PAYMENT_ANALYSIS
+-- 3. TẠO BẢNG CHÍNH THỨC LOCAL_AI.MEP_PAYMENT_ANALYSIS (CHO DATABASE MỚI)
 CREATE TABLE LOCAL_AI.MEP_PAYMENT_ANALYSIS (
     KEYID           VARCHAR2(100) NOT NULL,          -- Số công việc (Số WO / Task ID) - Khóa chính
     TASK_NAME       VARCHAR2(300),                   -- Tên công việc / hạng mục thi công
@@ -15,6 +18,7 @@ CREATE TABLE LOCAL_AI.MEP_PAYMENT_ANALYSIS (
     PART_NAME       VARCHAR2(100),                   -- Part (MEP, Cơ điện 1, Xây dựng...)
     GROUP_NAME      VARCHAR2(100),                   -- Group (Infra Group, EHS...)
     STATUS          VARCHAR2(30) DEFAULT 'WAITING',  -- Trạng thái: WAITING, RUNNING, COMPLETED, CANCEL
+    PROGRESS        NUMBER DEFAULT 0,                -- Tiến độ xử lý AI (0 -> 100%)
     ERROR_COUNT     NUMBER DEFAULT 0,                -- Tổng số lỗi sai lệch (0: Khớp 100%, >0: Có lỗi)
     RESULT_LINK     VARCHAR2(500),                   -- Đường link tải file Excel báo cáo 2 sheet
     REASON          VARCHAR2(1000),                  -- Ghi chú chi tiết kết quả hoặc nguyên nhân lỗi

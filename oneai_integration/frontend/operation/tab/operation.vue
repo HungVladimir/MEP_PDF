@@ -117,10 +117,13 @@
         </el-table-column>
 
         <!-- CỘT: TRẠNG THÁI (STATUS) -->
-        <el-table-column prop="STATUS" label="Trạng Thái" width="110" align="center" sortable>
+        <el-table-column prop="STATUS" label="Trạng Thái" width="135" align="center" sortable>
           <template #default="{ row }">
             <el-tag v-if="row.STATUS === 'COMPLETED'" type="success" effect="dark">Hoàn Tất</el-tag>
-            <el-tag v-else-if="row.STATUS === 'RUNNING'" type="warning" effect="dark">Đang Xử Lý</el-tag>
+            <div v-else-if="row.STATUS === 'RUNNING'" class="progress-cell">
+              <el-tag type="warning" effect="dark" size="mini">Đang Xử Lý</el-tag>
+              <el-progress :percentage="Number(row.PROGRESS) || 0" :stroke-width="6" :show-text="true" class="progress-bar-inline" />
+            </div>
             <el-tag v-else-if="row.STATUS === 'WAITING'" type="info">Chờ Duyệt</el-tag>
             <el-tag v-else type="danger">{{ row.STATUS || 'Mới' }}</el-tag>
           </template>
@@ -222,6 +225,74 @@ const total = ref(0)
 const isSaving = ref(false)
 const isLoading = ref(false)
 
+// Biến Smart Polling (Thăm dò thông minh tự động bật/tắt)
+let smartPollTimer = null
+let smartPollCount = 0
+const MAX_POLL_COUNT = 200 // Tối đa 10 phút (200 * 3s)
+
+const stopSmartPolling = () => {
+  if (smartPollTimer) {
+    clearInterval(smartPollTimer)
+    smartPollTimer = null
+    smartPollCount = 0
+  }
+}
+
+const startSmartPollingIfNeeded = () => {
+  const hasRunning = tableData.value.some(r => r.STATUS === 'RUNNING')
+  if (!hasRunning) {
+    stopSmartPolling()
+    return
+  }
+
+  if (smartPollTimer) return // Đã bật rồi thì không tạo thêm interval trùng lặp
+
+  smartPollCount = 0
+  console.log("⚡ [Smart Polling] Kích hoạt thăm dò tiến độ mỗi 3 giây...")
+
+  smartPollTimer = setInterval(async () => {
+    smartPollCount++
+    if (smartPollCount > MAX_POLL_COUNT) {
+      console.warn("⚠️ [Smart Polling] Quá thời gian chờ (10 phút), tự động dừng.")
+      stopSmartPolling()
+      return
+    }
+
+    // Nếu người dùng đang thêm dòng mới (isNew), tạm ngưng không đè dữ liệu
+    const hasNewRow = tableData.value.some(r => r.isNew)
+    if (hasNewRow) return
+
+    try {
+      const data = await get_data_page(
+        page.value, pageSize.value,
+        selectedStatus.value || 'ALL',
+        selectedMonth.value || 'ALL',
+        searchKeyword.value || 'ALL'
+      )
+      if (data && data.length > 0) {
+        tableData.value = data.map(newRow => {
+          const oldRow = tableData.value.find(r => r.KEYID === newRow.KEYID)
+          return {
+            ...newRow,
+            isNew: false,
+            isEditing: oldRow ? oldRow.isEditing : false
+          }
+        })
+      }
+
+      // Khi không còn dòng nào RUNNING nữa -> Dừng polling ngay lập tức
+      const stillRunning = tableData.value.some(r => r.STATUS === 'RUNNING')
+      if (!stillRunning) {
+        console.log("🎉 [Smart Polling] Tất cả tác vụ AI đã hoàn tất. Tắt polling.")
+        stopSmartPolling()
+        loadTotal()
+      }
+    } catch (err) {
+      console.error("[Smart Polling Error]", err)
+    }
+  }, 3000)
+}
+
 // 1. TẢI DỮ LIỆU TỪ BACKEND
 const loadData = async () => {
   try {
@@ -236,6 +307,7 @@ const loadData = async () => {
       isNew: false,
       isEditing: false
     }))
+    startSmartPollingIfNeeded()
   } catch (err) {
     console.error("Lỗi tải bảng dữ liệu MEP:", err)
   }
@@ -465,15 +537,19 @@ const handleUploadExcel = async (file, row) => {
   formData.append("KEYID", row.KEYID)
 
   row.STATUS = 'RUNNING'
+  row.PROGRESS = 5
   row.REASON = 'Đang đẩy file lên AI Worker...'
+  startSmartPollingIfNeeded()
 
   try {
     const res = await axios.post(`${FASTAPI_BASE_URL}/mep_payment/upload`, formData)
     ElMessage.success(res.data.message || "Tải lên thành công! AI đang bóc tách ngầm.")
-    countdown.value = 10
+    startSmartPollingIfNeeded()
   } catch (err) {
     row.STATUS = 'WAITING'
+    row.PROGRESS = 0
     row.REASON = 'Lỗi upload file'
+    stopSmartPolling()
     ElMessage.error("Lỗi khi kết nối Worker: " + (err.response?.data?.detail || err.message))
   }
 }
@@ -493,9 +569,13 @@ const handleReview = async (row, decision) => {
   }
 }
 
-// Vòng đời khởi tạo
+// Vòng đời
 onMounted(() => {
   handleReload()
+})
+
+onUnmounted(() => {
+  stopSmartPolling()
 })
 
 const totalPages = computed(() => Math.max(1, Math.ceil(total.value / pageSize.value)))
@@ -620,6 +700,25 @@ watch([selectedStatus, selectedMonth], () => {
 .text-reason {
   color: #F56C6C;
   font-size: 11px;
+}
+
+.progress-cell {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  align-items: center;
+  width: 100%;
+  padding: 2px 0;
+}
+
+.progress-bar-inline {
+  width: 100%;
+}
+
+.progress-cell :deep(.el-progress__text) {
+  font-size: 11px !important;
+  color: #E6A23C !important;
+  font-weight: 600;
 }
 
 .pagination-bar {

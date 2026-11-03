@@ -375,7 +375,7 @@ getdata_page = QuerySettings(
     query="""
     SELECT 
         RN AS STT, KEYID, TASK_NAME, PAYMENT_MONTH, PIC, PART_NAME, GROUP_NAME,
-        STATUS, ERROR_COUNT, RESULT_LINK, REASON, REVIEW_DECISION, REVIEW_NOTE,
+        STATUS, NVL(PROGRESS, 0) AS PROGRESS, ERROR_COUNT, RESULT_LINK, REASON, REVIEW_DECISION, REVIEW_NOTE,
         REVIEW_BY,
         TO_CHAR(UPLOAD_TIME, 'YYYY-MM-DD HH24:MI') AS UPLOAD_TIME,
         TO_CHAR(RESULT_TIME, 'YYYY-MM-DD HH24:MI') AS RESULT_TIME
@@ -459,9 +459,10 @@ File này đặt tại `src/views/operation/tab/operation.vue` và được bọ
   ```
 * `loadTotal()` gọi `get_total_row()` để lấy tổng số dòng gán vào `total.value`.
 
-##### 2. `handleReload()` (Dòng 329-333)
-* Chạy song song `await loadData()` và `await loadTotal()`.
-* Đặt lại đồng hồ đếm ngược `countdown.value = 10`.
+##### 2. `handleReload()` - Nút Cứng Quản Trị Bảng
+* Nút Reload đã được chuyển thành nút cứng nằm trên thanh Action Bar, ngang hàng với Delete, Insert, Export, Save.
+* Bật cờ `isLoading.value = true` để hiển thị icon xoay tròn, sau đó chạy song song `await loadData()` và `await loadTotal()`.
+* Đã gỡ bỏ hoàn toàn timer đếm ngược ngầm 60s để tránh hiện tượng màn hình tự tải đè khi kỹ sư đang thao tác.
 
 ##### 3. `handleSelectionChange(selection)` (Dòng 336-338)
 * Được gắn vào sự kiện `@selection-change` của `<el-table>`.
@@ -521,7 +522,7 @@ File này đặt tại `src/views/operation/tab/operation.vue` và được bọ
   5. Tự động kích hoạt: `document.body.appendChild(link); link.click(); document.body.removeChild(link);`.
   6. Giải phóng RAM trình duyệt: `window.URL.revokeObjectURL(blobUrl)`.
 
-##### 8. `handleUploadExcel(file, row)` - Nạp file hồ sơ thầu (Dòng 509-532)
+##### 8. `handleUploadExcel(file, row)` - Nạp file hồ sơ thầu
 * Khi người dùng bấm nút `+ Upload File` và chọn file `.xlsx`:
   1. Tạo đối tượng `FormData`:
      ```javascript
@@ -529,8 +530,8 @@ File này đặt tại `src/views/operation/tab/operation.vue` và được bọ
      formData.append('file', file.raw)
      formData.append('KEYID', row.KEYID)
      ```
-  2. Gửi HTTP POST tới `${FASTAPI_BASE_URL}/mep_payment/upload`.
-  3. Ngay lập tức đổi trạng thái của dòng trên giao diện thành `WAITING` để người dùng an tâm rằng file đã được nạp thành công và máy chủ đang xếp hàng xử lý.
+  2. Gán ngay trạng thái `row.STATUS = 'RUNNING'`, `row.PROGRESS = 5` và kích hoạt hàm `startSmartPollingIfNeeded()`.
+  3. Gửi HTTP POST tới `${FASTAPI_BASE_URL}/mep_payment/upload`.
 
 ##### 9. `handleReview(row, decision)` - Phê duyệt / Từ chối (Dòng 534-565)
 * Khi Kỹ sư trưởng bấm nút **Duyệt** hoặc **Hủy**:
@@ -545,6 +546,12 @@ File này đặt tại `src/views/operation/tab/operation.vue` và được bọ
 * `handleSizeChange(s)`: Đổi số dòng hiển thị mỗi trang thành `s` và tải lại trang 1.
 * `goFirst()`: Về trang đầu tiên (Trang 1).
 * `goLast()`: Đến trang cuối cùng (`totalPages`).
+
+##### 12. `startSmartPollingIfNeeded()` & `stopSmartPolling()` - Cơ Chế Thăm Dò Tiến Độ Thông Minh
+* **Bản chất:** Chỉ kích hoạt khi trong bảng tồn tại ít nhất 1 dòng có `STATUS === 'RUNNING'`.
+* **Chu kỳ:** Mỗi 3 giây gọi API lấy lại dữ liệu trang hiện tại, merge tiến độ `PROGRESS` (15% -> 50% -> 85% -> 100%) vào bảng.
+* **Bảo toàn thao tác:** Nếu phát hiện kỹ sư đang có dòng mới thêm (`isNew`), polling tạm dừng ngay lập tức để không đè mất chữ đang nhập.
+* **Tự ngắt thông minh:** Khi tất cả tác vụ chuyển sang `COMPLETED` hoặc `CANCEL`, hàm `stopSmartPolling()` lập tức hủy `setInterval`, trả lại sự yên tĩnh tuyệt đối cho mạng và máy chủ. Ngoài ra có bộ đếm bảo vệ tối đa 10 phút chống trường hợp tác vụ bị treo.
 
 ---
 
