@@ -162,6 +162,13 @@ async def upload_excel_task(
             raise HTTPException(
                 status_code=400, detail="Chỉ chấp nhận file Excel (.xlsx / .xlsm)")
 
+        # Kiểm tra dung lượng file theo config
+        max_bytes = config.MAX_UPLOAD_SIZE_MB * 1024 * 1024
+        if file.size and file.size > max_bytes:
+            raise HTTPException(
+                status_code=413,
+                detail=f"Dung lượng file ({file.size / (1024*1024):.1f}MB) vượt quá giới hạn ({config.MAX_UPLOAD_SIZE_MB}MB)!")
+
         safe_keyid = KEYID.replace('/', '_').replace('\\', '_')
         session_dir = STORAGE_DIR / f"session_{safe_keyid}_{int(time.time())}"
         session_dir.mkdir(parents=True, exist_ok=True)
@@ -169,6 +176,14 @@ async def upload_excel_task(
         excel_path = session_dir / file.filename
         with open(excel_path, "wb") as buffer:
             shutil.copyfileobj(file.file, buffer)
+
+        # Kiểm tra lại dung lượng sau khi ghi đĩa
+        saved_file_size = excel_path.stat().st_size
+        if saved_file_size > max_bytes:
+            excel_path.unlink(missing_ok=True)
+            raise HTTPException(
+                status_code=413,
+                detail=f"Dung lượng file ({saved_file_size / (1024*1024):.1f}MB) vượt quá giới hạn ({config.MAX_UPLOAD_SIZE_MB}MB)!")
 
         update_task_status(keyid=KEYID, status="WAITING",
                            reason="Đã nhận file, đang xếp hàng chạy...", progress=0)

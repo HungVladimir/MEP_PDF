@@ -48,6 +48,149 @@ def get_cur():
 # CÁC HÀM NGHIỆP VỤ THAO TÁC VỚI BẢNG LOCAL_AI.MEP_PAYMENT_ANALYSIS
 # ==============================================================================
 
+def check_keyid_exists(keyid: str) -> bool:
+    """
+    Kiểm tra xem KEYID đã tồn tại trong bảng LOCAL_AI.MEP_PAYMENT_ANALYSIS hay chưa.
+    Tương thích cả thư viện OneAI SDV lẫn oracledb Connection chuẩn.
+    """
+    if not keyid or not str(keyid).strip():
+        return False
+    try:
+        sql = "SELECT COUNT(*) AS CNT FROM LOCAL_AI.MEP_PAYMENT_ANALYSIS WHERE KEYID = :KEYID"
+        params = {"KEYID": str(keyid).strip()}
+        cur = get_cur()
+
+        # 1. Nếu là thư viện nội bộ OneAI SDV hỗ trợ DATAFRAME
+        if result_type and hasattr(result_type, 'DATAFRAME'):
+            try:
+                df = cur.execute(sql=sql, params=params, res=result_type.DATAFRAME)
+                if df is not None and not df.empty:
+                    return int(df.iloc[0, 0]) > 0
+            except Exception:
+                pass
+
+        # 2. Nếu cur là đối tượng Connection chuẩn (có method .cursor())
+        if hasattr(cur, 'cursor'):
+            c = cur.cursor()
+            c.execute(sql, params)
+            row = c.fetchone()
+            c.close()
+            return (row[0] if row else 0) > 0
+
+        # 3. Nếu cur.execute trả về kết quả hoặc cursor trực tiếp
+        res = cur.execute(sql, params=params)
+        if hasattr(res, 'fetchone'):
+            row = res.fetchone()
+            return (row[0] if row else 0) > 0
+        if isinstance(res, (list, tuple)) and len(res) > 0:
+            return int(res[0][0]) > 0
+
+        return False
+    except Exception as e:
+        print(f"[Oracle DB Warning] check_keyid_exists error: {e}")
+        return False
+
+
+def insert_task(cur, r: dict):
+    """Thêm 1 dòng mới vào bảng LOCAL_AI.MEP_PAYMENT_ANALYSIS (Chỉ INSERT)."""
+    sql = """
+        INSERT INTO LOCAL_AI.MEP_PAYMENT_ANALYSIS 
+        (KEYID, TASK_NAME, PAYMENT_MONTH, PIC, PART_NAME, GROUP_NAME, STATUS, PROGRESS, ERROR_COUNT, UPLOAD_TIME)
+        VALUES 
+        (:KEYID, :TASK_NAME, :PAYMENT_MONTH, :PIC, :PART_NAME, :GROUP_NAME, :STATUS, :PROGRESS, 0, SYSDATE)
+    """
+    params = {
+        "KEYID": str(r.get("KEYID", "")).strip(),
+        "TASK_NAME": str(r.get("TASK_NAME", "")).strip(),
+        "PAYMENT_MONTH": str(r.get("PAYMENT_MONTH", "")).strip(),
+        "PIC": str(r.get("PIC", "")).strip(),
+        "PART_NAME": str(r.get("PART_NAME", "")).strip(),
+        "GROUP_NAME": str(r.get("GROUP_NAME", "")).strip(),
+        "STATUS": str(r.get("STATUS", "WAITING")).strip(),
+        "PROGRESS": int(r.get("PROGRESS", 0) or 0)
+    }
+    cur.execute(sql, params=params)
+
+
+def update_task(cur, r: dict):
+    """Cập nhật thông tin các cột của dòng đã có trong DB (Chỉ UPDATE theo KEYID)."""
+    sql = """
+        UPDATE LOCAL_AI.MEP_PAYMENT_ANALYSIS
+        SET TASK_NAME     = :TASK_NAME,
+            PAYMENT_MONTH = :PAYMENT_MONTH,
+            PIC           = :PIC,
+            PART_NAME     = :PART_NAME,
+            GROUP_NAME    = :GROUP_NAME
+        WHERE KEYID = :KEYID
+    """
+    params = {
+        "KEYID": str(r.get("KEYID", "")).strip(),
+        "TASK_NAME": str(r.get("TASK_NAME", "")).strip(),
+        "PAYMENT_MONTH": str(r.get("PAYMENT_MONTH", "")).strip(),
+        "PIC": str(r.get("PIC", "")).strip(),
+        "PART_NAME": str(r.get("PART_NAME", "")).strip(),
+        "GROUP_NAME": str(r.get("GROUP_NAME", "")).strip()
+    }
+    cur.execute(sql, params=params)
+
+
+def save_tasks(rows: list) -> int:
+    """
+    Hàm điều phối Lưu dữ liệu (Save):
+    - Tách biệt rõ ràng:
+      + Nếu dòng mới (isNew == True)  -> gọi insert_task()
+      + Nếu dòng cũ sửa (isNew == False) -> gọi update_task()
+    """
+    if not rows:
+        return 0
+
+    cur = get_cur()
+    ins_count = 0
+    upd_count = 0
+
+    try:
+        for r in rows:
+            if r.get("isNew"):
+                insert_task(cur, r)
+                ins_count += 1
+            else:
+                update_task(cur, r)
+                upd_count += 1
+
+        if hasattr(cur, 'commit'):
+            cur.commit()
+
+        print(f"[Oracle DB] Da luu thanh cong: {ins_count} dong moi (INSERT), {upd_count} dong cap nhat (UPDATE).")
+        return len(rows)
+    except Exception as e:
+        print(f"[Oracle DB Error] save_tasks: {e}")
+        raise
+
+# Tương thích ngược với mã nguồn api.py hiện tại
+batch_upsert_tasks = save_tasks
+
+
+def delete_tasks(keyids: list) -> int:
+    """Xóa các dòng được chọn khỏi bảng LOCAL_AI.MEP_PAYMENT_ANALYSIS (Chỉ DELETE)."""
+    if not keyids:
+        return 0
+
+    sql = "DELETE FROM LOCAL_AI.MEP_PAYMENT_ANALYSIS WHERE KEYID = :KEYID"
+    params_list = [{"KEYID": str(k).strip()} for k in keyids]
+    try:
+        cur = get_cur()
+        for p in params_list:
+            cur.execute(sql, params=p)
+        if hasattr(cur, 'commit'):
+            cur.commit()
+
+        print(f"[Oracle DB] Da xoa {len(keyids)} dong khoi MEP_PAYMENT_ANALYSIS.")
+        return len(keyids)
+    except Exception as e:
+        print(f"[Oracle DB Error] delete_tasks: {e}")
+        raise
+
+
 def update_task_status(keyid: str, status: str, error_count: int = 0, result_link: str = None, reason: str = "", progress: int = None):
     """Cập nhật trạng thái tiến độ vào bảng LOCAL_AI.MEP_PAYMENT_ANALYSIS."""
     try:
@@ -77,7 +220,7 @@ def update_task_status(keyid: str, status: str, error_count: int = 0, result_lin
         if hasattr(cur, 'commit'):
             cur.commit()
         print(f"[Oracle DB] Da cap nhat KEYID={keyid} -> STATUS={status}, PROGRESS={progress}%")
-    except oracledb.DatabaseError as e:
+    except Exception as e:
         print(f"[Oracle DB Error] update_task_status: {e}")
         raise
 
@@ -103,97 +246,6 @@ def update_review_decision(keyid: str, decision: str, note: str, reviewer: str):
         if hasattr(cur, 'commit'):
             cur.commit()
         print(f"[Oracle DB] Da luu Review cho KEYID={keyid} -> {decision}")
-    except oracledb.DatabaseError as e:
+    except Exception as e:
         print(f"[Oracle DB Error] update_review_decision: {e}")
-        raise
-
-
-def check_keyid_exists(keyid: str) -> bool:
-    """Kiểm tra xem KEYID đã tồn tại trong bảng LOCAL_AI.MEP_PAYMENT_ANALYSIS hay chưa."""
-    if not keyid or not str(keyid).strip():
-        return False
-    try:
-        sql = "SELECT COUNT(*) FROM LOCAL_AI.MEP_PAYMENT_ANALYSIS WHERE KEYID = :KEYID"
-        cur = get_cur()
-        cur.execute(sql, params={"KEYID": str(keyid).strip()})
-        res = cur.fetchall()
-        count = res[0][0] if res else 0
-        return count > 0
-    except oracledb.DatabaseError as e:
-        print(f"[Oracle DB Warning] check_keyid_exists: {e}")
-        return False
-
-
-def batch_upsert_tasks(rows: list) -> int:
-    """MERGE INTO bảng LOCAL_AI.MEP_PAYMENT_ANALYSIS (Insert dòng mới & Update dòng cũ)."""
-    if not rows:
-        return 0
-
-    sql = """
-        MERGE INTO LOCAL_AI.MEP_PAYMENT_ANALYSIS T
-        USING (
-            SELECT :KEYID AS KEYID,
-                   :TASK_NAME AS TASK_NAME,
-                   :PAYMENT_MONTH AS PAYMENT_MONTH,
-                   :PIC AS PIC,
-                   :PART_NAME AS PART_NAME,
-                   :GROUP_NAME AS GROUP_NAME,
-                   :STATUS AS STATUS
-            FROM DUAL
-        ) S
-        ON (T.KEYID = S.KEYID)
-        WHEN MATCHED THEN
-            UPDATE SET T.TASK_NAME     = S.TASK_NAME,
-                       T.PAYMENT_MONTH = S.PAYMENT_MONTH,
-                       T.PIC           = S.PIC,
-                       T.PART_NAME     = S.PART_NAME,
-                       T.GROUP_NAME    = S.GROUP_NAME
-        WHEN NOT MATCHED THEN
-            INSERT (KEYID, TASK_NAME, PAYMENT_MONTH, PIC, PART_NAME, GROUP_NAME, STATUS, UPLOAD_TIME)
-            VALUES (S.KEYID, S.TASK_NAME, S.PAYMENT_MONTH, S.PIC, S.PART_NAME, S.GROUP_NAME, S.STATUS, SYSDATE)
-    """
-    params_list = [
-        {
-            "KEYID": str(r.get("KEYID", "")).strip(),
-            "TASK_NAME": str(r.get("TASK_NAME", "")).strip(),
-            "PAYMENT_MONTH": str(r.get("PAYMENT_MONTH", "")).strip(),
-            "PIC": str(r.get("PIC", "")).strip(),
-            "PART_NAME": str(r.get("PART_NAME", "")).strip(),
-            "GROUP_NAME": str(r.get("GROUP_NAME", "")).strip(),
-            "STATUS": str(r.get("STATUS", "WAITING")).strip()
-        }
-        for r in rows
-    ]
-    try:
-        cur = get_cur()
-        for p in params_list:
-            cur.execute(sql, params=p)
-        if hasattr(cur, 'commit'):
-            cur.commit()
-
-        print(f"[Oracle DB] Da MERGE thanh cong {len(rows)} dong vao MEP_PAYMENT_ANALYSIS.")
-        return len(rows)
-    except oracledb.DatabaseError as e:
-        print(f"[Oracle DB Error] batch_upsert_tasks: {e}")
-        raise
-
-
-def delete_tasks(keyids: list) -> int:
-    """Xóa các dòng được chọn khỏi bảng LOCAL_AI.MEP_PAYMENT_ANALYSIS."""
-    if not keyids:
-        return 0
-
-    sql = "DELETE FROM LOCAL_AI.MEP_PAYMENT_ANALYSIS WHERE KEYID = :KEYID"
-    params_list = [{"KEYID": str(k).strip()} for k in keyids]
-    try:
-        cur = get_cur()
-        for p in params_list:
-            cur.execute(sql, params=p)
-        if hasattr(cur, 'commit'):
-            cur.commit()
-
-        print(f"[Oracle DB] Da xoa {len(keyids)} dong khoi MEP_PAYMENT_ANALYSIS.")
-        return len(keyids)
-    except oracledb.DatabaseError as e:
-        print(f"[Oracle DB Error] delete_tasks: {e}")
         raise

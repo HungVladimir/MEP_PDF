@@ -90,6 +90,7 @@ SHEET_KEYWORDS_DRAWING = ['bản vẽ', 'ban ve', 'drawing', 'bv']
 SHEET_KEYWORDS_GATEPASS = ['bbgn', 'gate', 'mang vào', 'biên bản']
 
 # ==========================================
-# 6. CẤU HÌNH VẬN HÀNH PIPELINE
+# 6. CẤU HÌNH VẬN HÀNH PIPELINE & GIỚI HẠN UPLOAD
 # ==========================================
 SKIP_EXTRACTED_CSV = False   # True: File nào đã có sẵn .csv thì bỏ qua không gọi lại AI
+MAX_UPLOAD_SIZE_MB = int(os.getenv("MAX_UPLOAD_SIZE_MB", 50))  # Giới hạn dung lượng file Excel upload tối đa (MB)

@@ -522,46 +522,81 @@ except ImportError:
 def check_keyid_exists(keyid: str) -> bool:
     if not keyid or not str(keyid).strip():
         return False
-    sql = "SELECT COUNT(*) FROM LOCAL_AI.MEP_PAYMENT_ANALYSIS WHERE KEYID = :KEYID"
-    params = {"KEYID": str(keyid).strip()}
     try:
-        if HAS_ONEAI_SDV and oracle_conn is not None:
-            cur = oracle_conn(dns="MBLDB", user_name=os.getenv("DB_USER_YMS_AI"), password=os.getenv("DB_PASSWORD_YMS_AI"))
-            cur.execute(sql, params=params)
-            res = cur.fetchall()
-            return (res[0][0] if res else 0) > 0
+        sql = "SELECT COUNT(*) AS CNT FROM LOCAL_AI.MEP_PAYMENT_ANALYSIS WHERE KEYID = :KEYID"
+        params = {"KEYID": str(keyid).strip()}
+        cur = get_cur()
+        # Hỗ trợ cả Connection có cursor() lẫn thư viện OneAI SDV
+        if hasattr(cur, 'cursor'):
+            c = cur.cursor()
+            c.execute(sql, params)
+            row = c.fetchone()
+            c.close()
+            return (row[0] if row else 0) > 0
+        res = cur.execute(sql, params=params)
+        if hasattr(res, 'fetchone'):
+            row = res.fetchone()
+            return (row[0] if row else 0) > 0
+        return False
     except Exception as e:
         print(f"[DB Warning] check_keyid_exists: {e}")
-    return False
+        return False
 
-# 3. Hàm MERGE INTO lưu dòng mới hoặc cập nhật dòng cũ
-def batch_upsert_tasks(rows: list) -> int:
+# 3. Tách biệt rõ ràng từng nhiệm vụ: INSERT, UPDATE và hàm điều phối SAVE
+def insert_task(cur, r: dict):
+    """Thêm 1 dòng mới vào DB (INSERT)."""
     sql = """
-        MERGE INTO LOCAL_AI.MEP_PAYMENT_ANALYSIS T
-        USING (
-            SELECT :KEYID AS KEYID, :TASK_NAME AS TASK_NAME, :PAYMENT_MONTH AS PAYMENT_MONTH,
-                   :PIC AS PIC, :PART_NAME AS PART_NAME, :GROUP_NAME AS GROUP_NAME, :STATUS AS STATUS
-            FROM DUAL
-        ) S
-        ON (T.KEYID = S.KEYID)
-        WHEN MATCHED THEN
-            UPDATE SET T.TASK_NAME = S.TASK_NAME, T.PAYMENT_MONTH = S.PAYMENT_MONTH,
-                       T.PIC = S.PIC, T.PART_NAME = S.PART_NAME, T.GROUP_NAME = S.GROUP_NAME
-        WHEN NOT MATCHED THEN
-            INSERT (KEYID, TASK_NAME, PAYMENT_MONTH, PIC, PART_NAME, GROUP_NAME, STATUS, UPLOAD_TIME)
-            VALUES (S.KEYID, S.TASK_NAME, S.PAYMENT_MONTH, S.PIC, S.PART_NAME, S.GROUP_NAME, S.STATUS, SYSDATE)
+        INSERT INTO LOCAL_AI.MEP_PAYMENT_ANALYSIS 
+        (KEYID, TASK_NAME, PAYMENT_MONTH, PIC, PART_NAME, GROUP_NAME, STATUS, PROGRESS, ERROR_COUNT, UPLOAD_TIME)
+        VALUES 
+        (:KEYID, :TASK_NAME, :PAYMENT_MONTH, :PIC, :PART_NAME, :GROUP_NAME, :STATUS, :PROGRESS, 0, SYSDATE)
     """
-    cur = oracle_conn(dns="MBLDB", user_name=os.getenv("DB_USER_YMS_AI"), password=os.getenv("DB_PASSWORD_YMS_AI"))
+    params = {
+        "KEYID": str(r.get("KEYID", "")).strip(),
+        "TASK_NAME": str(r.get("TASK_NAME", "")).strip(),
+        "PAYMENT_MONTH": str(r.get("PAYMENT_MONTH", "")).strip(),
+        "PIC": str(r.get("PIC", "")).strip(),
+        "PART_NAME": str(r.get("PART_NAME", "")).strip(),
+        "GROUP_NAME": str(r.get("GROUP_NAME", "")).strip(),
+        "STATUS": str(r.get("STATUS", "WAITING")).strip(),
+        "PROGRESS": int(r.get("PROGRESS", 0) or 0)
+    }
+    cur.execute(sql, params=params)
+
+def update_task(cur, r: dict):
+    """Cập nhật thông tin dòng cũ trong DB (UPDATE)."""
+    sql = """
+        UPDATE LOCAL_AI.MEP_PAYMENT_ANALYSIS
+        SET TASK_NAME     = :TASK_NAME,
+            PAYMENT_MONTH = :PAYMENT_MONTH,
+            PIC           = :PIC,
+            PART_NAME     = :PART_NAME,
+            GROUP_NAME    = :GROUP_NAME
+        WHERE KEYID = :KEYID
+    """
+    params = {
+        "KEYID": str(r.get("KEYID", "")).strip(),
+        "TASK_NAME": str(r.get("TASK_NAME", "")).strip(),
+        "PAYMENT_MONTH": str(r.get("PAYMENT_MONTH", "")).strip(),
+        "PIC": str(r.get("PIC", "")).strip(),
+        "PART_NAME": str(r.get("PART_NAME", "")).strip(),
+        "GROUP_NAME": str(r.get("GROUP_NAME", "")).strip()
+    }
+    cur.execute(sql, params=params)
+
+def save_tasks(rows: list) -> int:
+    """Hàm điều phối Lưu dữ liệu (Save): Dòng mới gọi insert_task(), dòng cũ gọi update_task()."""
+    if not rows: return 0
+    cur = get_cur()
     for r in rows:
-        params = {k: str(r.get(k, '')).strip() for k in ["KEYID", "TASK_NAME", "PAYMENT_MONTH", "PIC", "PART_NAME", "GROUP_NAME", "STATUS"]}
-        cur.execute(sql, params=params)
-    
-    # RẤT QUAN TRỌNG: Phải commit để ghi dữ liệu vĩnh viễn xuống đĩa cứng Oracle
-    if hasattr(cur, 'commit'):
-        cur.commit()
-    elif hasattr(cur, 'connection'):
-        cur.connection.commit()
+        if r.get("isNew"):
+            insert_task(cur, r)
+        else:
+            update_task(cur, r)
+    if hasattr(cur, 'commit'): cur.commit()
     return len(rows)
+
+batch_upsert_tasks = save_tasks
 
 # 4. Hàm cập nhật trạng thái & tiến độ bóc tách AI
 def update_task_status(keyid: str, status: str, error_count: int = 0, result_link: str = None, reason: str = "", progress: int = None):
