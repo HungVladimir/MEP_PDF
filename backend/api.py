@@ -119,6 +119,19 @@ def run_ai_task_background(keyid: str, session_dir: Path, excel_path: str):
             print(f"⚠️ [ZIP Warning] Lỗi nén zip, dùng link excel: {z_err}")
             download_link = f"/mep_payment/files/{file_name}"
 
+        # TRÍCH XUẤT VÀ LƯU CHI TIẾT ĐỐI SOÁT (JSON CACHE CHO MODAL DIALOG)
+        try:
+            from detail_builder import parse_excel_report_to_detail, safe_id
+            import json
+            detail_data = parse_excel_report_to_detail(Path(final_excel_path), keyid, session_dir)
+            if detail_data:
+                json_path = FINAL_REPORT_DIR / f"{safe_id(keyid)}_detail.json"
+                with open(json_path, "w", encoding="utf-8") as jf:
+                    json.dump(detail_data, jf, ensure_ascii=False, indent=2)
+                print(f"💾 [Detail Cache] Đã lưu chi tiết đối soát: {json_path.name}")
+        except Exception as det_err:
+            print(f"⚠️ [Detail Cache Warning] {det_err}")
+
         update_task_status(
             keyid=keyid,
             status="COMPLETED",
@@ -285,3 +298,94 @@ async def submit_review(req: ReviewRequest):
     except Exception as e:
         raise HTTPException(
             status_code=500, detail=f"Lỗi khi lưu phê duyệt: {str(e)}")
+
+
+# 5. CÁC ENDPOINT MỚI: CHI TIẾT ĐỐI SOÁT, SOI ẢNH BẢN VẼ & CHẠY LẠI AI (THEO CHUẨN THIẾT KẾ CỦA SẾP)
+
+@app.get("/mep_payment/detail/{keyid}")
+async def get_task_detail(keyid: str, status: str = "COMPLETED", error_count: int = 0, reason: str = ""):
+    """
+    Trả về chi tiết kết quả đối soát của task (danh sách lỗi, nhóm theo bản vẽ, ảnh bằng chứng, log).
+    Hỗ trợ đọc từ cache JSON, quét file Excel cũ hoặc tạo fallback an toàn.
+    """
+    try:
+        from detail_builder import build_or_load_task_detail
+        fallback_info = {
+            "status": status,
+            "error_count": int(error_count or 0),
+            "reason": reason or ""
+        }
+        detail = build_or_load_task_detail(keyid, FINAL_REPORT_DIR, STORAGE_DIR, fallback_info)
+        return detail
+    except Exception as e:
+        print(f"❌ [FastAPI Error] get_task_detail: {e}")
+        raise HTTPException(status_code=500, detail=f"Lỗi đọc chi tiết đối soát: {str(e)}")
+
+
+@app.get("/mep_payment/image/{keyid}/{filename}")
+async def get_task_image(keyid: str, filename: str):
+    """Phục vụ ảnh bản vẽ / ảnh bằng chứng đối soát để hiển thị trong Lightbox / Preview."""
+    try:
+        from detail_builder import safe_id
+        safe_key = safe_id(keyid)
+
+        # Quét trong các thư mục session của keyid
+        for s_dir in STORAGE_DIR.glob(f"*session_{safe_key}*"):
+            for sub in ["", "drawings", "evidence_images", "pages"]:
+                target = (s_dir / sub / filename) if sub else (s_dir / filename)
+                if target.exists() and target.is_file():
+                    ext = target.suffix.lower()
+                    media_type = "image/png" if ext == ".png" else "image/jpeg"
+                    return FileResponse(str(target), media_type=media_type)
+
+        raise HTTPException(status_code=404, detail="Không tìm thấy file ảnh bản vẽ.")
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Lỗi tải ảnh: {str(e)}")
+
+
+@app.post("/mep_payment/rerun/{keyid}")
+async def rerun_task_endpoint(keyid: str, background_tasks: BackgroundTasks):
+    """
+    Chạy lại tác vụ AI đối soát (Rerun) cho hồ sơ đã có file Excel trong session cũ.
+    Giúp xử lý lại ngay lập tức khi mạng lag hoặc AI bị timeout mà không cần upload lại.
+    """
+    try:
+        from detail_builder import safe_id
+        safe_key = safe_id(keyid)
+
+        # 1. Tìm phiên làm việc (session) gần nhất của KEYID
+        sess_candidates = sorted(STORAGE_DIR.glob(f"*session_{safe_key}*"), key=os.path.getmtime, reverse=True)
+        if not sess_candidates:
+            raise HTTPException(
+                status_code=404,
+                detail=f"Không tìm thấy phiên làm việc cũ cho [{keyid}]. Vui lòng bấm Upload lại file Excel!"
+            )
+
+        session_dir = sess_candidates[0]
+        excels = list(session_dir.glob("*.xlsx")) + list(session_dir.glob("*.xlsm"))
+        if not excels:
+            raise HTTPException(
+                status_code=404,
+                detail=f"Không tìm thấy file Excel trong thư mục session của [{keyid}]. Vui lòng upload lại file!"
+            )
+
+        excel_path = excels[0]
+        print(f"🔄 [RERUN] Bắt đầu kích hoạt chạy lại AI cho KEYID={keyid} với file {excel_path.name}")
+
+        update_task_status(
+            keyid=keyid,
+            status="RUNNING",
+            reason="Đang chạy lại AI đối soát...",
+            progress=5
+        )
+        background_tasks.add_task(run_ai_task_background, keyid, session_dir, str(excel_path))
+
+        return {"status": "ok", "message": f"Đã bắt đầu chạy lại tác vụ AI cho [{keyid}]."}
+    except HTTPException:
+        raise
+    except Exception as e:
+        print(f"❌ [FastAPI Error] rerun_task: {e}")
+        raise HTTPException(status_code=500, detail=f"Lỗi kích hoạt chạy lại AI: {str(e)}")
+

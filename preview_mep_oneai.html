@@ -1,0 +1,1847 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Preview MEP OneAI System - Giao Diện Đối Soát Nghiệm Thu Khối Lượng</title>
+  <style>
+    :root {
+      --bg-dark: #121314;
+      --panel-dark: #1D1E1F;
+      --card-bg: #262727;
+      --card-border: #363637;
+      --line: #4C4D4F;
+      --text-main: #E5EAF3;
+      --text-muted: #A3A6AD;
+      --accent: #409EFF;
+      --accent-hover: #66b1ff;
+      --ok: #67C23A;
+      --ok-bg: rgba(103, 194, 58, 0.15);
+      --err: #F56C6C;
+      --err-bg: rgba(245, 108, 108, 0.15);
+      --warn: #E6A23C;
+      --warn-bg: rgba(230, 162, 60, 0.15);
+      --font-mono: ui-monospace, SFMono-Regular, Consolas, "Liberation Mono", Menlo, monospace;
+      --font-sans: system-ui, -apple-system, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      background-color: var(--bg-dark);
+      color: var(--text-main);
+      font-family: var(--font-sans);
+      font-size: 13px;
+      line-height: 1.5;
+    }
+
+    /* HEADER BANNER */
+    .app-header {
+      background: var(--panel-dark);
+      border-bottom: 1px solid var(--card-border);
+      padding: 12px 24px;
+      display: flex;
+      align-items: center;
+      gap: 16px;
+      position: sticky;
+      top: 0;
+      z-index: 50;
+    }
+    .app-header h1 {
+      font-size: 16px;
+      font-weight: 700;
+      margin: 0;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      color: #FFF;
+    }
+    .spacer { flex: 1; }
+    .badge-mode {
+      background: #2a3b4c;
+      color: var(--accent);
+      border: 1px solid #409EFF55;
+      padding: 4px 10px;
+      border-radius: 99px;
+      font-size: 11px;
+      font-weight: 600;
+    }
+    .user-pill {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      font-size: 12px;
+      color: var(--text-muted);
+    }
+    .user-pill b { color: var(--text-main); }
+
+    /* NOTICE BANNER */
+    .notice-banner {
+      background: linear-gradient(90deg, rgba(64,158,255,0.12), rgba(64,158,255,0.02));
+      border-left: 4px solid var(--accent);
+      padding: 10px 16px;
+      margin: 16px 20px 0;
+      border-radius: 4px;
+      font-size: 12px;
+      color: var(--text-main);
+    }
+
+    .mep-container {
+      padding: 16px 20px 60px;
+      max-width: 1560px;
+      margin: 0 auto;
+    }
+
+    /* 1. KHỐI THẺ KPI THỐNG KÊ (5 STAT CARDS) */
+    .kpi-cards-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(190px, 1fr));
+      gap: 12px;
+      margin-bottom: 16px;
+    }
+    .kpi-card {
+      background-color: var(--card-bg);
+      border: 1px solid var(--card-border);
+      border-radius: 8px;
+      padding: 12px 16px;
+      display: flex;
+      align-items: center;
+      gap: 14px;
+      cursor: pointer;
+      transition: all 0.2s ease;
+      user-select: none;
+    }
+    .kpi-card:hover {
+      transform: translateY(-2px);
+      border-color: var(--accent);
+      box-shadow: 0 4px 14px rgba(0,0,0,0.3);
+    }
+    .kpi-card.active {
+      border-color: var(--accent);
+      background-color: #1a2a3a;
+      box-shadow: 0 0 0 1px var(--accent);
+    }
+    .kpi-icon {
+      width: 42px;
+      height: 42px;
+      border-radius: 8px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 20px;
+    }
+    .kpi-icon.total { background: #303133; color: #FFF; }
+    .kpi-icon.ok { background: var(--ok-bg); color: var(--ok); }
+    .kpi-icon.err { background: var(--err-bg); color: var(--err); }
+    .kpi-icon.running { background: var(--warn-bg); color: var(--warn); }
+    .kpi-icon.waiting { background: #262727; color: var(--text-muted); }
+
+    .kpi-val {
+      font-size: 22px;
+      font-weight: 700;
+      line-height: 1.2;
+    }
+    .kpi-label {
+      font-size: 11px;
+      color: var(--text-muted);
+      margin-top: 2px;
+    }
+
+    /* 2. TOOLBAR FILTER */
+    .toolbar {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 12px;
+      align-items: center;
+      margin-bottom: 14px;
+      background: var(--panel-dark);
+      padding: 10px 14px;
+      border-radius: 8px;
+      border: 1px solid var(--card-border);
+    }
+    select, input[type="text"], input[type="month"] {
+      background-color: #121314;
+      border: 1px solid var(--line);
+      color: var(--text-main);
+      border-radius: 6px;
+      padding: 6px 10px;
+      font-size: 12px;
+      outline: none;
+      transition: border-color 0.15s;
+    }
+    select:focus, input:focus { border-color: var(--accent); }
+
+    /* 3. TABLE ACTION BAR */
+    .table-action-bar {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 10px;
+      padding: 0 4px;
+    }
+    .total-count { font-size: 13px; color: var(--text-muted); }
+    .count-number { color: #FFF; font-weight: 700; }
+    .badge-filter-notice {
+      font-size: 11px;
+      color: var(--accent);
+      background: rgba(64,158,255,0.1);
+      padding: 2px 6px;
+      border-radius: 4px;
+      margin-left: 8px;
+    }
+    .action-buttons { display: flex; align-items: center; gap: 8px; }
+    .btn-divider {
+      width: 1px;
+      height: 20px;
+      background-color: var(--line);
+      margin: 0 4px;
+    }
+
+    /* BUTTONS */
+    .btn {
+      padding: 6px 14px;
+      border-radius: 6px;
+      cursor: pointer;
+      font-size: 12px;
+      font-weight: 500;
+      border: 1px solid var(--line);
+      background: #262727;
+      color: var(--text-main);
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      transition: all 0.15s;
+      user-select: none;
+    }
+    .btn:hover { background: #363637; border-color: #606266; color: var(--accent); }
+    .btn.primary {
+      background-color: var(--accent);
+      border-color: var(--accent);
+      color: #FFF;
+      font-weight: 600;
+      box-shadow: 0 2px 6px rgba(64,158,255,0.25);
+    }
+    .btn.primary:hover { background-color: var(--accent-hover); border-color: var(--accent-hover); }
+    .btn.insert {
+      background-color: #1A2E22;
+      border-color: #2E7D32;
+      color: #4ADE80;
+      font-weight: 600;
+    }
+    .btn.insert:hover { background-color: #2E7D32; color: #FFF; }
+    .btn.danger {
+      background-color: var(--err);
+      border-color: var(--err);
+      color: #FFF;
+      font-weight: 600;
+    }
+    .btn.danger:hover { opacity: 0.9; }
+    .btn.sm { padding: 3px 8px; font-size: 11px; }
+
+    /* 4. TABLE STYLING */
+    .table-container {
+      width: 100%;
+      overflow-x: auto;
+      background: var(--panel-dark);
+      border: 1px solid var(--card-border);
+      border-radius: 8px;
+    }
+    table { width: 100%; border-collapse: collapse; text-align: left; }
+    th, td {
+      padding: 10px 12px;
+      border-bottom: 1px solid #2d2e30;
+      vertical-align: middle;
+      font-size: 12px;
+    }
+    th {
+      background: #18191A;
+      color: var(--text-muted);
+      font-weight: 600;
+      position: sticky;
+      top: 0;
+      white-space: nowrap;
+    }
+    tr.table-row { cursor: pointer; transition: background 0.12s; }
+    tr.table-row:hover td { background: #242526; }
+    .font-mono { font-family: var(--font-mono); }
+    .font-bold { font-weight: 700; }
+    .text-center { text-align: center; }
+
+    /* TAGS & BADGES */
+    .tag {
+      display: inline-block;
+      padding: 2px 8px;
+      border-radius: 4px;
+      font-size: 11px;
+      font-weight: 600;
+      white-space: nowrap;
+    }
+    .tag-success { background: var(--ok-bg); color: var(--ok); border: 1px solid rgba(103,194,58,0.3); }
+    .tag-danger { background: var(--err-bg); color: var(--err); border: 1px solid rgba(245,108,108,0.3); }
+    .tag-warning { background: var(--warn-bg); color: var(--warn); border: 1px solid rgba(230,162,60,0.3); }
+    .tag-info { background: #303133; color: var(--text-muted); border: 1px solid #4C4D4F; }
+
+    .result-cell-box {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 2px;
+      cursor: pointer;
+    }
+    .view-detail-link {
+      font-size: 11px;
+      color: var(--accent);
+      text-decoration: underline;
+      margin-top: 2px;
+    }
+    .view-detail-link:hover { color: var(--accent-hover); }
+
+    /* PROGRESS BAR */
+    .progress-bar-wrap {
+      width: 100%;
+      height: 6px;
+      background: #363637;
+      border-radius: 3px;
+      overflow: hidden;
+      margin-top: 4px;
+    }
+    .progress-bar-fill {
+      height: 100%;
+      background: var(--warn);
+      transition: width 0.3s ease;
+    }
+
+    .btn-rerun-mini {
+      background: #262727;
+      border: 1px solid var(--warn);
+      color: var(--warn);
+      padding: 2px 6px;
+      border-radius: 4px;
+      font-size: 10px;
+      cursor: pointer;
+    }
+    .btn-rerun-mini:hover { background: var(--warn); color: #000; }
+
+    /* 5. MODAL DIALOG CHI TIẾT (4 TABS CHUẨN SẾP) */
+    .modal-overlay {
+      position: fixed;
+      inset: 0;
+      background: rgba(0, 0, 0, 0.75);
+      backdrop-filter: blur(3px);
+      display: flex;
+      align-items: flex-start;
+      justify-content: center;
+      padding: 30px 16px;
+      z-index: 1000;
+      overflow-y: auto;
+    }
+    .modal-card {
+      background: var(--panel-dark);
+      border: 1px solid var(--card-border);
+      border-radius: 12px;
+      width: 100%;
+      max-width: 1140px;
+      padding: 22px;
+      box-shadow: 0 20px 40px rgba(0,0,0,0.6);
+      animation: modalFadeIn 0.2s ease-out;
+    }
+    @keyframes modalFadeIn {
+      from { opacity: 0; transform: scale(0.98); }
+      to { opacity: 1; transform: scale(1); }
+    }
+
+    .modal-header-card {
+      background: var(--card-bg);
+      border: 1px solid var(--card-border);
+      border-radius: 8px;
+      padding: 14px 18px;
+      display: flex;
+      justify-content: space-between;
+      align-items: flex-start;
+      margin-bottom: 14px;
+    }
+    .modal-header-card h3 { margin: 0 0 6px 0; font-size: 16px; color: #FFF; }
+    .modal-meta { display: flex; flex-wrap: wrap; gap: 14px; font-size: 12px; color: var(--text-muted); }
+
+    .modal-stats-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+      gap: 10px;
+      margin-bottom: 14px;
+    }
+    .m-stat {
+      background: var(--card-bg);
+      border: 1px solid var(--card-border);
+      border-radius: 6px;
+      padding: 10px 14px;
+      display: flex;
+      flex-direction: column;
+    }
+    .m-stat.border-err { border-left: 4px solid var(--err); }
+    .m-stat.border-ok { border-left: 4px solid var(--ok); }
+    .m-stat b { font-size: 20px; font-weight: 700; color: #FFF; }
+    .m-stat span { font-size: 11px; color: var(--text-muted); margin-top: 2px; }
+
+    /* TAB HEADERS */
+    .tab-headers {
+      display: flex;
+      gap: 4px;
+      border-bottom: 1px solid var(--card-border);
+      margin-bottom: 14px;
+    }
+    .tab-btn {
+      background: none;
+      border: 0;
+      padding: 9px 16px;
+      color: var(--text-muted);
+      cursor: pointer;
+      font: inherit;
+      font-weight: 600;
+      border-bottom: 2px solid transparent;
+      transition: all 0.15s;
+    }
+    .tab-btn:hover { color: var(--text-main); }
+    .tab-btn.active {
+      color: var(--accent);
+      border-bottom-color: var(--accent);
+      background: rgba(64,158,255,0.06);
+    }
+
+    /* COLLAPSE ACCORDION */
+    .collapse-item {
+      border: 1px solid var(--card-border);
+      border-radius: 6px;
+      margin-bottom: 8px;
+      background: var(--card-bg);
+      overflow: hidden;
+    }
+    .collapse-header {
+      padding: 10px 14px;
+      background: #242526;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      user-select: none;
+      font-weight: 600;
+    }
+    .collapse-header:hover { background: #2d2e30; }
+
+    /* IMAGES STRIP */
+    .images-strip {
+      display: flex;
+      gap: 12px;
+      overflow-x: auto;
+      padding: 10px 4px;
+    }
+    .img-thumb-box {
+      flex: 0 0 170px;
+      border: 1px solid var(--card-border);
+      border-radius: 6px;
+      padding: 8px;
+      background: var(--card-bg);
+      text-align: center;
+      cursor: zoom-in;
+      transition: transform 0.15s, border-color 0.15s;
+    }
+    .img-thumb-box:hover {
+      transform: translateY(-2px);
+      border-color: var(--accent);
+    }
+    .thumb-svg {
+      width: 100%;
+      height: 150px;
+      border-radius: 4px;
+      background: #FFF;
+    }
+
+    /* LOG CONSOLE */
+    .log-console {
+      background: #111213;
+      border: 1px solid var(--card-border);
+      border-radius: 6px;
+      padding: 12px 14px;
+      font-family: var(--font-mono);
+      font-size: 12px;
+      line-height: 1.6;
+      max-height: 250px;
+      overflow-y: auto;
+      color: #C0C4CC;
+    }
+
+    /* REVIEW CARD */
+    .detail-review-card {
+      background: var(--card-bg);
+      border: 1px solid var(--card-border);
+      border-radius: 8px;
+      padding: 14px 16px;
+      margin-top: 14px;
+    }
+    .review-inputs-row {
+      display: flex;
+      gap: 10px;
+      margin-bottom: 12px;
+    }
+
+    /* LIGHTBOX ZOOM MODAL */
+    .zoom-lightbox {
+      position: fixed;
+      inset: 0;
+      background: rgba(0,0,0,0.85);
+      backdrop-filter: blur(4px);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 24px;
+      z-index: 2000;
+    }
+    .zoom-box {
+      background: #1E1F20;
+      border: 1px solid var(--card-border);
+      border-radius: 10px;
+      max-width: 900px;
+      width: 100%;
+      padding: 16px;
+    }
+
+    /* TOAST */
+    .toast-wrap {
+      position: fixed;
+      bottom: 24px;
+      left: 50%;
+      transform: translateX(-50%);
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+      z-index: 3000;
+      pointer-events: none;
+    }
+    .toast-msg {
+      background: #2D3035;
+      color: #FFF;
+      border-left: 4px solid var(--accent);
+      padding: 10px 18px;
+      border-radius: 6px;
+      box-shadow: 0 8px 24px rgba(0,0,0,0.4);
+      font-size: 13px;
+      animation: toastIn 0.2s ease-out;
+    }
+    @keyframes toastIn {
+      from { opacity: 0; transform: translateY(10px); }
+      to { opacity: 1; transform: translateY(0); }
+    }
+  </style>
+</head>
+<body>
+
+  <!-- APP HEADER -->
+  <header class="app-header">
+    <h1>
+      <span>⚡</span> MEP OneAI - Quản Lý Đối Soát & Nghiệm Thu Khối Lượng
+    </h1>
+    <span class="badge-mode">Local Preview Mode (Offline Demo)</span>
+    <div class="spacer"></div>
+    <div class="user-pill">
+      <span>👤 <b>Kỹ sư nghiệm thu</b> (MEP Infra Group)</span>
+      <span class="tag tag-success">Quyền duyệt</span>
+    </div>
+  </header>
+
+  <!-- NOTICE BANNER -->
+  <div class="notice-banner">
+    💡 <b>Bản chạy thử độc lập (Interactive Preview)</b>: Bạn có thể click vào các <b>Thẻ KPI</b> để lọc nhanh, bấm vào mã <b>Số WO</b> (hoặc bấm vào thẻ <b>Kết quả kiểm tra</b>) để mở <b>Hộp thoại đối soát 4 Tab</b> với đầy đủ bảng lỗi, soi ảnh bản vẽ, nhật ký AI và nút <b>Chạy lại AI (Rerun)</b>!
+  </div>
+
+  <div class="mep-container">
+    <!-- 1. KHỐI THẺ KPI THỐNG KÊ (5 STAT CARDS CLICK-TO-FILTER) -->
+    <div class="kpi-cards-grid">
+      <div class="kpi-card" id="kpi-all" onclick="filterByKpi('ALL')">
+        <div class="kpi-icon total">📚</div>
+        <div class="kpi-info">
+          <div class="kpi-val" id="val-total">5</div>
+          <div class="kpi-label">Tổng số hồ sơ</div>
+        </div>
+      </div>
+      <div class="kpi-card" id="kpi-ok" onclick="filterByKpi('OK')">
+        <div class="kpi-icon ok">✓</div>
+        <div class="kpi-info">
+          <div class="kpi-val" id="val-ok" style="color:var(--ok)">2</div>
+          <div class="kpi-label">Khớp 100% (0 lỗi)</div>
+        </div>
+      </div>
+      <div class="kpi-card" id="kpi-err" onclick="filterByKpi('ERR')">
+        <div class="kpi-icon err">⚠️</div>
+        <div class="kpi-info">
+          <div class="kpi-val" id="val-err" style="color:var(--err)">1</div>
+          <div class="kpi-label">Có sai lệch</div>
+        </div>
+      </div>
+      <div class="kpi-card" id="kpi-running" onclick="filterByKpi('RUNNING')">
+        <div class="kpi-icon running">⚙️</div>
+        <div class="kpi-info">
+          <div class="kpi-val" id="val-running" style="color:var(--warn)">1</div>
+          <div class="kpi-label">Đang đối soát AI</div>
+        </div>
+      </div>
+      <div class="kpi-card" id="kpi-waiting" onclick="filterByKpi('WAITING')">
+        <div class="kpi-icon waiting">⏳</div>
+        <div class="kpi-info">
+          <div class="kpi-val" id="val-waiting" style="color:var(--text-muted)">1</div>
+          <div class="kpi-label">Chờ duyệt / Mới</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- 2. TOOLBAR FILTER -->
+    <div class="toolbar">
+      <select id="sel-status" onchange="onStatusSelectChange(this.value)">
+        <option value="ALL">Tất cả trạng thái</option>
+        <option value="WAITING">Chờ duyệt (WAITING)</option>
+        <option value="RUNNING">Đang xử lý (RUNNING)</option>
+        <option value="COMPLETED">Hoàn tất (COMPLETED)</option>
+        <option value="CANCEL">Thất bại (CANCEL)</option>
+      </select>
+
+      <input type="month" id="sel-month" onchange="renderTable()" style="width:160px">
+
+      <input type="text" id="sel-search" placeholder="Nhập số WO hoặc tên công việc..." style="width:260px" oninput="renderTable()">
+      
+      <div class="spacer"></div>
+      <button class="btn" onclick="resetFilters()">↺ Xóa bộ lọc</button>
+    </div>
+
+    <!-- 3. ACTION BAR -->
+    <div class="table-action-bar">
+      <div class="total-count">
+        Total: <span class="count-number" id="tbl-total-count">5 rows</span>
+        <span id="active-filter-badge" class="badge-filter-notice" style="display:none"></span>
+      </div>
+
+      <div class="action-buttons">
+        <button class="btn" onclick="handleReload()"><span style="font-size:14px">↻</span> Reload</button>
+        <button class="btn insert" onclick="handleInsert()"><span>+</span> Insert</button>
+        <button class="btn primary" onclick="handleSave()"><span>💾</span> Save</button>
+        <button class="btn" onclick="handleExportCsv()"><span>📥</span> Export (.csv)</button>
+        <span class="btn-divider"></span>
+        <button class="btn danger" onclick="handleDelete()"><span>🗑️</span> Delete</button>
+      </div>
+    </div>
+
+    <!-- 4. DATA TABLE GRID -->
+    <div class="table-container">
+      <table>
+        <thead>
+          <tr>
+            <th width="40" class="text-center"><input type="checkbox" id="check-all" onchange="toggleSelectAll(this.checked)"></th>
+            <th width="50" class="text-center">STT</th>
+            <th width="150" class="text-center">SỐ CÔNG VIỆC (WO)</th>
+            <th width="320" style="min-width:280px">TÊN CÔNG VIỆC</th>
+            <th width="100" class="text-center">THÁNG TT</th>
+            <th width="120" class="text-center">NGƯỜI PHỤ TRÁCH</th>
+            <th width="100" class="text-center">PART</th>
+            <th width="110" class="text-center">GROUP</th>
+            <th width="140" class="text-center">TRẠNG THÁI</th>
+            <th width="120" class="text-center">TÀI LIỆU ĐÍNH KÈM</th>
+            <th width="160" class="text-center">KẾT QUẢ KIỂM TRA</th>
+            <th width="170" class="text-center">CHI TIẾT BÁO CÁO</th>
+          </tr>
+        </thead>
+        <tbody id="table-body">
+          <!-- Rendered via JS -->
+        </tbody>
+      </table>
+      <!-- 5. THANH PHÂN TRANG (MÔ PHỎNG PHÂN TRANG 20 DÒNG/TRANG) -->
+      <div class="pagination-bar" style="display:flex;justify-content:center;align-items:center;gap:8px;margin-top:14px;padding:6px 0">
+        <button class="btn sm" onclick="changePage(1)">First</button>
+        <button class="btn sm" onclick="changePage(currentPage - 1)">‹ Prev</button>
+        <span id="page-indicator" style="font-size:12px;color:var(--text-muted);font-weight:600;padding:0 8px">Trang 1 / 2</span>
+        <button class="btn sm" onclick="changePage(currentPage + 1)">Next ›</button>
+        <button class="btn sm" onclick="changePage(totalPages)">Last</button>
+        <span style="font-size:11px;color:var(--accent);margin-left:12px">(Mỗi trang 20 dòng - Thử chuyển sang Trang 2 và bấm Insert để kiểm chứng STT)</span>
+      </div>
+    </div>
+  </div>
+
+  <!-- 5. DIALOG CHI TIẾT ĐỐI SOÁT (MODAL 4 TABS CHUẨN SẾP) -->
+  <div id="modal-detail" class="modal-overlay" style="display:none" onclick="if(event.target===this) closeDetailModal()">
+    <div class="modal-card">
+      <!-- HEADER CARD -->
+      <div class="modal-header-card">
+        <div>
+          <h3 id="dt-task-name">Lắp đặt đường ống Chiller Phase 2 & Cáp điện hạ thế</h3>
+          <div class="modal-meta">
+            <span><b>Mã WO:</b> <span id="dt-keyid" class="font-mono">WOR2510150002M</span></span>
+            <span><b>PIC:</b> <span id="dt-pic">Tran Van B</span></span>
+            <span><b>Phần việc:</b> <span id="dt-part-group">MEP Part / Infra Group</span></span>
+            <span><b>Tháng:</b> <span id="dt-month">2026-10</span></span>
+            <span><b>Công nghệ:</b> <span id="dt-tech">MEP AI Vision (NextAI Qwen) + 2-Stage Reconciler</span></span>
+          </div>
+        </div>
+        <div style="display:flex;gap:6px;align-items:center">
+          <span id="dt-status-tag" class="tag tag-success">COMPLETED</span>
+          <span id="dt-review-tag" class="tag tag-warning">CHỜ DUYỆT</span>
+          <button class="btn sm" onclick="closeDetailModal()" style="margin-left:8px">✕ Đóng</button>
+        </div>
+      </div>
+
+      <!-- 4 MINI STATS CARDS -->
+      <div class="modal-stats-grid">
+        <div class="m-stat" id="dt-stat-err-box">
+          <b id="dt-stat-err-count" style="color:var(--err)">2</b>
+          <span>Số lỗi phát hiện</span>
+        </div>
+        <div class="m-stat">
+          <b id="dt-stat-dwg-count">3</b>
+          <span>Bản vẽ AI bóc tách</span>
+        </div>
+        <div class="m-stat">
+          <b id="dt-stat-items-count">24</b>
+          <span>Dòng vật tư kiểm tra</span>
+        </div>
+        <div class="m-stat">
+          <b id="dt-stat-sheet-name" style="font-size:15px;color:var(--accent)">1. Đối Soát Bản Vẽ</b>
+          <span>Bảng danh mục nguồn</span>
+        </div>
+      </div>
+
+      <!-- ERROR BREAKDOWN BADGES -->
+      <div id="dt-breakdown-row" style="margin-bottom:12px;display:flex;align-items:center;gap:8px;flex-wrap:wrap">
+        <span style="font-size:12px;color:var(--text-muted)">Phân loại sai lệch:</span>
+        <span class="tag tag-danger">Lệch khối lượng: 1</span>
+        <span class="tag tag-danger">Mã mồ côi (Chưa khai báo): 1</span>
+      </div>
+
+      <!-- 4 TABS -->
+      <div class="tab-headers">
+        <button class="tab-btn active" id="tab-btn-errors" onclick="switchDetailTab('errors')">⚠️ Danh Sách Lỗi (<span id="dt-tab-err-cnt">2</span>)</button>
+        <button class="tab-btn" id="tab-btn-drawings" onclick="switchDetailTab('drawings')">📑 Đối Chiếu Theo Bản Vẽ (<span id="dt-tab-dwg-cnt">3</span>)</button>
+        <button class="tab-btn" id="tab-btn-images" onclick="switchDetailTab('images')">🖼️ Soi Bản Vẽ / Ảnh Trích Xuất (<span id="dt-tab-img-cnt">3</span>)</button>
+        <button class="tab-btn" id="tab-btn-logs" onclick="switchDetailTab('logs')">📜 Nhật Ký AI</button>
+      </div>
+
+      <!-- TAB 1 CONTENT: ERROR LIST -->
+      <div id="tab-content-errors" class="tab-pane">
+        <div class="table-container" style="max-height:300px;overflow-y:auto">
+          <table>
+            <thead>
+              <tr>
+                <th width="40" class="text-center">#</th>
+                <th width="160">Phân loại lỗi</th>
+                <th width="130" class="text-center">Bản vẽ</th>
+                <th width="140" class="text-center">Mã SDAC</th>
+                <th width="200">Tên vật tư</th>
+                <th width="90" class="text-center">SL Dự toán</th>
+                <th width="90" class="text-center">SL Bản vẽ</th>
+                <th width="120" class="text-center">Chênh lệch</th>
+                <th width="220">Chi tiết đối chiếu</th>
+              </tr>
+            </thead>
+            <tbody id="dt-errors-tbody">
+              <!-- Rendered via JS -->
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      <!-- TAB 2 CONTENT: DRAWING GROUPS ACCORDION -->
+      <div id="tab-content-drawings" class="tab-pane" style="display:none;max-height:300px;overflow-y:auto">
+        <div id="dt-drawings-accordion">
+          <!-- Accordion items rendered via JS -->
+        </div>
+      </div>
+
+      <!-- TAB 3 CONTENT: IMAGES STRIP -->
+      <div id="tab-content-images" class="tab-pane" style="display:none">
+        <div class="images-strip" id="dt-images-container">
+          <!-- Thumbnails rendered via JS -->
+        </div>
+      </div>
+
+      <!-- TAB 4 CONTENT: LOGS -->
+      <div id="tab-content-logs" class="tab-pane" style="display:none">
+        <div class="log-console" id="dt-logs-text">
+          <!-- Log lines rendered via JS -->
+        </div>
+      </div>
+
+      <!-- FOOTER REVIEW & ACTIONS -->
+      <div class="detail-review-card">
+        <h4 style="margin:0 0 10px 0;color:#FFF">✍️ Phê Duyệt & Thao Tác Hồ Sơ</h4>
+        <div class="review-inputs-row">
+          <input type="text" id="dt-review-note" placeholder="Nhập ghi chú duyệt (VD: Đã xác nhận lại với bộ phận thi công, chấp nhận sai số...)" style="flex:1">
+          <button class="btn" style="background:#2E7D32;color:#FFF;border-color:#2E7D32" onclick="submitReviewAction('APPROVED')">✓ Duyệt (Approve)</button>
+          <button class="btn danger" onclick="submitReviewAction('REJECTED')">✕ Từ Chối (Reject)</button>
+        </div>
+        <div style="display:flex;gap:8px;align-items:center">
+          <button class="btn primary" onclick="toast('Đang tải file báo cáo .zip đối soát 2 sheet...')">📥 Tải Báo Cáo (.zip)</button>
+          <button class="btn" style="border-color:var(--warn);color:var(--warn)" onclick="simulateRerunInModal()">🔄 Chạy Lại AI (Rerun)</button>
+          <div class="spacer"></div>
+          <button class="btn" onclick="closeDetailModal()">Đóng</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- 6. LIGHTBOX ZOOM MODAL -->
+  <div id="modal-zoom" class="zoom-lightbox" style="display:none" onclick="if(event.target===this) closeZoomModal()">
+    <div class="zoom-box">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px">
+        <b id="zoom-title" style="color:#FFF;font-size:14px">Ảnh bản vẽ kỹ thuật phóng to</b>
+        <button class="btn sm" onclick="closeZoomModal()">✕ Đóng</button>
+      </div>
+      <div id="zoom-svg-container" style="display:flex;justify-content:center;background:#FFF;padding:12px;border-radius:6px;max-height:75vh;overflow:auto">
+        <!-- High-res SVG injected here -->
+      </div>
+    </div>
+  </div>
+
+  <!-- TOAST CONTAINER -->
+  <div class="toast-wrap" id="toast-container"></div>
+
+  <!-- SCRIPT ENGINE -->
+  <script>
+    // Dữ liệu mẫu chuẩn nghiệm thu MEP OneAI
+    const tasks = [
+      {
+        KEYID: "WOR2510150002M",
+        TASK_NAME: "Lắp đặt đường ống Chiller Phase 2 & Cáp điện hạ thế",
+        PAYMENT_MONTH: "2026-10",
+        PIC: "Tran Van B",
+        PART_NAME: "MEP Part",
+        GROUP_NAME: "Infra Group",
+        STATUS: "COMPLETED",
+        PROGRESS: 100,
+        ERROR_COUNT: 2,
+        RESULT_LINK: "/mep_payment/files/Consolidated_WOR2510150002M.zip",
+        REASON: "Lệch 2 mã vật tư ở Bản vẽ M-01 và M-02",
+        REVIEW_DECISION: null,
+        REVIEW_NOTE: "",
+        detail: {
+          mode: "MEP AI Vision (NextAI Qwen) + 2-Stage Reconciler",
+          sheet: "1. Đối Soát Bản Vẽ",
+          drawings_count: 3,
+          total_items: 24,
+          error_types: {
+            "Lệch khối lượng": 1,
+            "Mã mồ côi (Chưa khai báo)": 1
+          },
+          errors: [
+            {
+              id: 1,
+              type: "Lệch khối lượng",
+              dwg: "Bản vẽ M-01",
+              code: "M03-00726974",
+              name: "Dây cáp điện chống cháy Cu/Mica/XLPE/FR-PVC 4x25",
+              vendor_qty: "150.00",
+              ai_qty: "120.00",
+              diff: "Lệch: +30.00m (Vượt 25%)",
+              cell: "Sheet 1, E12",
+              msg: "Số lượng dự toán đề nghị thanh toán (150m) lớn hơn khối lượng thiết kế bóc tách (120m)."
+            },
+            {
+              id: 2,
+              type: "Mã mồ côi (Chưa khai báo)",
+              dwg: "Bản vẽ M-02",
+              code: "CV-2.5MM2",
+              name: "Dây đơn mềm ruột đồng cách điện PVC 1x2.5mm2",
+              vendor_qty: "80.00",
+              ai_qty: "0.00",
+              diff: "Bản vẽ không có mã này",
+              cell: "Sheet 1, F15",
+              msg: "Mã vật tư có trong bảng kê dự toán nhưng không tìm thấy vị trí thể hiện trên bản vẽ thiết kế."
+            }
+          ],
+          groups: [
+            {
+              drawing_no: "M-01: Mặt bằng Chiller & Tủ điện phân phối",
+              total_items: 9,
+              error_count: 1,
+              rows: [
+                { code: "M03-00726974", name: "Dây cáp điện chống cháy Cu/Mica/XLPE", qty: 120.0, ok: false, why: "Lệch: Dự toán 150 > Bản vẽ 120" },
+                { code: "CONDUIT-D32", name: "Ống luồn dây PVC D32", qty: 85.0, ok: true, why: "✓ Khớp 100%" },
+                { code: "TRAY-200X100", name: "Máng cáp sơn tĩnh điện 200x100", qty: 45.0, ok: true, why: "✓ Khớp 100%" }
+              ]
+            },
+            {
+              drawing_no: "M-02: Sơ đồ đơn tuyến cấp nguồn",
+              total_items: 8,
+              error_count: 1,
+              rows: [
+                { code: "MCCB-3P-250A", name: "Aptomat khối MCCB 3P 250A 36kA", qty: 2.0, ok: true, why: "✓ Khớp 100%" },
+                { code: "CV-2.5MM2", name: "Dây đơn mềm ruột đồng PVC 2.5", qty: 0.0, ok: false, why: "Bản vẽ không có mã này" }
+              ]
+            },
+            {
+              drawing_no: "M-03: Chi tiết lắp đặt giá đỡ cáp",
+              total_items: 7,
+              error_count: 0,
+              rows: [
+                { code: "SUPPORT-SUS304", name: "Treo đỡ máng cáp inox SUS304", qty: 32.0, ok: true, why: "✓ Khớp 100%" },
+                { code: "BOLT-M10X50", name: "Bu lông nở M10x50", qty: 64.0, ok: true, why: "✓ Khớp 100%" }
+              ]
+            }
+          ],
+          images: [
+            { id: "img-01", name: "dwg_m01_chiller.png", title: "Trang 1: Mặt bằng Chiller (M-01)" },
+            { id: "img-02", name: "dwg_m02_single_line.png", title: "Trang 2: Sơ đồ đơn tuyến (M-02)" },
+            { id: "img-03", name: "dwg_m03_cable_tray.png", title: "Trang 3: Chi tiết giá đỡ (M-03)" }
+          ],
+          logs: [
+            "[14:20:01] Nhận file Excel: WOR2510150002M_Payment.xlsx (12.4 MB)",
+            "[14:20:02] Giải mã cấu trúc OLE: Trích xuất 3 bản vẽ PDF đính kèm",
+            "[14:20:05] AI Vision Qwen 3.8 bóc tách bảng kê vật tư bản vẽ M-01, M-02, M-03",
+            "[14:20:08] Thực hiện thuật toán Pivot gom nhóm vật tư (Code + Phụ trội + Ghi chú)",
+            "[14:20:10] Đối soát 2 vòng: Vòng 1 Bản vẽ (2 sai lệch), Vòng 2 Gate Pass (Khớp 100%)",
+            "[14:20:12] Đóng gói báo cáo 2 sheet: Consolidated_WOR2510150002M.zip"
+          ]
+        }
+      },
+      {
+        KEYID: "WOR2509010045E",
+        TASK_NAME: "Bảo trì hệ thống PCCC khu văn phòng & Bơm cứu hỏa",
+        PAYMENT_MONTH: "2026-09",
+        PIC: "Le Thi C",
+        PART_NAME: "Fire Safety",
+        GROUP_NAME: "EHS Group",
+        STATUS: "COMPLETED",
+        PROGRESS: 100,
+        ERROR_COUNT: 0,
+        RESULT_LINK: "/mep_payment/files/Consolidated_WOR2509010045E.zip",
+        REASON: "Khớp 100% không phát hiện sai lệch",
+        REVIEW_DECISION: "APPROVED",
+        REVIEW_NOTE: "Đã kiểm tra khối lượng nghiệm thu khớp hoàn toàn với bản vẽ hoàn công.",
+        detail: {
+          mode: "MEP AI Vision (NextAI Qwen)",
+          sheet: "1. Đối Soát Bản Vẽ",
+          drawings_count: 2,
+          total_items: 18,
+          error_types: {},
+          errors: [],
+          groups: [
+            {
+              drawing_no: "PCCC-01: Hệ thống đường ống cứu hỏa",
+              total_items: 10,
+              error_count: 0,
+              rows: [{ code: "PIPE-D100", name: "Ống thép tráng kẽm D100", qty: 240.0, ok: true, why: "✓ Khớp 100%" }]
+            }
+          ],
+          images: [{ id: "img-pccc", name: "dwg_pccc.png", title: "Trang 1: Bản vẽ PCCC hoàn công" }],
+          logs: [
+            "[09:15:00] Nhận file đối soát PCCC...",
+            "[09:15:04] AI Vision hoàn tất 2/2 trang...",
+            "[09:15:06] Đối chiếu 18 danh mục: 0 lỗi sai lệch. Khớp 100%."
+          ]
+        }
+      },
+      {
+        KEYID: "WOR2511040018P",
+        TASK_NAME: "Thi công hệ thống điện chiếu sáng xưởng A & Cấp nguồn máy CNC",
+        PAYMENT_MONTH: "2026-11",
+        PIC: "Nguyen Van A",
+        PART_NAME: "MEP Part",
+        GROUP_NAME: "Infra Group",
+        STATUS: "RUNNING",
+        PROGRESS: 65,
+        ERROR_COUNT: 0,
+        RESULT_LINK: null,
+        REASON: "AI đang phân tích trang 3/5 bản vẽ chiếu sáng...",
+        REVIEW_DECISION: null,
+        REVIEW_NOTE: "",
+        detail: null
+      },
+      {
+        KEYID: "WOR2512230006V",
+        TASK_NAME: "Hệ thống thông gió tạo áp cầu thang thoát hiểm",
+        PAYMENT_MONTH: "2026-10",
+        PIC: "Hoang Van D",
+        PART_NAME: "HVAC Part",
+        GROUP_NAME: "Infra Group",
+        STATUS: "WAITING",
+        PROGRESS: 0,
+        ERROR_COUNT: 0,
+        RESULT_LINK: null,
+        REASON: "Chờ upload file kiểm tra",
+        REVIEW_DECISION: null,
+        REVIEW_NOTE: "",
+        detail: null
+      },
+      {
+        KEYID: "WOR2508120099K",
+        TASK_NAME: "Lắp đặt máy phát điện dự phòng 1500kVA",
+        PAYMENT_MONTH: "2026-08",
+        PIC: "Pham Van E",
+        PART_NAME: "MEP Part",
+        GROUP_NAME: "Infra Group",
+        STATUS: "CANCEL",
+        PROGRESS: 0,
+        ERROR_COUNT: 0,
+        RESULT_LINK: null,
+        REASON: "File PDF đính kèm scan mờ, AI không nhận diện được bảng BOM",
+        REVIEW_DECISION: null,
+        REVIEW_NOTE: "",
+        detail: null
+      },
+      {
+        KEYID: "WOR2508060006M",
+        TASK_NAME: "Thi công đường ống & phụ kiện MEP hạng mục #6",
+        PAYMENT_MONTH: "2026-10",
+        PIC: "Kỹ sư #6",
+        PART_NAME: "MEP Part",
+        GROUP_NAME: "Infra Group",
+        STATUS: "COMPLETED",
+        PROGRESS: 100,
+        ERROR_COUNT: 0,
+        RESULT_LINK: "/mep_payment/files/Sample.zip",
+        REASON: "Khớp 100%",
+        REVIEW_DECISION: "APPROVED",
+        REVIEW_NOTE: "Đã nghiệm thu đạt",
+        detail: null
+      },
+      {
+        KEYID: "WOR2508070007M",
+        TASK_NAME: "Thi công đường ống & phụ kiện MEP hạng mục #7",
+        PAYMENT_MONTH: "2026-10",
+        PIC: "Kỹ sư #7",
+        PART_NAME: "MEP Part",
+        GROUP_NAME: "Infra Group",
+        STATUS: "COMPLETED",
+        PROGRESS: 100,
+        ERROR_COUNT: 0,
+        RESULT_LINK: "/mep_payment/files/Sample.zip",
+        REASON: "Khớp 100%",
+        REVIEW_DECISION: "APPROVED",
+        REVIEW_NOTE: "Đã nghiệm thu đạt",
+        detail: null
+      },
+      {
+        KEYID: "WOR2508080008M",
+        TASK_NAME: "Thi công đường ống & phụ kiện MEP hạng mục #8",
+        PAYMENT_MONTH: "2026-10",
+        PIC: "Kỹ sư #8",
+        PART_NAME: "MEP Part",
+        GROUP_NAME: "Infra Group",
+        STATUS: "COMPLETED",
+        PROGRESS: 100,
+        ERROR_COUNT: 0,
+        RESULT_LINK: "/mep_payment/files/Sample.zip",
+        REASON: "Khớp 100%",
+        REVIEW_DECISION: "APPROVED",
+        REVIEW_NOTE: "Đã nghiệm thu đạt",
+        detail: null
+      },
+      {
+        KEYID: "WOR2508090009M",
+        TASK_NAME: "Thi công đường ống & phụ kiện MEP hạng mục #9",
+        PAYMENT_MONTH: "2026-10",
+        PIC: "Kỹ sư #9",
+        PART_NAME: "MEP Part",
+        GROUP_NAME: "Infra Group",
+        STATUS: "COMPLETED",
+        PROGRESS: 100,
+        ERROR_COUNT: 0,
+        RESULT_LINK: "/mep_payment/files/Sample.zip",
+        REASON: "Khớp 100%",
+        REVIEW_DECISION: "APPROVED",
+        REVIEW_NOTE: "Đã nghiệm thu đạt",
+        detail: null
+      },
+      {
+        KEYID: "WOR2508100010M",
+        TASK_NAME: "Thi công đường ống & phụ kiện MEP hạng mục #10",
+        PAYMENT_MONTH: "2026-10",
+        PIC: "Kỹ sư #10",
+        PART_NAME: "MEP Part",
+        GROUP_NAME: "Infra Group",
+        STATUS: "COMPLETED",
+        PROGRESS: 100,
+        ERROR_COUNT: 0,
+        RESULT_LINK: "/mep_payment/files/Sample.zip",
+        REASON: "Khớp 100%",
+        REVIEW_DECISION: "APPROVED",
+        REVIEW_NOTE: "Đã nghiệm thu đạt",
+        detail: null
+      },
+      {
+        KEYID: "WOR2508110011M",
+        TASK_NAME: "Thi công đường ống & phụ kiện MEP hạng mục #11",
+        PAYMENT_MONTH: "2026-10",
+        PIC: "Kỹ sư #11",
+        PART_NAME: "MEP Part",
+        GROUP_NAME: "Infra Group",
+        STATUS: "COMPLETED",
+        PROGRESS: 100,
+        ERROR_COUNT: 0,
+        RESULT_LINK: "/mep_payment/files/Sample.zip",
+        REASON: "Khớp 100%",
+        REVIEW_DECISION: "APPROVED",
+        REVIEW_NOTE: "Đã nghiệm thu đạt",
+        detail: null
+      },
+      {
+        KEYID: "WOR2508120012M",
+        TASK_NAME: "Thi công đường ống & phụ kiện MEP hạng mục #12",
+        PAYMENT_MONTH: "2026-10",
+        PIC: "Kỹ sư #12",
+        PART_NAME: "MEP Part",
+        GROUP_NAME: "Infra Group",
+        STATUS: "COMPLETED",
+        PROGRESS: 100,
+        ERROR_COUNT: 0,
+        RESULT_LINK: "/mep_payment/files/Sample.zip",
+        REASON: "Khớp 100%",
+        REVIEW_DECISION: "APPROVED",
+        REVIEW_NOTE: "Đã nghiệm thu đạt",
+        detail: null
+      },
+      {
+        KEYID: "WOR2508130013M",
+        TASK_NAME: "Thi công đường ống & phụ kiện MEP hạng mục #13",
+        PAYMENT_MONTH: "2026-10",
+        PIC: "Kỹ sư #13",
+        PART_NAME: "MEP Part",
+        GROUP_NAME: "Infra Group",
+        STATUS: "COMPLETED",
+        PROGRESS: 100,
+        ERROR_COUNT: 0,
+        RESULT_LINK: "/mep_payment/files/Sample.zip",
+        REASON: "Khớp 100%",
+        REVIEW_DECISION: "APPROVED",
+        REVIEW_NOTE: "Đã nghiệm thu đạt",
+        detail: null
+      },
+      {
+        KEYID: "WOR2508140014M",
+        TASK_NAME: "Thi công đường ống & phụ kiện MEP hạng mục #14",
+        PAYMENT_MONTH: "2026-10",
+        PIC: "Kỹ sư #14",
+        PART_NAME: "MEP Part",
+        GROUP_NAME: "Infra Group",
+        STATUS: "COMPLETED",
+        PROGRESS: 100,
+        ERROR_COUNT: 0,
+        RESULT_LINK: "/mep_payment/files/Sample.zip",
+        REASON: "Khớp 100%",
+        REVIEW_DECISION: "APPROVED",
+        REVIEW_NOTE: "Đã nghiệm thu đạt",
+        detail: null
+      },
+      {
+        KEYID: "WOR2508150015M",
+        TASK_NAME: "Thi công đường ống & phụ kiện MEP hạng mục #15",
+        PAYMENT_MONTH: "2026-10",
+        PIC: "Kỹ sư #15",
+        PART_NAME: "MEP Part",
+        GROUP_NAME: "Infra Group",
+        STATUS: "COMPLETED",
+        PROGRESS: 100,
+        ERROR_COUNT: 0,
+        RESULT_LINK: "/mep_payment/files/Sample.zip",
+        REASON: "Khớp 100%",
+        REVIEW_DECISION: "APPROVED",
+        REVIEW_NOTE: "Đã nghiệm thu đạt",
+        detail: null
+      },
+      {
+        KEYID: "WOR2508160016M",
+        TASK_NAME: "Thi công đường ống & phụ kiện MEP hạng mục #16",
+        PAYMENT_MONTH: "2026-10",
+        PIC: "Kỹ sư #16",
+        PART_NAME: "MEP Part",
+        GROUP_NAME: "Infra Group",
+        STATUS: "COMPLETED",
+        PROGRESS: 100,
+        ERROR_COUNT: 0,
+        RESULT_LINK: "/mep_payment/files/Sample.zip",
+        REASON: "Khớp 100%",
+        REVIEW_DECISION: "APPROVED",
+        REVIEW_NOTE: "Đã nghiệm thu đạt",
+        detail: null
+      },
+      {
+        KEYID: "WOR2508170017M",
+        TASK_NAME: "Thi công đường ống & phụ kiện MEP hạng mục #17",
+        PAYMENT_MONTH: "2026-10",
+        PIC: "Kỹ sư #17",
+        PART_NAME: "MEP Part",
+        GROUP_NAME: "Infra Group",
+        STATUS: "COMPLETED",
+        PROGRESS: 100,
+        ERROR_COUNT: 0,
+        RESULT_LINK: "/mep_payment/files/Sample.zip",
+        REASON: "Khớp 100%",
+        REVIEW_DECISION: "APPROVED",
+        REVIEW_NOTE: "Đã nghiệm thu đạt",
+        detail: null
+      },
+      {
+        KEYID: "WOR2508180018M",
+        TASK_NAME: "Thi công đường ống & phụ kiện MEP hạng mục #18",
+        PAYMENT_MONTH: "2026-10",
+        PIC: "Kỹ sư #18",
+        PART_NAME: "MEP Part",
+        GROUP_NAME: "Infra Group",
+        STATUS: "COMPLETED",
+        PROGRESS: 100,
+        ERROR_COUNT: 0,
+        RESULT_LINK: "/mep_payment/files/Sample.zip",
+        REASON: "Khớp 100%",
+        REVIEW_DECISION: "APPROVED",
+        REVIEW_NOTE: "Đã nghiệm thu đạt",
+        detail: null
+      },
+      {
+        KEYID: "WOR2508190019M",
+        TASK_NAME: "Thi công đường ống & phụ kiện MEP hạng mục #19",
+        PAYMENT_MONTH: "2026-10",
+        PIC: "Kỹ sư #19",
+        PART_NAME: "MEP Part",
+        GROUP_NAME: "Infra Group",
+        STATUS: "COMPLETED",
+        PROGRESS: 100,
+        ERROR_COUNT: 0,
+        RESULT_LINK: "/mep_payment/files/Sample.zip",
+        REASON: "Khớp 100%",
+        REVIEW_DECISION: "APPROVED",
+        REVIEW_NOTE: "Đã nghiệm thu đạt",
+        detail: null
+      },
+      {
+        KEYID: "WOR2508200020M",
+        TASK_NAME: "Thi công đường ống & phụ kiện MEP hạng mục #20",
+        PAYMENT_MONTH: "2026-10",
+        PIC: "Kỹ sư #20",
+        PART_NAME: "MEP Part",
+        GROUP_NAME: "Infra Group",
+        STATUS: "COMPLETED",
+        PROGRESS: 100,
+        ERROR_COUNT: 0,
+        RESULT_LINK: "/mep_payment/files/Sample.zip",
+        REASON: "Khớp 100%",
+        REVIEW_DECISION: "APPROVED",
+        REVIEW_NOTE: "Đã nghiệm thu đạt",
+        detail: null
+      },
+      {
+        KEYID: "WOR2508210021M",
+        TASK_NAME: "Thi công đường ống & phụ kiện MEP hạng mục #21",
+        PAYMENT_MONTH: "2026-10",
+        PIC: "Kỹ sư #21",
+        PART_NAME: "MEP Part",
+        GROUP_NAME: "Infra Group",
+        STATUS: "COMPLETED",
+        PROGRESS: 100,
+        ERROR_COUNT: 0,
+        RESULT_LINK: "/mep_payment/files/Sample.zip",
+        REASON: "Khớp 100%",
+        REVIEW_DECISION: "APPROVED",
+        REVIEW_NOTE: "Đã nghiệm thu đạt",
+        detail: null
+      },
+      {
+        KEYID: "WOR2508220022M",
+        TASK_NAME: "Thi công đường ống & phụ kiện MEP hạng mục #22",
+        PAYMENT_MONTH: "2026-10",
+        PIC: "Kỹ sư #22",
+        PART_NAME: "MEP Part",
+        GROUP_NAME: "Infra Group",
+        STATUS: "COMPLETED",
+        PROGRESS: 100,
+        ERROR_COUNT: 0,
+        RESULT_LINK: "/mep_payment/files/Sample.zip",
+        REASON: "Khớp 100%",
+        REVIEW_DECISION: "APPROVED",
+        REVIEW_NOTE: "Đã nghiệm thu đạt",
+        detail: null
+      }
+    ];
+
+    let currentFilterKpi = "ALL";
+    let selectedRowKeyids = new Set();
+    let currentModalTask = null;
+
+    function toast(msg) {
+      const c = document.getElementById("toast-container");
+      const el = document.createElement("div");
+      el.className = "toast-msg";
+      el.innerText = msg;
+      c.appendChild(el);
+      setTimeout(() => el.remove(), 3500);
+    }
+
+    function updateKpiCards() {
+      const total = tasks.length;
+      const ok = tasks.filter(t => t.STATUS === 'COMPLETED' && (t.ERROR_COUNT === 0 || !t.ERROR_COUNT)).length;
+      const err = tasks.filter(t => t.STATUS === 'COMPLETED' && t.ERROR_COUNT > 0).length;
+      const running = tasks.filter(t => t.STATUS === 'RUNNING').length;
+      const waiting = tasks.filter(t => t.STATUS === 'WAITING' || !t.STATUS).length;
+
+      document.getElementById("val-total").innerText = total;
+      document.getElementById("val-ok").innerText = ok;
+      document.getElementById("val-err").innerText = err;
+      document.getElementById("val-running").innerText = running;
+      document.getElementById("val-waiting").innerText = waiting;
+
+      ['all', 'ok', 'err', 'running', 'waiting'].forEach(k => {
+        document.getElementById(`kpi-${k}`).classList.remove("active");
+      });
+      if (currentFilterKpi === 'ALL') document.getElementById("kpi-all").classList.add("active");
+      else if (currentFilterKpi === 'OK') document.getElementById("kpi-ok").classList.add("active");
+      else if (currentFilterKpi === 'ERR') document.getElementById("kpi-err").classList.add("active");
+      else if (currentFilterKpi === 'RUNNING') document.getElementById("kpi-running").classList.add("active");
+      else if (currentFilterKpi === 'WAITING') document.getElementById("kpi-waiting").classList.add("active");
+    }
+
+    function filterByKpi(kpiKey) {
+      currentFilterKpi = kpiKey;
+      const sel = document.getElementById("sel-status");
+      if (kpiKey === 'ALL') sel.value = 'ALL';
+      else if (kpiKey === 'OK' || kpiKey === 'ERR') sel.value = 'COMPLETED';
+      else sel.value = kpiKey;
+
+      const badge = document.getElementById("active-filter-badge");
+      if (kpiKey !== 'ALL') {
+        badge.style.display = "inline-block";
+        badge.innerText = `Đang lọc thẻ: ${kpiKey}`;
+      } else {
+        badge.style.display = "none";
+      }
+
+      updateKpiCards();
+      renderTable();
+    }
+
+    function onStatusSelectChange(val) {
+      if (val === 'ALL') currentFilterKpi = 'ALL';
+      else currentFilterKpi = val;
+      updateKpiCards();
+      renderTable();
+    }
+
+    function resetFilters() {
+      currentFilterKpi = "ALL";
+      document.getElementById("sel-status").value = "ALL";
+      document.getElementById("sel-month").value = "";
+      document.getElementById("sel-search").value = "";
+      document.getElementById("active-filter-badge").style.display = "none";
+      updateKpiCards();
+      renderTable();
+    }
+
+    let currentPage = 1;
+    const pageSize = 20;
+    let totalPages = 1;
+
+    function changePage(p) {
+      if (p < 1) p = 1;
+      if (p > totalPages) p = totalPages;
+      currentPage = p;
+      renderTable();
+    }
+
+    function renderTable() {
+      const q = document.getElementById("sel-search").value.toLowerCase().trim();
+      const month = document.getElementById("sel-month").value;
+      const status = document.getElementById("sel-status").value;
+
+      const tbody = document.getElementById("table-body");
+      tbody.innerHTML = "";
+
+      const filtered = tasks.filter(t => {
+        const matchQ = !q || t.KEYID.toLowerCase().includes(q) || t.TASK_NAME.toLowerCase().includes(q) || t.PIC.toLowerCase().includes(q);
+        const matchM = !month || t.PAYMENT_MONTH === month;
+        let matchS = true;
+
+        if (currentFilterKpi === 'OK') {
+          matchS = (t.STATUS === 'COMPLETED' && (t.ERROR_COUNT === 0 || !t.ERROR_COUNT));
+        } else if (currentFilterKpi === 'ERR') {
+          matchS = (t.STATUS === 'COMPLETED' && t.ERROR_COUNT > 0);
+        } else if (status !== 'ALL') {
+          matchS = (t.STATUS === status);
+        }
+        return matchQ && matchM && matchS;
+      });
+
+      totalPages = Math.max(1, Math.ceil(filtered.length / pageSize));
+      if (currentPage > totalPages) currentPage = totalPages;
+      document.getElementById("tbl-total-count").innerText = `${filtered.length} rows`;
+      const pageIndicator = document.getElementById("page-indicator");
+      if (pageIndicator) pageIndicator.innerText = `Trang ${currentPage} / ${totalPages}`;
+
+      // Phân trang 20 dòng/trang
+      const startIndex = (currentPage - 1) * pageSize;
+      const pageRows = filtered.slice(startIndex, startIndex + pageSize);
+
+      pageRows.forEach((t, i) => {
+        const globalStt = t.STT || (startIndex + i + 1);
+        t.STT = globalStt;
+        const tr = document.createElement("tr");
+        tr.className = "table-row";
+        // Row dblclick disabled to prevent conflict with cell editing
+
+        const isChecked = selectedRowKeyids.has(t.KEYID);
+
+        let statusHtml = "";
+        if (t.STATUS === "COMPLETED") {
+          statusHtml = `<span class="tag tag-success">Hoàn Tất</span>`;
+        } else if (t.STATUS === "RUNNING") {
+          statusHtml = `
+            <div>
+              <span class="tag tag-warning">Đang Xử Lý (${t.PROGRESS}%)</span>
+              <div class="progress-bar-wrap"><div class="progress-bar-fill" style="width:${t.PROGRESS}%"></div></div>
+            </div>
+          `;
+        } else if (t.STATUS === "WAITING") {
+          statusHtml = `<span class="tag tag-info">Chờ Duyệt</span>`;
+        } else if (t.STATUS === "CANCEL") {
+          statusHtml = `<span class="tag tag-danger">Thất Bại</span>`;
+        }
+
+        let resultHtml = "";
+        if (t.STATUS === "COMPLETED") {
+          const isOk = Number(t.ERROR_COUNT) === 0;
+          resultHtml = `
+            <div class="result-cell-box" onclick="openDetailModalByKey('${t.KEYID}')" title="Bấm để mở chi tiết đối soát">
+              <span class="tag ${isOk ? 'tag-success' : 'tag-danger'}" style="cursor:pointer">${isOk ? '✅ Khớp 100% (0 lỗi)' : `❌ Lệch ${t.ERROR_COUNT} lỗi`}</span>
+            </div>
+          `;
+        } else if (t.STATUS === "RUNNING") {
+          resultHtml = `<span style="color:var(--warn)">⚙️ Đang đối soát AI...</span>`;
+        } else if (t.STATUS === "CANCEL") {
+          resultHtml = `
+            <div class="result-cell-box" onclick="openDetailModalByKey('${t.KEYID}')">
+              <span class="tag tag-danger">❌ Lỗi xử lý</span>
+              <span class="view-detail-link">ℹ️ Xem nguyên nhân</span>
+            </div>
+          `;
+        } else {
+          resultHtml = `<span style="color:var(--text-muted)">-</span>`;
+        }
+
+        let reportHtml = "";
+        if (t.STATUS === "COMPLETED") {
+          let reviewBadge = `<span class="tag tag-warning">Chờ Duyệt</span>`;
+          if (t.REVIEW_DECISION === "APPROVED") reviewBadge = `<span class="tag tag-success">Đã Duyệt</span>`;
+          else if (t.REVIEW_DECISION === "REJECTED") reviewBadge = `<span class="tag tag-danger">Từ Chối</span>`;
+
+          reportHtml = `
+            <div>
+              <div style="margin-bottom:4px">
+                <a href="#" style="color:var(--ok);font-weight:600;font-size:12px;text-decoration:none" onclick="toast('Đang tải file báo cáo .zip của ' + '${t.KEYID}');return false">📥 Tải Báo Cáo (.zip)</a>
+              </div>
+              <div>${reviewBadge}</div>
+            </div>
+          `;
+        } else if (t.STATUS === "CANCEL") {
+          reportHtml = `
+            <div>
+              <div style="color:var(--err);font-size:11px" title="${t.REASON}">${t.REASON}</div>
+              <button class="btn-rerun-mini" style="margin-top:4px" onclick="triggerRerun('${t.KEYID}')">🔄 Chạy lại</button>
+            </div>
+          `;
+        } else {
+          reportHtml = `<span style="color:var(--text-muted)">${t.REASON || '-'}</span>`;
+        }
+
+        tr.innerHTML = `
+          <td class="text-center"><input type="checkbox" ${isChecked ? 'checked' : ''} onchange="toggleSelectRow('${t.KEYID}', this.checked)"></td>
+          <td class="text-center">${globalStt}</td>
+          <td class="text-center"><span class="wo-key-pill" title="Bấm để xem chi tiết đối soát ${t.KEYID}" onclick="openDetailModalByKey('${t.KEYID}')">${t.KEYID}</span></td>
+          <td><b>${t.TASK_NAME}</b></td>
+          <td class="text-center">${t.PAYMENT_MONTH}</td>
+          <td class="text-center">${t.PIC}</td>
+          <td class="text-center">${t.PART_NAME}</td>
+          <td class="text-center">${t.GROUP_NAME}</td>
+          <td class="text-center">${statusHtml}</td>
+          <td class="text-center">
+            <button class="btn sm" onclick="simulateUpload('${t.KEYID}')" ${t.STATUS === 'RUNNING' ? 'disabled' : ''}>
+              ☁️ ${t.STATUS === 'RUNNING' ? 'Đang chạy...' : 'Upload'}
+            </button>
+          </td>
+          <td class="text-center">${resultHtml}</td>
+          <td class="text-center">${reportHtml}</td>
+        `;
+
+        tbody.appendChild(tr);
+      });
+    }
+
+    function toggleSelectRow(keyid, checked) {
+      if (checked) selectedRowKeyids.add(keyid);
+      else selectedRowKeyids.delete(keyid);
+    }
+
+    function toggleSelectAll(checked) {
+      if (checked) tasks.forEach(t => selectedRowKeyids.add(t.KEYID));
+      else selectedRowKeyids.clear();
+      renderTable();
+    }
+
+    function handleReload() {
+      toast("Đang làm mới bảng dữ liệu đối soát...");
+      renderTable();
+      updateKpiCards();
+    }
+
+    function handleInsert() {
+      // 1. Tính toán STT chuẩn toàn cục (Global STT) theo đúng logic vừa fix
+      const currentMaxStt = tasks.reduce((max, r) => Math.max(max, Number(r.STT) || 0), 0);
+      const nextStt = Math.max(Number(tasks.length || 0) + 1, currentMaxStt + 1);
+
+      const newKey = `WOR${new Date().toISOString().slice(2,10).replace(/-/g,'')}00${nextStt}`;
+      const newTask = {
+        STT: nextStt,
+        KEYID: newKey,
+        TASK_NAME: `Công việc nghiệm thu mới thêm (Hồ sơ #${nextStt})`,
+        PAYMENT_MONTH: new Date().toISOString().slice(0, 7),
+        PIC: "Ky su 1",
+        PART_NAME: "MEP Part",
+        GROUP_NAME: "Infra Group",
+        STATUS: "WAITING",
+        PROGRESS: 0,
+        ERROR_COUNT: 0,
+        RESULT_LINK: null,
+        REASON: "Chờ upload file kiểm tra",
+        REVIEW_DECISION: null,
+        REVIEW_NOTE: "",
+        detail: null
+      };
+
+      // Thêm dòng mới vào danh sách
+      tasks.push(newTask);
+      toast(`🎉 Đã thêm dòng mới thành công! STT: #${nextStt} (Mã: ${newKey})`);
+      updateKpiCards();
+      renderTable();
+    }
+
+    function handleSave() {
+      toast("💾 Đã lưu dữ liệu thành công xuống cơ sở dữ liệu!");
+    }
+
+    function handleDelete() {
+      if (selectedRowKeyids.size === 0) {
+        toast("⚠️ Vui lòng tick chọn ít nhất 1 dòng để xóa!");
+        return;
+      }
+      if (!confirm(`Bạn có chắc chắn muốn xóa ${selectedRowKeyids.size} dòng đã chọn?`)) return;
+      const remaining = tasks.filter(t => !selectedRowKeyids.has(t.KEYID));
+      tasks.length = 0;
+      tasks.push(...remaining);
+      selectedRowKeyids.clear();
+      toast("Đã xóa các dòng đã chọn thành công!");
+      updateKpiCards();
+      renderTable();
+    }
+
+    function handleExportCsv() {
+      let csv = "KEYID,TASK_NAME,PAYMENT_MONTH,PIC,PART_NAME,GROUP_NAME,STATUS,ERROR_COUNT\n";
+      tasks.forEach(t => {
+        csv += `"${t.KEYID}","${t.TASK_NAME}","${t.PAYMENT_MONTH}","${t.PIC}","${t.PART_NAME}","${t.GROUP_NAME}","${t.STATUS}",${t.ERROR_COUNT}\n`;
+      });
+      const blob = new Blob(["\uFEFF" + csv], { type: "text/csv;charset=utf-8;" });
+      const a = document.createElement("a");
+      a.href = URL.createObjectURL(blob);
+      a.download = `MEP_Payment_${new Date().toISOString().slice(0,10)}.csv`;
+      a.click();
+      toast("Đã xuất file CSV thành công!");
+    }
+
+    function simulateUpload(keyid) {
+      const t = tasks.find(x => x.KEYID === keyid);
+      if (!t) return;
+      toast(`Đã nạp file Excel cho ${keyid}. AI đang bóc tách ngầm...`);
+      t.STATUS = "RUNNING";
+      t.PROGRESS = 20;
+      t.REASON = "AI đang khởi động mô hình bóc tách bản vẽ...";
+      renderTable();
+      updateKpiCards();
+
+      const timer = setInterval(() => {
+        t.PROGRESS += 25;
+        if (t.PROGRESS >= 100) {
+          clearInterval(timer);
+          t.STATUS = "COMPLETED";
+          t.PROGRESS = 100;
+          t.ERROR_COUNT = 0;
+          t.REASON = "Hoàn tất đối soát: Khớp 100%";
+          t.RESULT_LINK = `/mep_payment/files/${keyid}_result.zip`;
+          toast(`🎉 [${keyid}] AI đã xử lý xong! Khớp 100% không sai lệch.`);
+          renderTable();
+          updateKpiCards();
+        } else {
+          t.REASON = `Đang phân tích trang bản vẽ (${t.PROGRESS}%)...`;
+          renderTable();
+        }
+      }, 1000);
+    }
+
+    function triggerRerun(keyid) {
+      const t = tasks.find(x => x.KEYID === keyid);
+      if (!t) return;
+      toast(`🔄 Đang kích hoạt chạy lại AI cho hồ sơ ${keyid}...`);
+      t.STATUS = "RUNNING";
+      t.PROGRESS = 15;
+      t.REASON = "Đang chạy lại AI đối soát từ phiên làm việc cũ...";
+      renderTable();
+      updateKpiCards();
+
+      setTimeout(() => {
+        t.STATUS = "COMPLETED";
+        t.PROGRESS = 100;
+        t.REASON = t.ERROR_COUNT > 0 ? `Hoàn tất đối soát: ${t.ERROR_COUNT} sai lệch` : "Hoàn tất: Khớp 100%";
+        toast(`✓ Hồ sơ ${keyid} đã hoàn tất chạy lại AI!`);
+        renderTable();
+        updateKpiCards();
+        if (currentModalTask && currentModalTask.KEYID === keyid) {
+          openDetailModal(t);
+        }
+      }, 2500);
+    }
+
+    function openDetailModalByKey(keyid) {
+      const t = tasks.find(x => x.KEYID === keyid);
+      if (t) openDetailModal(t);
+    }
+
+    function openDetailModal(t) {
+      currentModalTask = t;
+      document.getElementById("dt-task-name").innerText = t.TASK_NAME;
+      document.getElementById("dt-keyid").innerText = t.KEYID;
+      document.getElementById("dt-pic").innerText = t.PIC || '—';
+      document.getElementById("dt-part-group").innerText = `${t.PART_NAME} / ${t.GROUP_NAME}`;
+      document.getElementById("dt-month").innerText = t.PAYMENT_MONTH;
+
+      // Status tag
+      const sTag = document.getElementById("dt-status-tag");
+      sTag.className = `tag ${t.STATUS === 'COMPLETED' ? 'tag-success' : t.STATUS === 'RUNNING' ? 'tag-warning' : 'tag-danger'}`;
+      sTag.innerText = t.STATUS;
+
+      // Review tag
+      const rTag = document.getElementById("dt-review-tag");
+      if (t.REVIEW_DECISION === "APPROVED") {
+        rTag.className = "tag tag-success"; rTag.innerText = "ĐÃ DUYỆT";
+      } else if (t.REVIEW_DECISION === "REJECTED") {
+        rTag.className = "tag tag-danger"; rTag.innerText = "TỪ CHỐI";
+      } else {
+        rTag.className = "tag tag-warning"; rTag.innerText = "CHỜ DUYỆT";
+      }
+
+      // Review note input
+      document.getElementById("dt-review-note").value = t.REVIEW_NOTE || "";
+
+      // Detail Data fallback
+      const dt = t.detail || {
+        mode: "MEP AI Vision (NextAI Qwen)",
+        sheet: "1. Đối Soát Bản Vẽ",
+        drawings_count: 1,
+        total_items: 12,
+        error_types: t.ERROR_COUNT > 0 ? { "Lệch số lượng": t.ERROR_COUNT } : {},
+        errors: t.ERROR_COUNT > 0 ? [
+          { id: 1, type: "Lệch số lượng", dwg: "Bản vẽ 1", code: "SDAC-001", name: "Cáp điện hạ thế", vendor_qty: "100", ai_qty: "80", diff: "Lệch 20", msg: t.REASON || "Lệch dự toán" }
+        ] : [],
+        groups: [],
+        images: [{ id: "img-sample", name: "dwg_sample.png", title: "Bản vẽ sơ bộ hoàn công" }],
+        logs: [
+          `Tiếp nhận hồ sơ: ${t.KEYID}`,
+          `Trạng thái: ${t.STATUS}`,
+          `Ghi chú xử lý: ${t.REASON || 'Hoàn tất'}`
+        ]
+      };
+
+      document.getElementById("dt-tech").innerText = dt.mode;
+      document.getElementById("dt-stat-err-count").innerText = t.ERROR_COUNT;
+      document.getElementById("dt-stat-err-count").style.color = t.ERROR_COUNT > 0 ? "var(--err)" : "var(--ok)";
+      document.getElementById("dt-stat-dwg-count").innerText = dt.drawings_count;
+      document.getElementById("dt-stat-items-count").innerText = dt.total_items;
+      document.getElementById("dt-stat-sheet-name").innerText = dt.sheet;
+
+      // Breakdown tags
+      const bdRow = document.getElementById("dt-breakdown-row");
+      bdRow.innerHTML = `<span style="font-size:12px;color:var(--text-muted)">Phân loại sai lệch:</span>`;
+      const errEntries = Object.entries(dt.error_types || {});
+      if (errEntries.length === 0) {
+        bdRow.innerHTML += `<span class="tag tag-success">Không phát hiện sai lệch (Khớp 100%)</span>`;
+      } else {
+        errEntries.forEach(([typ, cnt]) => {
+          bdRow.innerHTML += `<span class="tag tag-danger">${typ}: <b>${cnt}</b></span>`;
+        });
+      }
+
+      document.getElementById("dt-tab-err-cnt").innerText = dt.errors ? dt.errors.length : 0;
+      document.getElementById("dt-tab-dwg-cnt").innerText = dt.groups ? dt.groups.length : 0;
+      document.getElementById("dt-tab-img-cnt").innerText = dt.images ? dt.images.length : 0;
+
+      // Tab 1 Table
+      const errTbody = document.getElementById("dt-errors-tbody");
+      errTbody.innerHTML = "";
+      if (!dt.errors || dt.errors.length === 0) {
+        errTbody.innerHTML = `<tr><td colspan="9" class="text-center" style="padding:24px;color:var(--ok)">✅ Tuyệt vời! Không phát hiện lỗi sai lệch nào giữa Dự toán và Bản vẽ.</td></tr>`;
+      } else {
+        dt.errors.forEach(e => {
+          errTbody.innerHTML += `
+            <tr>
+              <td class="text-center">${e.id}</td>
+              <td><span class="tag tag-danger">${e.type}</span></td>
+              <td class="text-center font-mono">${e.dwg}</td>
+              <td class="text-center font-mono"><b>${e.code}</b></td>
+              <td>${e.name}</td>
+              <td class="text-center">${e.vendor_qty}</td>
+              <td class="text-center">${e.ai_qty}</td>
+              <td class="text-center" style="color:var(--err);font-weight:700">${e.diff}</td>
+              <td>${e.msg}</td>
+            </tr>
+          `;
+        });
+      }
+
+      // Tab 2 Groups Accordion
+      const accDiv = document.getElementById("dt-drawings-accordion");
+      accDiv.innerHTML = "";
+      if (!dt.groups || dt.groups.length === 0) {
+        accDiv.innerHTML = `<div style="padding:16px;color:var(--text-muted)">Không có nhóm bản vẽ nào.</div>`;
+      } else {
+        dt.groups.forEach((g, idx) => {
+          let rowsHtml = "";
+          g.rows.forEach(r => {
+            rowsHtml += `
+              <tr>
+                <td class="font-mono"><b>${r.code}</b></td>
+                <td>${r.name}</td>
+                <td class="text-center">${r.qty}</td>
+                <td class="text-center" style="color:${r.ok ? 'var(--ok)' : 'var(--err)'};font-weight:600">${r.why}</td>
+              </tr>
+            `;
+          });
+
+          accDiv.innerHTML += `
+            <div class="collapse-item">
+              <div class="collapse-header" onclick="toggleCollapseItem(this)">
+                <span><b>${g.drawing_no}</b> <span style="color:var(--text-muted)">(${g.total_items} vật tư)</span></span>
+                <span class="tag ${g.error_count > 0 ? 'tag-danger' : 'tag-success'}">${g.error_count > 0 ? `${g.error_count} lỗi` : 'Khớp 100%'}</span>
+              </div>
+              <div class="collapse-content" style="padding:8px;${g.error_count > 0 ? '' : 'display:none'}">
+                <table style="width:100%">
+                  <thead>
+                    <tr><th>Mã vật tư</th><th>Tên vật tư</th><th class="text-center">Số lượng AI đọc</th><th class="text-center">Kết quả đối chiếu</th></tr>
+                  </thead>
+                  <tbody>${rowsHtml}</tbody>
+                </table>
+              </div>
+            </div>
+          `;
+        });
+      }
+
+      // Tab 3 Images
+      const imgDiv = document.getElementById("dt-images-container");
+      imgDiv.innerHTML = "";
+      if (!dt.images || dt.images.length === 0) {
+        imgDiv.innerHTML = `<div style="padding:16px;color:var(--text-muted)">Chưa có ảnh bản vẽ trong phiên này.</div>`;
+      } else {
+        dt.images.forEach((img, idx) => {
+          imgDiv.innerHTML += `
+            <div class="img-thumb-box" onclick="openZoomModal('${img.title}')">
+              <svg class="thumb-svg" viewBox="0 0 160 140">
+                <rect width="160" height="140" fill="#FFF" stroke="#CBD5E1"/>
+                <rect x="8" y="8" width="144" height="124" fill="none" stroke="#64748B"/>
+                <circle cx="80" cy="60" r="28" fill="#E2E8F0" stroke="#0284C7"/>
+                <line x1="30" y1="60" x2="130" y2="60" stroke="#0284C7" stroke-width="2"/>
+                <rect x="80" y="95" width="68" height="30" fill="#F8FAFC" stroke="#000"/>
+                <text x="85" y="108" font-size="7" font-weight="bold">DRAWING M-0${idx+1}</text>
+                <text x="85" y="118" font-size="6" fill="#64748B">Scale 1:50 · Rev A</text>
+              </svg>
+              <div style="font-size:11px;color:var(--text-muted);margin-top:4px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${img.title}</div>
+            </div>
+          `;
+        });
+      }
+
+      // Tab 4 Logs
+      const logDiv = document.getElementById("dt-logs-text");
+      logDiv.innerHTML = "";
+      (dt.logs || []).forEach((l, i) => {
+        logDiv.innerHTML += `<div><span style="color:var(--accent)">[${i+1}]</span> ${l}</div>`;
+      });
+
+      switchDetailTab('errors');
+      document.getElementById("modal-detail").style.display = "flex";
+    }
+
+    function closeDetailModal() {
+      document.getElementById("modal-detail").style.display = "none";
+      currentModalTask = null;
+    }
+
+    function switchDetailTab(tabKey) {
+      ['errors', 'drawings', 'images', 'logs'].forEach(k => {
+        document.getElementById(`tab-btn-${k}`).classList.remove("active");
+        document.getElementById(`tab-content-${k}`).style.display = "none";
+      });
+      document.getElementById(`tab-btn-${tabKey}`).classList.add("active");
+      document.getElementById(`tab-content-${tabKey}`).style.display = "block";
+    }
+
+    function toggleCollapseItem(headerEl) {
+      const content = headerEl.nextElementSibling;
+      content.style.display = content.style.display === "none" ? "block" : "none";
+    }
+
+    function submitReviewAction(decision) {
+      if (!currentModalTask) return;
+      currentModalTask.REVIEW_DECISION = decision;
+      currentModalTask.REVIEW_NOTE = document.getElementById("dt-review-note").value;
+      toast(decision === 'APPROVED' ? '✅ Đã lưu phê duyệt: APPROVED' : '❌ Đã lưu quyết định: REJECTED');
+      openDetailModal(currentModalTask);
+      renderTable();
+    }
+
+    function simulateRerunInModal() {
+      if (!currentModalTask) return;
+      triggerRerun(currentModalTask.KEYID);
+    }
+
+    function openZoomModal(title) {
+      document.getElementById("zoom-title").innerText = title;
+      document.getElementById("zoom-svg-container").innerHTML = `
+        <svg viewBox="0 0 800 500" style="width:100%;max-width:800px;background:#FFF;border:1px solid #CBD5E1">
+          <rect x="20" y="20" width="760" height="460" fill="none" stroke="#0F172A" stroke-width="2"/>
+          <rect x="40" y="40" width="360" height="380" rx="12" fill="#F8FAFC" stroke="#64748B" stroke-width="1.5"/>
+          <circle cx="220" cy="120" r="30" fill="#0284C7" opacity="0.3"/>
+          <rect x="100" y="240" width="240" height="120" fill="#F1F5F9" stroke="#0284C7" stroke-dasharray="4"/>
+          <text x="140" y="305" font-size="12" fill="#0284C7" font-weight="bold">KHU VỰC ĐI DÂY CÁP CHỐNG CHÁY (M03-00726974)</text>
+          
+          <!-- BẢNG BOM GÓC PHẢI -->
+          <rect x="440" y="40" width="320" height="260" fill="#FFF" stroke="#334155"/>
+          <rect x="440" y="40" width="320" height="30" fill="#0F172A"/>
+          <text x="520" y="60" font-size="12" font-weight="bold" fill="#FFF">BẢNG DANH MỤC VẬT TƯ (BOM)</text>
+          <line x1="440" y1="95" x2="760" y2="95" stroke="#CBD5E1"/>
+          <text x="450" y="85" font-size="10" font-weight="bold">MÃ SDAC</text>
+          <text x="590" y="85" font-size="10" font-weight="bold">TÊN VẬT TƯ</text>
+          <text x="720" y="85" font-size="10" font-weight="bold">SL (m)</text>
+          <text x="450" y="115" font-size="10" font-family="monospace">M03-00726974</text>
+          <text x="590" y="115" font-size="10">Cáp chống cháy Cu/Mica</text>
+          <text x="730" y="115" font-size="10" font-weight="bold" fill="#F56C6C">120.0</text>
+          <line x1="440" y1="125" x2="760" y2="125" stroke="#F1F5F9"/>
+          <text x="450" y="145" font-size="10" font-family="monospace">CONDUIT-D32</text>
+          <text x="590" y="145" font-size="10">Ống luồn PVC D32</text>
+          <text x="730" y="145" font-size="10" font-weight="bold">85.0</text>
+
+          <!-- KHUNG TÊN BẢN VẼ -->
+          <rect x="440" y="340" width="320" height="120" fill="#FFF" stroke="#0F172A" stroke-width="1.5"/>
+          <text x="450" y="365" font-size="11" font-weight="bold" fill="#0F172A">DỰ ÁN XÂY DỰNG & CƠ ĐIỆN NHÀ XƯỞNG THÔNG MINH</text>
+          <text x="450" y="395" font-size="15" font-weight="bold" fill="#409EFF">BẢN VẼ M-01: MẶT BẰNG CHILLER & TỦ ĐIỆN</text>
+          <text x="450" y="420" font-size="10" fill="#64748B">Tỷ lệ: 1:50 · Đơn vị: mm · Ngày duyệt: 2026-10-15</text>
+          <text x="450" y="440" font-size="10" fill="#64748B">Chữ ký chủ nhiệm thiết kế: ĐÃ DUYỆT</text>
+        </svg>
+      `;
+      document.getElementById("modal-zoom").style.display = "flex";
+    }
+
+    function closeZoomModal() {
+      document.getElementById("modal-zoom").style.display = "none";
+    }
+
+    // Init first load
+    updateKpiCards();
+    renderTable();
+  </script>
+</body>
+</html>

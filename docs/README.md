@@ -76,4 +76,20 @@ Thư mục tài liệu này đã được tinh gọn và quy hoạch thành **5 
 
 ---
 
+### 🎨 [7. Nâng Cấp Giao Diện Trực Quan 4 Tab Theo Chuẩn Sếp Gửi](./07_KIEN_TRUC_NANG_CAP_GIAO_DIEN_TRUC_QUAN_THEO_CHUAN_SEP_GUI.md) ⚡ *(PHIÊN BẢN MỚI NHẤT - LATEST)*
+* **Tên file:** `07_KIEN_TRUC_NANG_CAP_GIAO_DIEN_TRUC_QUAN_THEO_CHUAN_SEP_GUI.md`
+* **Nội dung:** Toàn bộ giải pháp nâng cấp giao diện trực quan và trải nghiệm người dùng (UX):
+  * **Hệ thống 5 Thẻ KPI:** Tổng hồ sơ, Khớp 100%, Có sai lệch, Đang đối soát, Chờ duyệt (Click-to-filter nhanh danh sách).
+  * **Hộp thoại Đối soát 4 Tab (Modal Dialog):** 
+    - Tab 1: Danh sách chi tiết lỗi sai lệch (Bản vẽ, Mã SDAC, Tên vật tư, SL Dự toán, SL Bản vẽ, Chênh lệch).
+    - Tab 2: Đối chiếu gom nhóm theo từng Bản vẽ kỹ thuật (Accordion đa tầng).
+    - Tab 3: Băng chuyền soi ảnh bản vẽ & xem phóng to độ phân giải cao (Lightbox SVG/PNG).
+    - Tab 4: Console hiển thị nhật ký bóc tách của AI theo thời gian thực.
+  * **Quy trình Phê duyệt & Chạy lại AI (Rerun):** Kỹ sư nhập ghi chú nghiệm thu, bấm Duyệt (Approve) hoặc Từ chối (Reject), và kích hoạt Chạy lại AI (Rerun) ngay trong modal hoặc khi tác vụ thất bại.
+  * **Phân tách sự kiện triệt để (Không xung đột):** Gỡ bỏ `@row-dblclick` để bảo toàn tính năng click đúp sửa inline các ô Part/Group/Task Name, mở modal chỉ bằng click chuột trái vào Số WO hoặc Kết quả kiểm tra.
+  * **Sửa lỗi STT phân trang:** Công thức `nextStt` toàn cục đảm bảo thêm dòng mới ở bất kỳ trang nào cũng mang số thứ tự tiếp theo chính xác.
+  * **Danh mục tối giản:** Chỉ cần sửa duy nhất 3 file (`detail_builder.py`, `api.py`, `operation.vue`), giữ nguyên 100% logic thuật toán lõi.
+
+---
+
 > 📂 **Thư mục lưu trữ lịch sử:** Các bản nháp hoặc tài liệu đơn lẻ trước đây đã được lưu trữ an toàn trong thư mục [`archive/`](./archive/) để tra cứu khi cần thiết.
