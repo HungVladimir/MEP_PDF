@@ -1,0 +1,1272 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Preview UI Sếp Gửi - Kiểm tra vật tư Workorder (wo-check)</title>
+  <style>
+    :root {
+      --bg: #f4f5f7;
+      --panel: #ffffff;
+      --ink: #1d2330;
+      --muted: #6b7385;
+      --line: #e3e6ec;
+      --accent: #1f5eff;
+      --accent-ink: #ffffff;
+      --ok: #13804a;
+      --ok-bg: #e6f5ec;
+      --err: #c62828;
+      --err-bg: #fdecec;
+      --warn: #a15c00;
+      --warn-bg: #fff4e0;
+      --info-bg: #eaf0ff;
+      --radius: 10px;
+      --mono: ui-monospace, SFMono-Regular, Consolas, "Liberation Mono", Menlo, monospace;
+    }
+    @media (prefers-color-scheme: dark) {
+      :root:not([data-theme="light"]) {
+        --bg: #12151b;
+        --panel: #1b1f27;
+        --ink: #e7e9ee;
+        --muted: #9aa2b3;
+        --line: #2c323d;
+        --accent: #5b8cff;
+        --ok: #4cc27f;
+        --ok-bg: #16301f;
+        --err: #ff6b6b;
+        --err-bg: #3a1a1a;
+        --warn: #f0a940;
+        --warn-bg: #3a2b12;
+        --info-bg: #1c2640;
+      }
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      background: var(--bg);
+      color: var(--ink);
+      font: 14px/1.5 system-ui, -apple-system, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    }
+    header {
+      background: var(--panel);
+      border-bottom: 1px solid var(--line);
+      padding: 12px 24px;
+      display: flex;
+      align-items: center;
+      gap: 16px;
+      flex-wrap: wrap;
+      position: sticky;
+      top: 0;
+      z-index: 100;
+      box-shadow: 0 1px 3px rgba(0,0,0,0.04);
+    }
+    header h1 {
+      font-size: 17px;
+      margin: 0;
+      font-weight: 700;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+    nav { display: flex; gap: 6px; }
+    nav button {
+      background: none;
+      border: 0;
+      padding: 8px 14px;
+      border-radius: 8px;
+      color: var(--muted);
+      cursor: pointer;
+      font: inherit;
+      font-weight: 500;
+      transition: all 0.15s;
+    }
+    nav button:hover { background: var(--bg); color: var(--ink); }
+    nav button.active {
+      background: var(--info-bg);
+      color: var(--accent);
+      font-weight: 600;
+    }
+    .spacer { flex: 1; }
+    main { max-width: 1320px; margin: 0 auto; padding: 24px 20px 80px; }
+    .card {
+      background: var(--panel);
+      border: 1px solid var(--line);
+      border-radius: var(--radius);
+      padding: 18px 20px;
+      margin-bottom: 16px;
+      box-shadow: 0 1px 2px rgba(0,0,0,0.02);
+    }
+    .card h3 { margin-top: 0; font-size: 16px; font-weight: 650; }
+    .row { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; }
+    .btn {
+      border: 1px solid var(--line);
+      background: var(--panel);
+      color: var(--ink);
+      padding: 7px 14px;
+      border-radius: 8px;
+      cursor: pointer;
+      font: inherit;
+      white-space: nowrap;
+      text-decoration: none;
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      font-weight: 500;
+      transition: all 0.15s;
+    }
+    .btn:hover { border-color: var(--accent); color: var(--accent); }
+    .btn.primary {
+      background: var(--accent);
+      color: var(--accent-ink);
+      border-color: var(--accent);
+    }
+    .btn.primary:hover { opacity: 0.92; color: #fff; }
+    .btn.ok { background: var(--ok); color: #fff; border-color: var(--ok); }
+    .btn.ok:hover { opacity: 0.92; }
+    .btn.danger { background: var(--err); color: #fff; border-color: var(--err); }
+    .btn.danger:hover { opacity: 0.92; }
+    .btn.sm { padding: 4px 10px; font-size: 13px; }
+    .btn:disabled { opacity: .5; cursor: not-allowed; }
+    input, select, textarea {
+      font: inherit;
+      color: var(--ink);
+      background: var(--panel);
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      padding: 8px 12px;
+      width: 100%;
+      outline: none;
+      transition: border-color 0.15s;
+    }
+    input:focus, select:focus, textarea:focus { border-color: var(--accent); }
+    input[readonly] { background: var(--bg); cursor: default; }
+    input[type=checkbox] { width: auto; cursor: pointer; }
+    textarea { min-height: 80px; resize: vertical; }
+    label { display: block; font-size: 12px; font-weight: 500; color: var(--muted); margin: 12px 0 5px; }
+    label.check { font-size: 13px; color: var(--ink); display: flex; align-items: center; gap: 8px; cursor: pointer; }
+    .grid2 { display: grid; grid-template-columns: 1fr 1fr; gap: 0 16px; }
+    @media (max-width:768px){ .grid2 { grid-template-columns: 1fr; } }
+    .stats {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+      gap: 12px;
+      margin-bottom: 18px;
+    }
+    .stat {
+      background: var(--panel);
+      border: 1px solid var(--line);
+      border-radius: var(--radius);
+      padding: 14px 16px;
+      transition: transform 0.15s, border-color 0.15s;
+    }
+    .stat:hover { border-color: var(--accent); transform: translateY(-1px); }
+    .stat.active-filter { border-color: var(--accent); background: var(--info-bg); }
+    .stat b { display: block; font-size: 24px; font-weight: 700; }
+    .stat span { color: var(--muted); font-size: 12px; font-weight: 500; }
+    .tablewrap { overflow-x: auto; border: 1px solid var(--line); border-radius: 8px; }
+    table { width: 100%; border-collapse: collapse; text-align: left; }
+    th, td { padding: 9px 12px; border-bottom: 1px solid var(--line); vertical-align: middle; }
+    th {
+      font-size: 12px;
+      color: var(--muted);
+      font-weight: 600;
+      background: var(--bg);
+      position: sticky;
+      top: 0;
+      white-space: nowrap;
+    }
+    tr.click { cursor: pointer; transition: background 0.12s; }
+    tr.click:hover td { background: var(--info-bg); }
+    .mono { font-family: var(--mono); font-size: 13px; }
+    .badge {
+      display: inline-block;
+      padding: 3px 9px;
+      border-radius: 99px;
+      font-size: 12px;
+      font-weight: 600;
+      white-space: nowrap;
+    }
+    .b-new { background: var(--line); color: var(--muted); }
+    .b-run { background: var(--info-bg); color: var(--accent); }
+    .b-ok { background: var(--ok-bg); color: var(--ok); }
+    .b-err { background: var(--err-bg); color: var(--err); }
+    .b-warn { background: var(--warn-bg); color: var(--warn); }
+    .b-done { background: var(--ok); color: #fff; }
+    .b-rej { background: var(--err); color: #fff; }
+    .muted { color: var(--muted); }
+    .small { font-size: 12px; }
+    .c-err { color: var(--err); font-weight: 700; }
+    .c-ok { color: var(--ok); font-weight: 700; }
+    .modal-bg {
+      position: fixed;
+      inset: 0;
+      background: rgba(15, 23, 42, 0.6);
+      backdrop-filter: blur(2px);
+      display: flex;
+      align-items: flex-start;
+      justify-content: center;
+      padding: 40px 16px;
+      z-index: 1000;
+      overflow-y: auto;
+    }
+    .modal {
+      background: var(--panel);
+      border-radius: 12px;
+      width: 100%;
+      max-width: 1100px;
+      padding: 24px;
+      border: 1px solid var(--line);
+      box-shadow: 0 20px 25px -5px rgba(0,0,0,0.1), 0 10px 10px -5px rgba(0,0,0,0.04);
+      animation: modalFadeIn 0.2s ease-out;
+    }
+    .modal.narrow { max-width: 540px; }
+    @keyframes modalFadeIn {
+      from { opacity: 0; transform: scale(0.97); }
+      to { opacity: 1; transform: scale(1); }
+    }
+    .modal h2 { margin: 0 0 6px; font-size: 20px; font-weight: 700; }
+    .log {
+      font-family: var(--mono);
+      font-size: 12px;
+      background: var(--bg);
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      padding: 10px 12px;
+      max-height: 200px;
+      overflow-y: auto;
+      white-space: pre-wrap;
+      line-height: 1.6;
+    }
+    .pages {
+      display: flex;
+      gap: 12px;
+      overflow-x: auto;
+      padding: 8px 2px 12px;
+    }
+    .page-thumb {
+      flex: 0 0 160px;
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      background: #ffffff;
+      padding: 8px;
+      cursor: zoom-in;
+      text-align: center;
+      transition: transform 0.15s, border-color 0.15s;
+    }
+    .page-thumb:hover { transform: translateY(-2px); border-color: var(--accent); }
+    .page-thumb-svg {
+      width: 100%;
+      height: 180px;
+      border: 1px dashed var(--line);
+      border-radius: 4px;
+      background: #fafafa;
+    }
+    .zoom-img-box {
+      max-width: 100%;
+      max-height: 80vh;
+      overflow: auto;
+      background: #fff;
+      padding: 16px;
+      border-radius: 8px;
+      border: 1px solid var(--line);
+      display: flex;
+      justify-content: center;
+    }
+    details {
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      margin-bottom: 10px;
+      background: var(--panel);
+      overflow: hidden;
+    }
+    details summary {
+      padding: 10px 14px;
+      cursor: pointer;
+      font-weight: 600;
+      background: var(--bg);
+      user-select: none;
+    }
+    details summary:hover { background: var(--info-bg); }
+    details .tablewrap, details .log { margin: 10px 12px 12px; }
+    .drop {
+      border: 2px dashed var(--line);
+      border-radius: 10px;
+      padding: 24px;
+      text-align: center;
+      color: var(--muted);
+      cursor: pointer;
+      transition: all 0.2s;
+    }
+    .drop:hover { border-color: var(--accent); color: var(--accent); background: var(--info-bg); }
+    .drop.has { border-color: var(--ok); color: var(--ok); background: var(--ok-bg); }
+    .warnbox {
+      background: var(--warn-bg);
+      border: 1px solid var(--warn);
+      border-radius: 8px;
+      padding: 10px 14px;
+      margin: 12px 0;
+      color: var(--warn);
+      font-size: 13px;
+    }
+    .toasts {
+      position: fixed;
+      bottom: 24px;
+      left: 50%;
+      transform: translateX(-50%);
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+      z-index: 2000;
+      pointer-events: none;
+    }
+    .toast {
+      background: #1e293b;
+      color: #f8fafc;
+      padding: 10px 20px;
+      border-radius: 8px;
+      font-size: 13px;
+      font-weight: 500;
+      box-shadow: 0 10px 15px -3px rgba(0,0,0,0.2);
+      animation: toastIn 0.25s cubic-bezier(0.16, 1, 0.3, 1);
+    }
+    @keyframes toastIn {
+      from { opacity: 0; transform: translateY(12px); }
+      to { opacity: 1; transform: translateY(0); }
+    }
+    .banner-info {
+      background: linear-gradient(90deg, #1f5eff15, #3b82f605);
+      border-left: 4px solid var(--accent);
+      padding: 10px 16px;
+      border-radius: 4px;
+      margin-bottom: 20px;
+      font-size: 13px;
+    }
+  </style>
+</head>
+<body>
+
+  <!-- HEADER -->
+  <header>
+    <h1>🧾 Kiểm tra vật tư Workorder</h1>
+    <nav>
+      <button id="nav-list" class="active" onclick="switchTab('list')">Workorder</button>
+      <button id="nav-settings" onclick="switchTab('settings')">Cài đặt AI &amp; Excel</button>
+    </nav>
+    <div class="spacer"></div>
+    <span class="small muted" id="header-ai-status">
+      🧪 Chế độ thử (không gọi AI)
+    </span>
+    <span class="small" style="display:flex;align-items:center;gap:6px">
+      👤 <b>Nguyễn Văn A</b> <span class="muted">nv001</span>
+      <span class="badge b-ok">Người duyệt</span>
+    </span>
+  </header>
+
+  <main>
+    <div class="banner-info">
+      💡 <b>Giao diện Preview mô phỏng dự án Sếp gửi (wo-check)</b>: Bấm vào các <b>Thẻ thống kê</b> để lọc, bấm vào từng <b>dòng bảng</b> để xem màn hình chi tiết, xem lỗi phân tích theo từng bản vẽ, phóng to ảnh trang bản vẽ, và thử nghiệm tính năng Duyệt / Từ chối!
+    </div>
+
+    <!-- TAB 1: LIST WORKORDER -->
+    <div id="view-list">
+      <!-- 5 STAT CARDS -->
+      <div class="stats">
+        <div class="stat" id="stat-all" style="cursor:pointer" onclick="filterByStatus('')">
+          <b id="val-total">3</b><span>Tổng workorder</span>
+        </div>
+        <div class="stat" id="stat-review" style="cursor:pointer" onclick="filterByStatus('review')">
+          <b id="val-review" style="color:var(--warn)">2</b><span>Chờ duyệt</span>
+        </div>
+        <div class="stat" id="stat-error" style="cursor:pointer" onclick="filterByStatus('error')">
+          <b id="val-error" style="color:var(--err)">2</b><span>AI báo có lỗi</span>
+        </div>
+        <div class="stat" id="stat-approved" style="cursor:pointer" onclick="filterByStatus('approved')">
+          <b id="val-approved" style="color:var(--ok)">1</b><span>Đã duyệt</span>
+        </div>
+        <div class="stat" id="stat-failed" style="cursor:pointer" onclick="filterByStatus('failed')">
+          <b id="val-failed" class="muted">0</b><span>Thất bại / cần chạy lại</span>
+        </div>
+      </div>
+
+      <!-- TABLE & TOOLBAR -->
+      <div class="card">
+        <div class="row" style="margin-bottom:14px">
+          <button class="btn primary" onclick="openAddModal()">+ Thêm workorder</button>
+          <button class="btn" onclick="toast('Đang xuất báo cáo Excel tổng hợp...')">
+            📥 Xuất báo cáo Excel
+          </button>
+          <div class="spacer"></div>
+          <input id="search-input" placeholder="Tìm WO / mô tả / người tạo..." style="max-width:260px" oninput="applyFilter()">
+          <select id="status-select" style="max-width:190px" onchange="applyFilter()">
+            <option value="">Tất cả trạng thái</option>
+            <option value="review">Chờ duyệt</option>
+            <option value="error">Có lỗi</option>
+            <option value="approved">Đã duyệt</option>
+            <option value="rejected">Từ chối</option>
+            <option value="running">Đang xử lý</option>
+            <option value="failed">Xử lý thất bại</option>
+          </select>
+        </div>
+
+        <div class="tablewrap">
+          <table>
+            <thead>
+              <tr>
+                <th>Workorder</th>
+                <th>Mô tả</th>
+                <th>File Excel</th>
+                <th>Người tạo</th>
+                <th>Ngày tạo</th>
+                <th>Kết quả AI</th>
+                <th>Số lỗi</th>
+                <th>Trạng thái duyệt</th>
+              </tr>
+            </thead>
+            <tbody id="wo-tbody">
+              <!-- Rendered via JS -->
+            </tbody>
+          </table>
+        </div>
+        <p id="empty-hint" class="muted small" style="display:none;margin-top:14px">
+          Chưa có workorder phù hợp với bộ lọc. Bấm "+ Thêm workorder" để upload file Excel.
+        </p>
+      </div>
+    </div>
+
+    <!-- TAB 2: SETTINGS -->
+    <div id="view-settings" style="display:none">
+      <div class="card">
+        <h3>Kết nối AI (OpenAI-compatible: vLLM, Ollama, Qwen-VL, OpenAI…)</h3>
+        <label class="check" style="background:var(--warn-bg);padding:10px 14px;border-radius:8px">
+          <input type="checkbox" id="set-mock" checked onchange="toggleMockMode(this.checked)">
+          <b>Chế độ thử – không gọi AI</b>: Đọc chữ trực tiếp trong PDF (chỉ dùng với file mẫu có lớp chữ vector). Bỏ chọn khi chạy thật với PDF dạng scan/ảnh raster.
+        </label>
+        <div class="grid2" style="margin-top:14px">
+          <div>
+            <label>Base URL (Backend server nội bộ gọi tới vLLM / NextAI)</label>
+            <input id="set-base-url" value="http://10.0.0.5:8000/v1">
+          </div>
+          <div>
+            <label>Model Vision (Ví dụ: Qwen/Qwen2.5-VL-72B-Instruct hoặc Qwen 3.8)</label>
+            <input id="set-model" value="Qwen/Qwen2.5-VL-72B-Instruct">
+          </div>
+          <div>
+            <label>API Key (Để trống nếu vLLM nội bộ không đặt password)</label>
+            <input id="set-api-key" type="password" placeholder="••••••••••••••">
+          </div>
+          <div>
+            <label>Số trang gửi AI song song (Concurrency)</label>
+            <input type="number" id="set-conc" value="4" min="1" max="16">
+          </div>
+          <div>
+            <label>Độ phân giải ảnh gửi AI (Cạnh dài px)</label>
+            <input type="number" id="set-res" value="2048" min="800" max="4000">
+          </div>
+          <div>
+            <label>max_tokens mỗi trang</label>
+            <input type="number" id="set-tokens" value="2048" min="512">
+          </div>
+        </div>
+        <label>Ghi chú thêm cho AI (Hint Prompt: quy tắc mã vật tư, số bản vẽ...)</label>
+        <textarea id="set-hint">Mã vật tư luôn dạng chữ hoa có dấu gạch ngang (VD: LCM-61-OLED-A01, FPC-0031A). Số bản vẽ luôn nằm ở khung tên góc phải dưới của trang.</textarea>
+        <div class="row" style="margin-top:14px">
+          <button class="btn" type="button" onclick="testAIConnection()">⚡ Kiểm tra kết nối AI</button>
+          <span class="small muted" id="test-msg"></span>
+        </div>
+      </div>
+
+      <div class="card">
+        <h3>Cấu trúc sheet danh sách vật tư trong Excel (BOM Mapping)</h3>
+        <p class="muted small" style="margin-top:0">Để trống = Tự nhận diện thông minh. Chỉ điền cứng khi file có mẫu đặc thù không tự tìm được.</p>
+        <div class="grid2">
+          <div><label>Tên sheet (Chứa từ khóa)</label><input id="set-sheet" value="VẬT TƯ"></div>
+          <div><label>Dòng tiêu đề (0 = tự động dò)</label><input type="number" id="set-hdr" value="9"></div>
+          <div><label>Cột mã vật tư (Chữ cái cột)</label><input id="set-code-col" value="B"></div>
+          <div><label>Cột bản vẽ đầu tiên (Chữ cái cột)</label><input id="set-first-col" value="E"></div>
+        </div>
+        <label class="check" style="margin-top:10px">
+          <input type="checkbox" id="set-compare-qty" checked> So sánh cả số lượng (Bỏ chọn = chỉ kiểm tra có / không)
+        </label>
+        <label class="check">
+          <input type="checkbox" id="set-missing-err" checked> Tính lỗi khi Excel có cột bản vẽ mà file PDF không đính kèm bản vẽ đó
+        </label>
+        <div class="row" style="margin-top:18px">
+          <button class="btn primary" onclick="saveSettings()">💾 Lưu cài đặt</button>
+          <span class="small muted">Cài đặt áp dụng cho các lần upload sau. Muốn áp dụng cho WO cũ thì bấm "Chạy lại AI".</span>
+        </div>
+      </div>
+    </div>
+  </main>
+
+  <!-- MODAL: ADD WORKORDER -->
+  <div id="modal-add" class="modal-bg" style="display:none" onclick="if(event.target===this) closeAddModal()">
+    <div class="modal narrow">
+      <h2>+ Thêm workorder</h2>
+      <p class="muted small" style="margin-top:0">Sau khi lưu, hệ thống tự tách PDF nhúng trong file Excel, gửi ảnh cho AI Vision đọc bảng vật tư và so sánh đối chiếu tự động.</p>
+
+      <label>Mã workorder *</label>
+      <input id="add-wo" placeholder="VD: WO-2026-1104-001" value="WO-TEST-004">
+      <label>Mô tả / Model sản phẩm</label>
+      <input id="add-desc" placeholder="VD: Cụm module màn hình OLED 6.8 inch" value="Module camera & cảm biến góc rộng">
+      <label>Người tạo</label>
+      <input value="Nguyễn Văn A (nv001)" readonly>
+
+      <label>File Excel workorder *</label>
+      <div id="drop-excel" class="drop" onclick="simulatePickFile()">
+        📂 Bấm hoặc kéo thả file <b>.xlsx / .xlsm</b> vào đây
+      </div>
+
+      <label>File PDF bản vẽ ngoài (Tuỳ chọn – chỉ dùng nếu PDF không nhúng sẵn trong Excel)</label>
+      <input type="file" accept=".pdf,image/png,image/jpeg" style="padding:6px">
+
+      <div class="row" style="margin-top:20px;justify-content:flex-end">
+        <button class="btn" onclick="closeAddModal()">Huỷ</button>
+        <button class="btn primary" onclick="submitAddWorkorder()">Lưu &amp; Bắt đầu kiểm tra</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- MODAL: WORKORDER DETAIL -->
+  <div id="modal-detail" class="modal-bg" style="display:none" onclick="if(event.target===this) closeDetailModal()">
+    <div class="modal">
+      <div class="row" style="justify-content:space-between;align-items:flex-start">
+        <div>
+          <h2>
+            <span id="dt-wo">WO-TEST-002</span>
+            <span id="dt-badge-ai" class="badge b-err">Có lỗi</span>
+            <span id="dt-badge-review" class="badge b-warn">Chờ duyệt</span>
+          </h2>
+          <div class="muted small" id="dt-meta">
+            Màn hình OLED 6.7" · <a href="#" onclick="toast('Tải file gốc Excel');return false;">WO-TEST-002_co_loi.xlsx</a> · Tạo bởi Kỹ thuật viên (nv002) lúc 29/10/2026 09:30 · Đọc bằng vLLM Qwen2.5-VL
+          </div>
+        </div>
+        <button class="btn sm" onclick="closeDetailModal()">✕ Đóng</button>
+      </div>
+
+      <!-- STATS IN MODAL -->
+      <div class="stats" style="margin-top:16px">
+        <div class="stat"><b id="dt-err-count" class="c-err">4</b><span>Số lỗi phát hiện</span></div>
+        <div class="stat"><b id="dt-dwg-count">3</b><span>Bản vẽ AI đọc được (3 trang)</span></div>
+        <div class="stat"><b id="dt-xl-dwg-count">3</b><span>Cột bản vẽ trong Excel</span></div>
+        <div class="stat"><b id="dt-pdf-items">28</b><span>Dòng vật tư trong PDF</span></div>
+        <div class="stat"><b id="dt-xl-items">26</b><span>Vật tư trong sheet BOM</span></div>
+      </div>
+
+      <!-- ERROR TYPE BADGES -->
+      <div class="row" id="dt-err-badges" style="margin-bottom:14px">
+        <span class="badge b-err">Sai số lượng: 2</span>
+        <span class="badge b-err">Thiếu vật tư trong Excel: 1</span>
+        <span class="badge b-err">Excel thừa vật tư: 1</span>
+      </div>
+
+      <!-- ERROR TABLE -->
+      <div class="card" id="card-errors">
+        <h3 id="dt-error-title" style="color:var(--err)">⚠️ Danh sách lỗi chi tiết</h3>
+        <div class="tablewrap" style="max-height:300px">
+          <table>
+            <thead>
+              <tr>
+                <th>#</th>
+                <th>Phân loại lỗi</th>
+                <th>Bản vẽ</th>
+                <th>Mã vật tư</th>
+                <th>SL PDF</th>
+                <th>SL Excel</th>
+                <th>Trang PDF</th>
+                <th>Chi tiết đối chiếu</th>
+              </tr>
+            </thead>
+            <tbody id="dt-error-tbody">
+              <!-- Rendered via JS -->
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      <!-- DRAWING GROUPS ACCORDION -->
+      <div class="card">
+        <h3>🔍 Chi tiết đối chiếu vật tư theo từng bản vẽ</h3>
+        <div id="dt-groups-container">
+          <!-- Accordion items rendered via JS -->
+        </div>
+      </div>
+
+      <!-- PDF DRAWING PAGES STRIP -->
+      <div class="card">
+        <h3>🖼️ Ảnh trang bản vẽ trích xuất từ PDF (Bấm để phóng to soi chi tiết)</h3>
+        <div class="pages" id="dt-pages-container">
+          <!-- Thumbnails rendered via JS -->
+        </div>
+      </div>
+
+      <!-- PROCESSING LOG -->
+      <details>
+        <summary>📜 Xem nhật ký xử lý (AI Pipeline Log)</summary>
+        <div class="log" id="dt-log-text"></div>
+      </details>
+
+      <!-- REVIEW / APPROVAL CARD -->
+      <div class="card" style="margin-top:16px;background:var(--bg)">
+        <h3>✍️ Phê duyệt kết quả kiểm tra</h3>
+        <div id="dt-reviewed-banner" style="display:none;margin-bottom:12px"></div>
+        <div class="grid2">
+          <div>
+            <label>Người duyệt</label>
+            <input value="Nguyễn Văn A (nv001)" readonly>
+          </div>
+          <div>
+            <label>Ghi chú duyệt</label>
+            <input id="dt-review-note" placeholder="VD: Đã xác nhận lại với bộ phận thiết kế, chấp nhận sai số...">
+          </div>
+        </div>
+        <div class="row" style="margin-top:14px">
+          <button class="btn ok" onclick="submitReview('approved')">✓ Duyệt (Approved)</button>
+          <button class="btn danger" onclick="submitReview('rejected')">✕ Từ chối (Reject)</button>
+          <div class="spacer"></div>
+          <button class="btn sm" onclick="toast('Mở hộp thoại chọn file Excel mới để upload lại...')">📤 Upload lại Excel</button>
+          <button class="btn sm" onclick="simulateRerun()">🔄 Chạy lại AI</button>
+          <button class="btn sm" onclick="deleteCurrentWO()">🗑️ Xoá</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- MODAL: IMAGE LIGHTBOX ZOOM -->
+  <div id="modal-zoom" class="modal-bg" style="display:none" onclick="if(event.target===this) closeZoomModal()">
+    <div class="modal" style="max-width:960px">
+      <div class="row" style="justify-content:space-between;margin-bottom:10px">
+        <h3 style="margin:0" id="zoom-title">Trang bản vẽ phóng to</h3>
+        <button class="btn sm" onclick="closeZoomModal()">Đóng</button>
+      </div>
+      <div class="zoom-img-box" id="zoom-content">
+        <!-- SVG drawing mock -->
+      </div>
+    </div>
+  </div>
+
+  <!-- TOAST NOTIFICATIONS -->
+  <div class="toasts" id="toast-container"></div>
+
+  <!-- APPLICATION LOGIC SCRIPT -->
+  <script>
+    // Sample Workorder Data matching Boss's system
+    const workorders = [
+      {
+        id: "wo-001",
+        wo: "WO-TEST-001",
+        description: 'Màn hình OLED 6.1"',
+        file_name: "WO-TEST-001_khop.xlsx",
+        created_by: "nv001",
+        created_by_name: "Phòng kỹ thuật",
+        created_at: 1730160000,
+        status: "ok",
+        error_count: 0,
+        review_decision: "approved",
+        review_by: "nv001",
+        review_by_name: "Nguyễn Văn A",
+        review_note: "Bản vẽ khớp hoàn toàn 100% với file Excel BOM.",
+        review_at: 1730164000,
+        result: {
+          mode: "vLLM Vision",
+          pdf_drawings: 3,
+          pages: 3,
+          excel_dwgs: 3,
+          pdf_items: 24,
+          excel_items: 24,
+          sheet: "DANH SÁCH VẬT TƯ",
+          errors: [],
+          groups: [
+            {
+              drawing_no: "BV-01", col: "E", pages: "1",
+              rows: [
+                { code: "LCM-61-OLED-A01", name: "Panel OLED 6.1 inch", qty: 1, xl: 1, cell: "BV-01!E10", ok: true },
+                { code: "FPC-0031A", name: "FPC chính", qty: 1, xl: 1, cell: "BV-01!E11", ok: true },
+                { code: "SCR-M1.2X3", name: "Vít M1.2x3", qty: 4, xl: 4, cell: "BV-01!E12", ok: true }
+              ]
+            },
+            {
+              drawing_no: "BV-02", col: "F", pages: "2",
+              rows: [
+                { code: "CVG-61-3D", name: "Kính cường lực 3D", qty: 1, xl: 1, cell: "BV-02!F10", ok: true },
+                { code: "OCA-0420", name: "Băng keo OCA", qty: 1, xl: 1, cell: "BV-02!F11", ok: true }
+              ]
+            }
+          ]
+        },
+        log: [
+          "[10:00:01] Bắt đầu xử lý WO-TEST-001...",
+          "[10:00:02] Trích xuất file nhúng OLE: Drawings.pdf (3 trang)",
+          "[10:00:03] Render ảnh độ phân giải cao 2048x1448",
+          "[10:00:06] AI Vision phân tích hoàn tất 3/3 trang",
+          "[10:00:07] Đối chiếu BOM sheet 'DANH SÁCH VẬT TƯ': 0 lỗi. Khớp 100%."
+        ]
+      },
+      {
+        id: "wo-002",
+        wo: "WO-TEST-002",
+        description: 'Màn hình OLED 6.7"',
+        file_name: "WO-TEST-002_co_loi.xlsx",
+        created_by: "nv002",
+        created_by_name: "Kỹ thuật viên B",
+        created_at: 1730162000,
+        status: "error",
+        error_count: 4,
+        review_decision: null,
+        review_by: null,
+        review_by_name: null,
+        review_note: "",
+        review_at: null,
+        result: {
+          mode: "vLLM Vision Qwen2.5-VL",
+          pdf_drawings: 3,
+          pages: 3,
+          excel_dwgs: 3,
+          pdf_items: 28,
+          excel_items: 26,
+          sheet: "DANH SÁCH VẬT TƯ",
+          errors: [
+            { type: "Sai số lượng", dwg: "BV-01", code: "SCR-M1.2X3", pdf: 8, xl: 4, page: 1, msg: "PDF ghi 8, Excel ghi 4 (ô E17)" },
+            { type: "Sai số lượng", dwg: "BV-02", code: "FOAM-0.3T", pdf: 2, xl: 1, page: 2, msg: "PDF ghi 2, Excel ghi 1 (ô F16)" },
+            { type: "Thiếu vật tư trong Excel", dwg: "BV-02", code: "TAP-CU-012", pdf: 1, xl: 0, page: 2, msg: "PDF có nhưng Excel để trống số lượng (ô F15)" },
+            { type: "Excel thừa vật tư", dwg: "BV-03", code: "GSK-0007", pdf: "—", xl: 2, page: 3, msg: "Excel ghi 2 (ô G19) nhưng bản vẽ BV-03 không có mã này" }
+          ],
+          groups: [
+            {
+              drawing_no: "BV-01", col: "E", pages: "1",
+              rows: [
+                { code: "LCM-67-OLED-B01", name: "Panel OLED 6.7 inch", qty: 1, xl: 1, cell: "BV-01!E10", ok: true },
+                { code: "FPC-0042B", name: "FPC kết nối chính", qty: 1, xl: 1, cell: "BV-01!E11", ok: true },
+                { code: "SCR-M1.2X3", name: "Vít liên kết M1.2x3", qty: 8, xl: 4, cell: "BV-01!E17", ok: false, why: "Lệch SL: PDF=8, Excel=4" }
+              ]
+            },
+            {
+              drawing_no: "BV-02", col: "F", pages: "2",
+              rows: [
+                { code: "CVG-67-3D", name: "Kính cường lực 3D 6.7 inch", qty: 1, xl: 1, cell: "BV-02!F10", ok: true },
+                { code: "FOAM-0.3T", name: "Mút đệm giảm chấn 0.3mm", qty: 2, xl: 1, cell: "BV-02!F16", ok: false, why: "Lệch SL: PDF=2, Excel=1" },
+                { code: "TAP-CU-012", name: "Băng đồng tản nhiệt", qty: 1, xl: 0, cell: "BV-02!F15", ok: false, why: "Excel thiếu mã này (ô trống)" }
+              ]
+            },
+            {
+              drawing_no: "BV-03", col: "G", pages: "3",
+              rows: [
+                { code: "BRK-SUS-67", name: "Khung gia cố SUS", qty: 1, xl: 1, cell: "BV-03!G10", ok: true },
+                { code: "GSK-0007", name: "Gioăng chống bụi", qty: "—", xl: 2, cell: "BV-03!G19", ok: false, why: "Bản vẽ PDF không có mã này" }
+              ]
+            }
+          ]
+        },
+        log: [
+          "[10:30:10] Nhận file WO-TEST-002_co_loi.xlsx (312 KB)...",
+          "[10:30:11] Trích xuất thành công PDF nhúng OLE Package: Assembly_Drawing.pdf",
+          "[10:30:12] Render 3 trang sang ảnh JPEG 2048x1448",
+          "[10:30:15] Gửi AI Vision Qwen2.5-VL phân tích bảng vật tư theo tọa độ...",
+          "[10:30:18] Đối chiếu bảng BOM -> Phát hiện 4 điểm sai lệch (2 lệch SL, 1 thiếu, 1 thừa)."
+        ]
+      },
+      {
+        id: "wo-003",
+        wo: "WO-TEST-003",
+        description: 'Màn hình LCD 6.5"',
+        file_name: "WO-TEST-003_thieu_ban_ve.xlsx",
+        created_by: "nv003",
+        created_by_name: "Kỹ sư C",
+        created_at: 1730163000,
+        status: "error",
+        error_count: 1,
+        review_decision: null,
+        review_by: null,
+        review_by_name: null,
+        review_note: "",
+        review_at: null,
+        result: {
+          mode: "vLLM Vision",
+          pdf_drawings: 2,
+          pages: 2,
+          excel_dwgs: 3,
+          pdf_items: 18,
+          excel_items: 25,
+          sheet: "DANH SÁCH VẬT TƯ",
+          errors: [
+            { type: "Thiếu bản vẽ", dwg: "BV-03", code: "—", pdf: "Không có", xl: "Cột G", page: "—", msg: "Excel có cột bản vẽ BV-03 nhưng trong file PDF nhúng chỉ có 2 trang (BV-01, BV-02)" }
+          ],
+          groups: [
+            {
+              drawing_no: "BV-01", col: "E", pages: "1",
+              rows: [{ code: "LCD-65-HD", name: "Panel LCD 6.5", qty: 1, xl: 1, cell: "BV-01!E10", ok: true }]
+            },
+            {
+              drawing_no: "BV-02", col: "F", pages: "2",
+              rows: [{ code: "CVG-65-25D", name: "Kính 2.5D", qty: 1, xl: 1, cell: "BV-02!F10", ok: true }]
+            }
+          ]
+        },
+        log: [
+          "[11:15:00] Bắt đầu kiểm tra WO-TEST-003...",
+          "[11:15:02] Trích xuất PDF: phát hiện chỉ có 2 trang trong tài liệu",
+          "[11:15:04] Sheet Excel BOM yêu cầu 3 cột bản vẽ (BV-01, BV-02, BV-03)",
+          "[11:15:06] Cảnh báo: Thiếu bản vẽ BV-03!"
+        ]
+      }
+    ];
+
+    let currentStatusFilter = '';
+    let currentDetailWO = null;
+
+    function fmtDate(t) {
+      if (!t) return '';
+      return new Date(t * 1000).toLocaleString('vi-VN');
+    }
+
+    function toast(msg) {
+      const container = document.getElementById('toast-container');
+      const el = document.createElement('div');
+      el.className = 'toast';
+      el.innerText = msg;
+      container.appendChild(el);
+      setTimeout(() => { el.remove(); }, 3500);
+    }
+
+    function switchTab(t) {
+      document.getElementById('nav-list').className = t === 'list' ? 'active' : '';
+      document.getElementById('nav-settings').className = t === 'settings' ? 'active' : '';
+      document.getElementById('view-list').style.display = t === 'list' ? 'block' : 'none';
+      document.getElementById('view-settings').style.display = t === 'settings' ? 'block' : 'none';
+    }
+
+    function filterByStatus(st) {
+      currentStatusFilter = st;
+      document.getElementById('status-select').value = st;
+      updateStatCardStyles();
+      applyFilter();
+    }
+
+    function updateStatCardStyles() {
+      ['all', 'review', 'error', 'approved', 'failed'].forEach(id => {
+        const el = document.getElementById('stat-' + id);
+        if (el) el.classList.remove('active-filter');
+      });
+      if (currentStatusFilter === '') document.getElementById('stat-all').classList.add('active-filter');
+      else if (currentStatusFilter === 'review') document.getElementById('stat-review').classList.add('active-filter');
+      else if (currentStatusFilter === 'error') document.getElementById('stat-error').classList.add('active-filter');
+      else if (currentStatusFilter === 'approved') document.getElementById('stat-approved').classList.add('active-filter');
+      else if (currentStatusFilter === 'failed') document.getElementById('stat-failed').classList.add('active-filter');
+    }
+
+    function applyFilter() {
+      const q = document.getElementById('search-input').value.toLowerCase().trim();
+      const st = document.getElementById('status-select').value;
+      currentStatusFilter = st;
+      updateStatCardStyles();
+
+      const tbody = document.getElementById('wo-tbody');
+      tbody.innerHTML = '';
+
+      const filtered = workorders.filter(w => {
+        const matchQ = !q || w.wo.toLowerCase().includes(q) || w.description.toLowerCase().includes(q) || w.created_by_name.toLowerCase().includes(q);
+        let matchSt = true;
+        if (st === 'review') matchSt = (w.status === 'ok' || w.status === 'error') && !w.review_decision;
+        else if (st === 'error') matchSt = (w.error_count > 0);
+        else if (st === 'approved') matchSt = (w.review_decision === 'approved');
+        else if (st === 'rejected') matchSt = (w.review_decision === 'rejected');
+        else if (st === 'running') matchSt = (w.status === 'running');
+        else if (st === 'failed') matchSt = (w.status === 'failed');
+        return matchQ && matchSt;
+      });
+
+      document.getElementById('empty-hint').style.display = filtered.length === 0 ? 'block' : 'none';
+
+      filtered.forEach(w => {
+        const tr = document.createElement('tr');
+        tr.className = 'click';
+        tr.onclick = () => openDetail(w.id);
+
+        let aiBadge = '<span class="badge b-new">Chưa xử lý</span>';
+        if (w.status === 'ok') aiBadge = '<span class="badge b-ok">Khớp</span>';
+        else if (w.status === 'error') aiBadge = '<span class="badge b-err">Có lỗi</span>';
+        else if (w.status === 'running') aiBadge = '<span class="badge b-run">Đang xử lý...</span>';
+        else if (w.status === 'failed') aiBadge = '<span class="badge b-warn">Thất bại</span>';
+
+        let reviewBadge = '<span class="muted">—</span>';
+        if (w.review_decision === 'approved') reviewBadge = '<span class="badge b-done">Đã duyệt</span>';
+        else if (w.review_decision === 'rejected') reviewBadge = '<span class="badge b-rej">Từ chối</span>';
+        else if (w.status === 'ok' || w.status === 'error') reviewBadge = '<span class="badge b-warn">Chờ duyệt</span>';
+
+        let errDisplay = `<span class="c-ok">0</span>`;
+        if (w.error_count > 0) errDisplay = `<b class="c-err">${w.error_count}</b>`;
+
+        tr.innerHTML = `
+          <td><b>${w.wo}</b></td>
+          <td>${w.description}</td>
+          <td class="small">${w.file_name}</td>
+          <td>${w.created_by_name} <span class="muted small">${w.created_by}</span></td>
+          <td class="small">${fmtDate(w.created_at)}</td>
+          <td>${aiBadge}</td>
+          <td>${errDisplay}</td>
+          <td>${reviewBadge}</td>
+        `;
+        tbody.appendChild(tr);
+      });
+
+      // Update counters
+      const total = workorders.length;
+      const reviewCount = workorders.filter(w => (w.status==='ok'||w.status==='error') && !w.review_decision).length;
+      const errorCount = workorders.filter(w => w.error_count > 0).length;
+      const approvedCount = workorders.filter(w => w.review_decision === 'approved').length;
+      const failedCount = workorders.filter(w => w.status === 'failed').length;
+
+      document.getElementById('val-total').innerText = total;
+      document.getElementById('val-review').innerText = reviewCount;
+      document.getElementById('val-error').innerText = errorCount;
+      document.getElementById('val-approved').innerText = approvedCount;
+      document.getElementById('val-failed').innerText = failedCount;
+    }
+
+    function openDetail(id) {
+      const w = workorders.find(x => x.id === id);
+      if (!w) return;
+      currentDetailWO = w;
+
+      document.getElementById('dt-wo').innerText = w.wo;
+      document.getElementById('dt-badge-ai').className = 'badge ' + (w.status === 'ok' ? 'b-ok' : w.status === 'error' ? 'b-err' : 'b-warn');
+      document.getElementById('dt-badge-ai').innerText = w.status === 'ok' ? 'Khớp' : w.status === 'error' ? 'Có lỗi' : 'Chưa xử lý';
+
+      const rBadge = document.getElementById('dt-badge-review');
+      if (w.review_decision === 'approved') {
+        rBadge.className = 'badge b-done'; rBadge.innerText = 'Đã duyệt';
+      } else if (w.review_decision === 'rejected') {
+        rBadge.className = 'badge b-rej'; rBadge.innerText = 'Từ chối';
+      } else {
+        rBadge.className = 'badge b-warn'; rBadge.innerText = 'Chờ duyệt';
+      }
+
+      document.getElementById('dt-meta').innerHTML = `
+        ${w.description} · <a href="#" onclick="toast('Tải file: ${w.file_name}');return false;">${w.file_name}</a>
+        · Tạo bởi ${w.created_by_name} (${w.created_by}) lúc ${fmtDate(w.created_at)} · Đọc bằng ${w.result ? w.result.mode : 'AI Vision'}
+      `;
+
+      const r = w.result || { errors: [], groups: [], pdf_drawings: 0, pages: 0, excel_dwgs: 0, pdf_items: 0, excel_items: 0 };
+      document.getElementById('dt-err-count').innerText = r.errors.length;
+      document.getElementById('dt-err-count').className = r.errors.length ? 'c-err' : 'c-ok';
+      document.getElementById('dt-dwg-count').innerText = r.pdf_drawings;
+      document.getElementById('dt-xl-dwg-count').innerText = r.excel_dwgs;
+      document.getElementById('dt-pdf-items').innerText = r.pdf_items;
+      document.getElementById('dt-xl-items').innerText = r.excel_items;
+
+      // Error Badges Breakdown
+      const errCounts = {};
+      r.errors.forEach(e => { errCounts[e.type] = (errCounts[e.type] || 0) + 1; });
+      const badgeContainer = document.getElementById('dt-err-badges');
+      badgeContainer.innerHTML = '';
+      Object.entries(errCounts).forEach(([t, n]) => {
+        const b = document.createElement('span');
+        b.className = 'badge b-err';
+        b.innerText = `${t}: ${n}`;
+        badgeContainer.appendChild(b);
+      });
+
+      // Error list
+      const errTbody = document.getElementById('dt-error-tbody');
+      errTbody.innerHTML = '';
+      if (r.errors.length === 0) {
+        document.getElementById('dt-error-title').innerHTML = '✅ Không phát hiện lỗi sai lệch nào';
+        document.getElementById('dt-error-title').style.color = 'var(--ok)';
+        errTbody.innerHTML = '<tr><td colspan="8" class="small muted" style="text-align:center;padding:16px">Tất cả thông số vật tư và số lượng giữa PDF và Excel khớp 100%.</td></tr>';
+      } else {
+        document.getElementById('dt-error-title').innerHTML = '⚠️ Danh sách lỗi đối chiếu';
+        document.getElementById('dt-error-title').style.color = 'var(--err)';
+        r.errors.forEach((e, idx) => {
+          const tr = document.createElement('tr');
+          tr.innerHTML = `
+            <td>${idx + 1}</td>
+            <td><span class="badge b-err">${e.type}</span></td>
+            <td class="mono">${e.dwg}</td>
+            <td class="mono"><b>${e.code}</b></td>
+            <td>${e.pdf}</td>
+            <td>${e.xl}</td>
+            <td><a href="#" onclick="openZoom('Trang ' + '${e.page}', '${e.dwg}');return false;">Trang ${e.page}</a></td>
+            <td class="small">${e.msg}</td>
+          `;
+          errTbody.appendChild(tr);
+        });
+      }
+
+      // Drawing Groups Accordion
+      const groupsDiv = document.getElementById('dt-groups-container');
+      groupsDiv.innerHTML = '';
+      (r.groups || []).forEach(g => {
+        const hasErr = g.rows.some(x => !x.ok);
+        const errCount = g.rows.filter(x => !x.ok).length;
+        const det = document.createElement('details');
+        if (hasErr) det.open = true;
+
+        let rowsHtml = '';
+        g.rows.forEach(rx => {
+          rowsHtml += `
+            <tr>
+              <td class="mono"><b>${rx.code}</b></td>
+              <td class="small">${rx.name || ''}</td>
+              <td>${rx.qty}</td>
+              <td>${rx.xl}</td>
+              <td class="mono small">${rx.cell || '—'}</td>
+              <td class="${rx.ok ? 'c-ok' : 'c-err'}">${rx.ok ? '✓ Khớp' : rx.why}</td>
+            </tr>
+          `;
+        });
+
+        det.innerHTML = `
+          <summary>
+            Bản vẽ <span class="mono">${g.drawing_no}</span> · Cột Excel ${g.col || '—'} · Trang ${g.pages} · ${g.rows.length} vật tư
+            ${hasErr ? `<span class="badge b-err" style="margin-left:8px">${errCount} lỗi</span>` : `<span class="badge b-ok" style="margin-left:8px">Khớp hoàn toàn</span>`}
+          </summary>
+          <div class="tablewrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>Mã vật tư</th>
+                  <th>Tên vật tư (AI đọc)</th>
+                  <th>SL PDF</th>
+                  <th>SL Excel</th>
+                  <th>Địa chỉ ô</th>
+                  <th>Kết quả đối chiếu</th>
+                </tr>
+              </thead>
+              <tbody>${rowsHtml}</tbody>
+            </table>
+          </div>
+        `;
+        groupsDiv.appendChild(det);
+      });
+
+      // Drawing Page thumbnails
+      const pagesDiv = document.getElementById('dt-pages-container');
+      pagesDiv.innerHTML = '';
+      const totalPages = r.pages || 3;
+      for (let p = 1; p <= totalPages; p++) {
+        const dwgName = (r.groups && r.groups[p - 1]) ? r.groups[p - 1].drawing_no : `BV-0${p}`;
+        const thumb = document.createElement('div');
+        thumb.className = 'page-thumb';
+        thumb.onclick = () => openZoom(`Trang ${p} - Bản vẽ ${dwgName}`, dwgName);
+        thumb.innerHTML = `
+          <svg class="page-thumb-svg" viewBox="0 0 160 200" xmlns="http://www.w3.org/2000/svg">
+            <rect width="160" height="200" fill="#ffffff" stroke="#cbd5e1" stroke-width="1"/>
+            <rect x="8" y="8" width="144" height="184" fill="none" stroke="#94a3b8" stroke-width="1"/>
+            <rect x="18" y="20" width="80" height="90" rx="4" fill="#f1f5f9" stroke="#64748b"/>
+            <line x1="24" y1="36" x2="92" y2="36" stroke="#94a3b8" stroke-width="2"/>
+            <line x1="24" y1="50" x2="80" y2="50" stroke="#94a3b8" stroke-width="2"/>
+            <!-- Title block -->
+            <rect x="70" y="150" width="76" height="36" fill="#f8fafc" stroke="#475569" stroke-width="1"/>
+            <text x="74" y="164" font-size="7" font-family="sans-serif" fill="#1e293b" font-weight="bold">${dwgName}</text>
+            <text x="74" y="176" font-size="6" font-family="sans-serif" fill="#64748b">Rev: A · Scale 1:1</text>
+            <!-- BOM mini table -->
+            <rect x="85" y="20" width="60" height="60" fill="#fff" stroke="#64748b" stroke-width="0.8"/>
+            <text x="89" y="32" font-size="6" font-family="sans-serif" fill="#1e293b" font-weight="bold">BOM TABLE</text>
+            <line x1="85" y1="36" x2="145" y2="36" stroke="#64748b" stroke-width="0.5"/>
+            <line x1="85" y1="46" x2="145" y2="46" stroke="#e2e8f0" stroke-width="0.5"/>
+            <line x1="85" y1="56" x2="145" y2="56" stroke="#e2e8f0" stroke-width="0.5"/>
+          </svg>
+          <div class="small muted" style="margin-top:6px;font-weight:600">Trang ${p} (${dwgName})</div>
+        `;
+        pagesDiv.appendChild(thumb);
+      }
+
+      // Log text
+      document.getElementById('dt-log-text').innerText = (w.log || []).join('\n');
+
+      // Review status banner
+      const banner = document.getElementById('dt-reviewed-banner');
+      if (w.review_decision) {
+        banner.style.display = 'block';
+        banner.className = w.review_decision === 'approved' ? 'warnbox' : 'warnbox';
+        banner.style.background = w.review_decision === 'approved' ? 'var(--ok-bg)' : 'var(--err-bg)';
+        banner.style.color = w.review_decision === 'approved' ? 'var(--ok)' : 'var(--err)';
+        banner.style.borderColor = w.review_decision === 'approved' ? 'var(--ok)' : 'var(--err)';
+        banner.innerHTML = `
+          <b>${w.review_decision === 'approved' ? '✅ ĐÃ DUYỆT' : '❌ ĐÃ TỪ CHỐI'}</b> bởi <b>${w.review_by_name}</b> lúc ${fmtDate(w.review_at)}
+          ${w.review_note ? `<br><i>Ghi chú: "${w.review_note}"</i>` : ''}
+        `;
+      } else {
+        banner.style.display = 'none';
+      }
+      document.getElementById('dt-review-note').value = w.review_note || '';
+
+      document.getElementById('modal-detail').style.display = 'flex';
+    }
+
+    function closeDetailModal() {
+      document.getElementById('modal-detail').style.display = 'none';
+      currentDetailWO = null;
+    }
+
+    function submitReview(decision) {
+      if (!currentDetailWO) return;
+      const note = document.getElementById('dt-review-note').value.trim();
+      currentDetailWO.review_decision = decision;
+      currentDetailWO.review_by = "nv001";
+      currentDetailWO.review_by_name = "Nguyễn Văn A";
+      currentDetailWO.review_note = note;
+      currentDetailWO.review_at = Math.floor(Date.now() / 1000);
+
+      toast(decision === 'approved' ? '✅ Đã duyệt workorder ' + currentDetailWO.wo : '❌ Đã từ chối workorder ' + currentDetailWO.wo);
+      openDetail(currentDetailWO.id);
+      applyFilter();
+    }
+
+    function simulateRerun() {
+      if (!currentDetailWO) return;
+      toast('🔄 Đang gửi lại tác vụ cho AI Vision phân tích...');
+      currentDetailWO.status = 'running';
+      applyFilter();
+      openDetail(currentDetailWO.id);
+      setTimeout(() => {
+        currentDetailWO.status = currentDetailWO.error_count > 0 ? 'error' : 'ok';
+        toast('✓ Đã cập nhật xong kết quả AI!');
+        openDetail(currentDetailWO.id);
+        applyFilter();
+      }, 1500);
+    }
+
+    function deleteCurrentWO() {
+      if (!currentDetailWO) return;
+      if (!confirm(`Bạn có chắc muốn xoá workorder ${currentDetailWO.wo}?`)) return;
+      const idx = workorders.findIndex(x => x.id === currentDetailWO.id);
+      if (idx !== -1) workorders.splice(idx, 1);
+      toast('Đã xoá workorder thành công');
+      closeDetailModal();
+      applyFilter();
+    }
+
+    function openZoom(title, dwgName) {
+      document.getElementById('zoom-title').innerText = title;
+      document.getElementById('zoom-content').innerHTML = `
+        <svg viewBox="0 0 800 500" style="width:100%;max-width:800px;background:#fff;border:1px solid #cbd5e1;border-radius:6px">
+          <rect x="20" y="20" width="760" height="460" fill="none" stroke="#334155" stroke-width="2"/>
+          <rect x="40" y="40" width="300" height="380" rx="16" fill="#f8fafc" stroke="#64748b" stroke-width="1.5"/>
+          <circle cx="190" cy="80" r="12" fill="#0284c7" opacity="0.3"/>
+          <text x="120" y="440" font-size="12" fill="#64748b" font-weight="600">MẶT TRƯỚC (BẢN VẼ LẮP RÁP CÔNG NGHIỆP)</text>
+          <!-- Title Box -->
+          <rect x="440" y="360" width="330" height="110" fill="#fff" stroke="#0f172a" stroke-width="1.5"/>
+          <text x="450" y="385" font-size="11" font-weight="bold" fill="#0f172a">CÔNG TY TNHH CÔNG NGHỆ CHẾ TẠO</text>
+          <text x="450" y="415" font-size="16" font-weight="bold" fill="#1f5eff">DRAWING NO: ${dwgName}</text>
+          <text x="450" y="440" font-size="11" fill="#475569">Mô hình: OLED Display Assembly · Rev: A0</text>
+          <text x="450" y="460" font-size="10" fill="#64748b">Tỷ lệ: 1:1 · Đơn vị: mm · Ngày duyệt: 29/10/2026</text>
+          <!-- BOM Table -->
+          <rect x="400" y="40" width="370" height="280" fill="#fff" stroke="#334155" stroke-width="1.2"/>
+          <rect x="400" y="40" width="370" height="28" fill="#e2e8f0"/>
+          <text x="490" y="58" font-size="12" font-weight="bold" fill="#0f172a">BẢNG DANH MỤC VẬT TƯ (BOM)</text>
+          <line x1="400" y1="68" x2="770" y2="68" stroke="#334155"/>
+          <text x="410" y="85" font-size="10" font-weight="bold">STT</text>
+          <text x="440" y="85" font-size="10" font-weight="bold">MÃ VẬT TƯ</text>
+          <text x="560" y="85" font-size="10" font-weight="bold">TÊN VẬT TƯ</text>
+          <text x="730" y="85" font-size="10" font-weight="bold">SL</text>
+          <line x1="400" y1="94" x2="770" y2="94" stroke="#cbd5e1"/>
+          <text x="412" y="115" font-size="10">1</text>
+          <text x="440" y="115" font-size="10" font-weight="bold" fill="#1f5eff">LCM-67-OLED-B01</text>
+          <text x="560" y="115" font-size="10">Panel OLED 6.7"</text>
+          <text x="735" y="115" font-size="10" font-weight="bold">1</text>
+          <line x1="400" y1="126" x2="770" y2="126" stroke="#f1f5f9"/>
+          <text x="412" y="145" font-size="10">2</text>
+          <text x="440" y="145" font-size="10" font-weight="bold" fill="#1f5eff">SCR-M1.2X3</text>
+          <text x="560" y="145" font-size="10">Vít M1.2x3 (Bắt khung)</text>
+          <text x="735" y="145" font-size="10" font-weight="bold" fill="#c62828">8</text>
+        </svg>
+      `;
+      document.getElementById('modal-zoom').style.display = 'flex';
+    }
+
+    function closeZoomModal() {
+      document.getElementById('modal-zoom').style.display = 'none';
+    }
+
+    function openAddModal() {
+      document.getElementById('modal-add').style.display = 'flex';
+    }
+    function closeAddModal() {
+      document.getElementById('modal-add').style.display = 'none';
+    }
+
+    function simulatePickFile() {
+      const box = document.getElementById('drop-excel');
+      box.className = 'drop has';
+      box.innerHTML = '✓ Đã chọn file: <b>WO-TEST-004_mau_san_xuat.xlsx</b> (280 KB)';
+    }
+
+    function submitAddWorkorder() {
+      const woCode = document.getElementById('add-wo').value.trim();
+      const desc = document.getElementById('add-desc').value.trim();
+      if (!woCode) {
+        toast('Vui lòng nhập mã workorder!');
+        return;
+      }
+      const newWO = {
+        id: "wo-" + Date.now(),
+        wo: woCode,
+        description: desc || "Workorder sản xuất mới",
+        file_name: woCode + ".xlsx",
+        created_by: "nv001",
+        created_by_name: "Nguyễn Văn A",
+        created_at: Math.floor(Date.now() / 1000),
+        status: "ok",
+        error_count: 0,
+        review_decision: null,
+        review_by: null,
+        review_by_name: null,
+        review_note: "",
+        review_at: null,
+        result: {
+          mode: "vLLM Vision",
+          pdf_drawings: 1,
+          pages: 1,
+          excel_dwgs: 1,
+          pdf_items: 8,
+          excel_items: 8,
+          sheet: "DANH SÁCH VẬT TƯ",
+          errors: [],
+          groups: [
+            {
+              drawing_no: "BV-01", col: "E", pages: "1",
+              rows: [
+                { code: "CAM-WIDE-01", name: "Cảm biến camera góc rộng", qty: 1, xl: 1, cell: "BV-01!E10", ok: true },
+                { code: "FPC-CAM-02", name: "Cáp mềm camera", qty: 1, xl: 1, cell: "BV-01!E11", ok: true }
+              ]
+            }
+          ]
+        },
+        log: [
+          `[${new Date().toLocaleTimeString()}] Bắt đầu phân tích ${woCode}...`,
+          `[${new Date().toLocaleTimeString()}] Tách thành công PDF nhúng OLE`,
+          `[${new Date().toLocaleTimeString()}] AI Vision phân tích hoàn tất. 0 lỗi.`
+        ]
+      };
+      workorders.unshift(newWO);
+      closeAddModal();
+      toast('🎉 Đã thêm thành công workorder ' + woCode + '!');
+      applyFilter();
+      openDetail(newWO.id);
+    }
+
+    function toggleMockMode(isMock) {
+      document.getElementById('header-ai-status').innerText = isMock ? '🧪 Chế độ thử (không gọi AI)' : 'AI: Qwen2.5-VL-72B-Instruct';
+      toast(isMock ? 'Đã bật chế độ thử (Mock mode)' : 'Đã chuyển sang chế độ gọi AI Vision');
+    }
+
+    function testAIConnection() {
+      const msg = document.getElementById('test-msg');
+      msg.innerText = '⏳ Đang gọi kiểm tra tới server AI...';
+      setTimeout(() => {
+        msg.innerText = '✓ Kết nối thành công! AI Model [Qwen2.5-VL-72B] sẵn sàng phục vụ.';
+        msg.style.color = 'var(--ok)';
+        toast('Kết nối AI Vision thành công!');
+      }, 800);
+    }
+
+    function saveSettings() {
+      toast('✓ Đã lưu cấu hình AI & BOM Mapping thành công!');
+    }
+
+    // Init on load
+    applyFilter();
+  </script>
+</body>
+</html>
+

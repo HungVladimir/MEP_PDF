@@ -1,0 +1,29 @@
+# Frontend (bản build Vue) + backend FastAPI dùng chung 1 cổng
+server {
+    listen 80;
+    server_name wo-check.local;
+
+    client_max_body_size 100m;          # = WO_MAX_UPLOAD_MB
+
+    root /opt/wo-check/frontend/dist;
+    index index.html;
+    location / {
+        try_files $uri $uri/ /index.html;
+    }
+
+    location /api/ {
+        proxy_pass http://127.0.0.1:8000;
+        proxy_set_header Host $host;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_read_timeout 300s;
+
+        # QUAN TRỌNG: xoá header user do trình duyệt tự gửi, tránh giả mạo người duyệt.
+        proxy_set_header X-Remote-User  "";
+        proxy_set_header X-Remote-Name  "";
+        proxy_set_header X-Remote-Roles "";
+        # Nếu xác thực ở tầng nginx/SSO, thay 3 dòng trên bằng giá trị thật, ví dụ:
+        # proxy_set_header X-Remote-User  $remote_user;
+        # proxy_set_header X-Remote-Name  $http_x_sso_name;    # họ tên đã URL-encode
+        # proxy_set_header X-Remote-Roles $http_x_sso_roles;   # vd: reviewer,staff
+    }
+}
