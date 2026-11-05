@@ -577,18 +577,24 @@ const startSmartPollingIfNeeded = () => {
         }
       }
 
-// Khi không còn dòng nào RUNNING nữa -> Dừng polling ngay lập tức
-const stillRunning = tableData.value.some(r => r.STATUS === 'RUNNING')
-if (!stillRunning) {
-  console.log("🎉 [Smart Polling] Tất cả tác vụ AI đã hoàn tất. Tắt polling.")
-  stopSmartPolling()
-  loadTotal()
-}
-            } catch (err) {
-  console.error("[Smart Polling Error]", err)
-}
-        }, 3000)
+      // Cứ mỗi 2 nhịp polling (6 giây), tự động đồng bộ lại 5 thẻ KPI
+      if (smartPollCount % 2 === 0) {
+        loadKpiSummary()
+      }
+
+      // Khi không còn dòng nào RUNNING nữa -> Dừng polling ngay lập tức và làm mới KPI
+      const stillRunning = tableData.value.some(r => r.STATUS === 'RUNNING')
+      if (!stillRunning) {
+        console.log("🎉 [Smart Polling] Tất cả tác vụ AI đã hoàn tất. Tắt polling.")
+        stopSmartPolling()
+        loadTotal()
+        loadKpiSummary()
+      }
+    } catch (err) {
+      console.error("[Smart Polling Error]", err)
     }
+  }, 3000)
+}
 
 // 1. TẢI DỮ LIỆU TỪ BACKEND
 const loadData = async () => {
@@ -698,6 +704,7 @@ const handleKpiFilter = (statusKey) => {
   } else {
     selectedStatus.value = statusKey
   }
+  loadKpiSummary()
 }
 
 // 3. DIALOG CHI TIẾT ĐỐI SOÁT (OPEN DETAIL MODAL)
@@ -790,8 +797,10 @@ const handleRerun = async (row) => {
     row.STATUS = 'RUNNING'
     row.PROGRESS = 5
     row.REASON = 'Đang chạy lại AI đối soát...'
+    kpiStats.value.running = (kpiStats.value.running || 0) + 1
     ElMessage.success(res.data?.message || "Đã kích hoạt chạy lại AI!")
     startSmartPollingIfNeeded()
+    loadKpiSummary()
     if (showDetailDialog.value && currentTask.value?.KEYID === row.KEYID) {
       currentTask.value.STATUS = 'RUNNING'
     }
@@ -1012,6 +1021,7 @@ const handleUploadExcel = async (file, row) => {
   row.STATUS = 'RUNNING'
   row.PROGRESS = 5
   row.REASON = 'Đang đẩy file lên AI Worker...'
+  kpiStats.value.running = (kpiStats.value.running || 0) + 1
 
   // Đồng bộ cả đối tượng trong bảng và currentTask trong modal dialog nếu đang mở
   if (currentTask.value && currentTask.value.KEYID === row.KEYID) {
@@ -1027,11 +1037,13 @@ const handleUploadExcel = async (file, row) => {
   }
 
   startSmartPollingIfNeeded()
+  loadKpiSummary()
 
   try {
     const res = await axios.post(`${FASTAPI_BASE_URL}/mep_payment/upload`, formData)
     ElMessage.success(res.data.message || "Tải lên thành công! AI đang bóc tách ngầm.")
     startSmartPollingIfNeeded()
+    loadKpiSummary()
   } catch (err) {
     row.STATUS = 'WAITING'
     row.PROGRESS = 0
@@ -1096,6 +1108,7 @@ watch(selectedStatus, (newVal) => {
   } else {
     activeKpiFilter.value = newVal
   }
+  loadKpiSummary()
   loadTotal()
   loadData()
 })

@@ -335,8 +335,11 @@ def run_mep_pipeline(
         # BƯỚC 4: ĐỐI SOÁT CHÉO 2 VÒNG & XUẤT EXCEL 2 SHEET
         update_status(
             "BƯỚC 4/4: Đang đối soát 2 Vòng và tô màu báo cáo...", 0.85)
+
+        # Đặt tên file báo cáo kết quả theo đúng tên file Excel Vendor upload lên
+        vendor_stem = os.path.splitext(os.path.basename(vendor_excel_path))[0] if vendor_excel_path else first_pdf_name
         base_output_path = os.path.join(
-            output_dir, f"{first_pdf_name}_Report.xlsx")
+            output_dir, f"{vendor_stem}_Report.xlsx")
         final_excel_path = excel_reconciler.get_unique_path(base_output_path)
 
         excel_reconciler.reconcile_and_highlight(

@@ -27,15 +27,32 @@ app.add_middleware(
     expose_headers=["Content-Disposition"]
 )
 
-# 2. KHỞI TẠO THƯ MỤC LƯU TRỮ
+# 2. KHỞI TẠO THƯ MỤC LƯU TRỮ (TỰ THÍCH ỨNG LOCAL DLP HOẶC SERVER)
 BASE_DIR = Path(__file__).resolve().parent
-# STORAGE_DIR = BASE_DIR / "sessions"
-# FINAL_REPORT_DIR = BASE_DIR / "final_reports"
-STORAGE_DIR = Path(r"D:\Private_Documents\Doc\AI-Infra\FinalReport\sessions")
-FINAL_REPORT_DIR = Path(r"D:\Private_Documents\Doc\AI-Infra\FinalReport")
 
-STORAGE_DIR.mkdir(exist_ok=True)
-FINAL_REPORT_DIR.mkdir(exist_ok=True)
+# Đường dẫn thư mục bảo mật máy Local công ty (DLP)
+COMPANY_PRIVATE_ROOT = Path(r"D:\Private_Documents\Doc\AI-Infra")
+
+if COMPANY_PRIVATE_ROOT.exists():
+    # 🏢 [MÔI TRƯỜNG LOCAL CÔNG TY - CÓ DLP CHẶN ẢNH]:
+    # - File Excel upload: lưu vào Private để tuân thủ DLP
+    # - File Excel kết quả & zip: lưu vào FinalReport trong Private
+    # - Toàn bộ Ảnh trích xuất, PDF, CSV, Log: lưu trong Project để không bị DLP chặn
+    PRIVATE_EXCEL_DIR = COMPANY_PRIVATE_ROOT / "sessions"
+    FINAL_REPORT_DIR  = COMPANY_PRIVATE_ROOT / "FinalReport"
+    PROJECT_STORAGE_DIR = BASE_DIR / "sessions"
+    print("🏢 [Môi trường] Đang chạy trên Máy Local Công Ty (Bật chế độ DLP 2 vùng lưu trữ)")
+else:
+    # 🌐 [MÔI TRƯỜNG SERVER / LINUX / MÁY KHÔNG CÓ DLP]:
+    # Tự động gộp tất cả về 1 vùng duy nhất ngay trong Project
+    PRIVATE_EXCEL_DIR = BASE_DIR / "sessions"
+    FINAL_REPORT_DIR  = BASE_DIR / "final_reports"
+    PROJECT_STORAGE_DIR = BASE_DIR / "sessions"
+    print("🌐 [Môi trường] Đang chạy trên Server (Bật chế độ Thống Nhất 1 vùng lưu trữ)")
+
+PRIVATE_EXCEL_DIR.mkdir(parents=True, exist_ok=True)
+FINAL_REPORT_DIR.mkdir(parents=True, exist_ok=True)
+PROJECT_STORAGE_DIR.mkdir(parents=True, exist_ok=True)
 
 
 class ReviewRequest(BaseModel):
@@ -189,11 +206,19 @@ def run_ai_task_background(keyid: str, session_dir: Path, excel_path: str):
             detail_data = parse_excel_report_to_detail(
                 Path(final_excel_path), keyid, session_dir, logs=full_logs)
             if detail_data:
-                json_path = FINAL_REPORT_DIR / f"{safe_id(keyid)}_detail.json"
-                with open(json_path, "w", encoding="utf-8") as jf:
-                    json.dump(detail_data, jf, ensure_ascii=False, indent=2)
+                json_name = f"{safe_id(keyid)}_detail.json"
+                try:
+                    with open(FINAL_REPORT_DIR / json_name, "w", encoding="utf-8") as jf:
+                        json.dump(detail_data, jf, ensure_ascii=False, indent=2)
+                except Exception:
+                    pass
+                try:
+                    with open(session_dir / json_name, "w", encoding="utf-8") as jf:
+                        json.dump(detail_data, jf, ensure_ascii=False, indent=2)
+                except Exception:
+                    pass
                 print(
-                    f"💾 [Detail Cache] Đã lưu chi tiết đối soát: {json_path.name}")
+                    f"💾 [Detail Cache] Đã lưu chi tiết đối soát: {json_name}")
         except Exception as det_err:
             print(f"⚠️ [Detail Cache Warning] {det_err}")
 
@@ -251,10 +276,13 @@ async def upload_excel_task(
                 detail=f"Dung lượng file ({file.size / (1024*1024):.1f}MB) vượt quá giới hạn ({config.MAX_UPLOAD_SIZE_MB}MB)!")
 
         safe_keyid = KEYID.replace('/', '_').replace('\\', '_')
-        session_dir = STORAGE_DIR / f"session_{safe_keyid}_{int(time.time())}"
-        session_dir.mkdir(parents=True, exist_ok=True)
+        session_name = f"session_{safe_keyid}_{int(time.time())}"
 
-        excel_path = session_dir / file.filename
+        # 1. Thư mục Private để lưu file Excel upload (tuân thủ DLP máy công ty)
+        private_session_dir = PRIVATE_EXCEL_DIR / session_name
+        private_session_dir.mkdir(parents=True, exist_ok=True)
+        excel_path = private_session_dir / file.filename
+
         with open(excel_path, "wb") as buffer:
             shutil.copyfileobj(file.file, buffer)
 
@@ -266,10 +294,14 @@ async def upload_excel_task(
                 status_code=413,
                 detail=f"Dung lượng file ({saved_file_size / (1024*1024):.1f}MB) vượt quá giới hạn ({config.MAX_UPLOAD_SIZE_MB}MB)!")
 
-        update_task_status(keyid=KEYID, status="WAITING",
-                           reason="Đã nhận file, đang xếp hàng chạy...", progress=0)
+        # 2. Thư mục Project để lưu toàn bộ ảnh evidence, PDF, CSV, pipeline.log (không bị DLP chặn)
+        project_session_dir = PROJECT_STORAGE_DIR / session_name
+        project_session_dir.mkdir(parents=True, exist_ok=True)
+
+        update_task_status(keyid=KEYID, status="RUNNING",
+                           reason="Đã nhận file, AI đang bóc tách ngầm...", progress=5)
         background_tasks.add_task(
-            run_ai_task_background, KEYID, session_dir, str(excel_path))
+            run_ai_task_background, KEYID, project_session_dir, str(excel_path))
 
         return {"status": "accepted", "message": "Nạp file thành công, AI đang khởi chạy."}
     except Exception as e:
@@ -384,7 +416,7 @@ async def get_task_detail(keyid: str, status: str = "COMPLETED", error_count: in
             "reason": reason or ""
         }
         detail = build_or_load_task_detail(
-            keyid, FINAL_REPORT_DIR, STORAGE_DIR, fallback_info)
+            keyid, FINAL_REPORT_DIR, PROJECT_STORAGE_DIR, fallback_info)
         return detail
     except Exception as e:
         print(f"❌ [FastAPI Error] get_task_detail: {e}")
@@ -399,14 +431,17 @@ async def get_task_image(keyid: str, filename: str):
         from detail_builder import safe_id
         safe_key = safe_id(keyid)
 
-        # Quét trong các thư mục session của keyid
-        for s_dir in STORAGE_DIR.glob(f"*session_{safe_key}*"):
-            for sub in ["", "drawings", "evidence_images", "pages"]:
-                target = (s_dir / sub / filename) if sub else (s_dir / filename)
-                if target.exists() and target.is_file():
-                    ext = target.suffix.lower()
-                    media_type = "image/png" if ext == ".png" else "image/jpeg"
-                    return FileResponse(str(target), media_type=media_type)
+        # Quét ưu tiên trong PROJECT_STORAGE_DIR (nơi lưu evidence_images không bị DLP chặn)
+        search_roots = [PROJECT_STORAGE_DIR, PRIVATE_EXCEL_DIR]
+        for root in search_roots:
+            if root.exists():
+                for s_dir in root.glob(f"*session_{safe_key}*"):
+                    for sub in ["", "evidence_images", "drawings", "pages"]:
+                        target = (s_dir / sub / filename) if sub else (s_dir / filename)
+                        if target.exists() and target.is_file():
+                            ext = target.suffix.lower()
+                            media_type = "image/png" if ext == ".png" else "image/jpeg"
+                            return FileResponse(str(target), media_type=media_type)
 
         raise HTTPException(
             status_code=404, detail="Không tìm thấy file ảnh bản vẽ.")
@@ -426,27 +461,34 @@ async def rerun_task_endpoint(keyid: str, background_tasks: BackgroundTasks):
         from detail_builder import safe_id
         safe_key = safe_id(keyid)
 
-        # 1. Tìm phiên làm việc (session) gần nhất của KEYID
-        sess_candidates = sorted(STORAGE_DIR.glob(
-            f"*session_{safe_key}*"), key=os.path.getmtime, reverse=True)
-        if not sess_candidates:
-            raise HTTPException(
-                status_code=404,
-                detail=f"Không tìm thấy phiên làm việc cũ cho [{keyid}]. Vui lòng bấm Upload lại file Excel!"
-            )
+        # 1. Tìm file Excel trong các phiên làm việc cũ (tìm cả trong PRIVATE_EXCEL_DIR và PROJECT_STORAGE_DIR)
+        search_roots = [PRIVATE_EXCEL_DIR, PROJECT_STORAGE_DIR]
+        sess_candidates = []
+        for root in search_roots:
+            if root.exists():
+                sess_candidates.extend(root.glob(f"*session_{safe_key}*"))
+        sess_candidates = sorted(sess_candidates, key=os.path.getmtime, reverse=True)
 
-        session_dir = sess_candidates[0]
-        excels = list(session_dir.glob("*.xlsx")) + \
-            list(session_dir.glob("*.xlsm"))
-        if not excels:
+        excel_path = None
+        for s_dir in sess_candidates:
+            excels = list(s_dir.glob("*.xlsx")) + list(s_dir.glob("*.xlsm"))
+            if excels:
+                excel_path = excels[0]
+                break
+
+        if not excel_path:
             raise HTTPException(
                 status_code=404,
                 detail=f"Không tìm thấy file Excel trong thư mục session của [{keyid}]. Vui lòng upload lại file!"
             )
 
-        excel_path = excels[0]
         print(
             f"🔄 [RERUN] Bắt đầu kích hoạt chạy lại AI cho KEYID={keyid} với file {excel_path.name}")
+
+        # Tạo project_session_dir mới để lưu ảnh và log mới
+        new_session_name = f"session_{safe_key}_{int(time.time())}"
+        project_session_dir = PROJECT_STORAGE_DIR / new_session_name
+        project_session_dir.mkdir(parents=True, exist_ok=True)
 
         update_task_status(
             keyid=keyid,
@@ -455,7 +497,7 @@ async def rerun_task_endpoint(keyid: str, background_tasks: BackgroundTasks):
             progress=5
         )
         background_tasks.add_task(
-            run_ai_task_background, keyid, session_dir, str(excel_path))
+            run_ai_task_background, keyid, project_session_dir, str(excel_path))
 
         return {"status": "ok", "message": f"Đã bắt đầu chạy lại tác vụ AI cho [{keyid}]."}
     except HTTPException:

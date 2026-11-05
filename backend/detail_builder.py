@@ -240,7 +240,7 @@ def build_or_load_task_detail(keyid: str, final_report_dir: Path, storage_dir: P
     safe_key = safe_id(keyid)
     cache_json_path = final_report_dir / f"{safe_key}_detail.json"
 
-    # 1. Đã có file cache JSON
+    # 1. Đã có file cache JSON trong final_report_dir
     if cache_json_path.exists():
         try:
             with open(cache_json_path, "r", encoding="utf-8") as f:
@@ -248,17 +248,25 @@ def build_or_load_task_detail(keyid: str, final_report_dir: Path, storage_dir: P
         except Exception as e:
             print(f"⚠️ Lỗi đọc cache detail: {e}")
 
-    # 2. Tìm file Excel báo cáo trong final_reports
-    possible_excels = list(final_report_dir.glob(f"*{safe_key}*.xlsx"))
-    if not possible_excels:
-        possible_excels = list(final_report_dir.glob("*.xlsx"))
-
-    # Tìm session_dir gần nhất
+    # Tìm session_dir gần nhất trong storage_dir
     session_dir = None
     if storage_dir.exists():
         sess_candidates = sorted(storage_dir.glob(f"*session_{safe_key}*"), key=os.path.getmtime, reverse=True)
         if sess_candidates:
             session_dir = sess_candidates[0]
+            # Kiểm tra cache JSON trong session_dir
+            sess_json = session_dir / f"{safe_key}_detail.json"
+            if sess_json.exists():
+                try:
+                    with open(sess_json, "r", encoding="utf-8") as f:
+                        return json.load(f)
+                except Exception:
+                    pass
+
+    # 2. Tìm file Excel báo cáo trong final_reports
+    possible_excels = list(final_report_dir.glob(f"*{safe_key}*.xlsx"))
+    if not possible_excels:
+        possible_excels = list(final_report_dir.glob("*.xlsx"))
 
     if possible_excels:
         target_excel = possible_excels[0]
