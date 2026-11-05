@@ -249,3 +249,70 @@ def update_review_decision(keyid: str, decision: str, note: str, reviewer: str):
     except Exception as e:
         print(f"[Oracle DB Error] update_review_decision: {e}")
         raise
+
+
+def get_kpi_summary(payment_month: str = "ALL", keyword: str = "ALL") -> dict:
+    """Truy vấn 5 chỉ số KPI toàn cục cố định từ bảng LOCAL_AI.MEP_PAYMENT_ANALYSIS."""
+    sql = """
+        SELECT
+            COUNT(*) AS TOTAL,
+            COUNT(CASE WHEN STATUS = 'COMPLETED' AND NVL(ERROR_COUNT, 0) = 0 THEN 1 END) AS OK_COUNT,
+            COUNT(CASE WHEN STATUS = 'COMPLETED' AND NVL(ERROR_COUNT, 0) > 0 THEN 1 END) AS ERR_COUNT,
+            COUNT(CASE WHEN STATUS = 'RUNNING' THEN 1 END) AS RUNNING_COUNT,
+            COUNT(CASE WHEN STATUS = 'WAITING' OR STATUS IS NULL THEN 1 END) AS WAITING_COUNT
+        FROM LOCAL_AI.MEP_PAYMENT_ANALYSIS
+        WHERE 1 = 1
+        AND (:PAYMENT_MONTH = 'ALL' OR PAYMENT_MONTH = :PAYMENT_MONTH)
+        AND (:KEYID = 'ALL' OR KEYID LIKE '%' || :KEYID || '%' OR TASK_NAME LIKE '%' || :KEYID || '%')
+    """
+    params = {
+        "PAYMENT_MONTH": str(payment_month or "ALL").strip(),
+        "KEYID": str(keyword or "ALL").strip()
+    }
+    try:
+        cur = get_cur()
+        if result_type and hasattr(result_type, 'DATAFRAME'):
+            try:
+                df = cur.execute(sql=sql, params=params, res=result_type.DATAFRAME)
+                if df is not None and not df.empty:
+                    r = df.iloc[0]
+                    return {
+                        "total": int(r.get("TOTAL", 0)),
+                        "ok": int(r.get("OK_COUNT", 0)),
+                        "err": int(r.get("ERR_COUNT", 0)),
+                        "running": int(r.get("RUNNING_COUNT", 0)),
+                        "waiting": int(r.get("WAITING_COUNT", 0))
+                    }
+            except Exception:
+                pass
+
+        if hasattr(cur, 'cursor'):
+            c = cur.cursor()
+            c.execute(sql, params)
+            r = c.fetchone()
+            c.close()
+            if r:
+                return {
+                    "total": int(r[0] or 0),
+                    "ok": int(r[1] or 0),
+                    "err": int(r[2] or 0),
+                    "running": int(r[3] or 0),
+                    "waiting": int(r[4] or 0)
+                }
+
+        res = cur.execute(sql, params=params)
+        if hasattr(res, 'fetchone'):
+            r = res.fetchone()
+            if r:
+                return {
+                    "total": int(r[0] or 0),
+                    "ok": int(r[1] or 0),
+                    "err": int(r[2] or 0),
+                    "running": int(r[3] or 0),
+                    "waiting": int(r[4] or 0)
+                }
+    except Exception as e:
+        print(f"[Oracle DB Warning] get_kpi_summary error: {e}")
+
+    return {"total": 0, "ok": 0, "err": 0, "running": 0, "waiting": 0}
+

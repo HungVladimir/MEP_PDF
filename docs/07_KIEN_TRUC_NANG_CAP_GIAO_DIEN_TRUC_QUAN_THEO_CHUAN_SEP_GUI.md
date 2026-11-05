@@ -56,14 +56,17 @@ SAU NÂNG CẤP (THEO CHUẨN SẾP GỬI):
 
 ### 3.1. Frontend (`operation.vue`)
 
-#### A. Khối 5 Thẻ KPI Thống Kê (Click-to-Filter)
-- Nằm ngay đầu giao diện, hiển thị trực quan các nhóm trạng thái:
-  1. **Tổng số hồ sơ**: Tất cả hồ sơ.
-  2. **Khớp 100% (0 lỗi)**: Màu xanh lá cây (`#67C23A`), lọc các hồ sơ nghiệm thu đạt chuẩn.
-  3. **Có sai lệch**: Màu đỏ cảnh báo (`#F56C6C`), lọc các hồ sơ phát hiện chênh lệch khối lượng/mã vật tư.
-  4. **Đang đối soát AI**: Màu vàng cam (`#E6A23C`), lọc các tác vụ AI Worker đang xử lý ngầm.
-  5. **Chờ duyệt / Mới**: Màu xám trung tính (`#909399`), các hồ sơ vừa nạp hoặc chờ xử lý.
-- Khi người dùng click vào bất kỳ thẻ nào, hệ thống tự động gán bộ lọc và reload dữ liệu ngay lập tức.
+#### A. Khối 5 Thẻ KPI Thống Kê Toàn Cục Cố Định (Click-to-Filter)
+- **Cơ chế Cố Định Số Liệu Toàn Cục (Fixed Global Summary Stats):**
+  - **Vấn đề trước đây:** Do `kpiStats` được tính bằng `computed` dựa trên mảng `tableData.value` (chỉ chứa 20 dòng của trang hiện tại), khi chuyển sang trang 2 hoặc khi bấm lọc, số trên các thẻ bị biến động liên tục (ví dụ: đang có 21 hồ sơ chờ duyệt, trang 1 hiện 20, sang trang 2 chỉ hiện 1).
+  - **Giải pháp chuẩn doanh nghiệp:** Biến `kpiStats` thành `ref` lưu trữ số liệu tổng hợp toàn cục từ truy vấn `searchKpiSummary` (không bị giới hạn bởi `:STATUS` hay phân trang).
+    - Ví dụ: Hệ thống có 25 hồ sơ (21 Chờ duyệt, 1 Khớp, 2 Lỗi, 1 Đang chạy) $\rightarrow$ 5 con số `25`, `1`, `2`, `1`, `21` này **luôn cố định 100%**, người dùng bấm vào thẻ nào hoặc chuyển sang trang nào thì số trên 5 thẻ vẫn giữ nguyên không đổi.
+- **Phân Tách Tuyệt Đối Giữa "Khớp 100%" (`OK`) và "Có Sai Lệch" (`ERR`):**
+  - Trước đây khi bấm vào "Khớp 100%" hoặc "Có sai lệch", cả 2 thẻ đều gửi `:STATUS = 'COMPLETED'` nên bảng hiển thị chung tất cả các dòng hoàn tất.
+  - **Giải pháp:** Cập nhật câu truy vấn SQL trên OneAI Gateway (`mep_payment_analysis.py`) và backend API:
+    - Khi lọc `OK`: Trả về đúng các dòng `STATUS = 'COMPLETED' AND NVL(ERROR_COUNT, 0) = 0`.
+    - Khi lọc `ERR`: Trả về đúng các dòng `STATUS = 'COMPLETED' AND NVL(ERROR_COUNT, 0) > 0`.
+    - Thêm cơ chế bảo vệ 2 lớp (Client-side fallback) ngay trên Vue: Đảm bảo ấn "Khớp 100%" chỉ ra đúng dòng khớp, ấn "Có sai lệch" chỉ ra đúng dòng có sai lệch.
 
 #### B. Cột "SỐ WO", "KẾT QUẢ KIỂM TRA" & Phân Tách Sự Kiện (Không Xung Đột Inline Edit)
 - **Giải quyết triệt để xung đột sự kiện (Event Collision):**
@@ -143,21 +146,26 @@ Chịu trách nhiệm bóc tách số liệu từ file Excel kết quả 2 sheet
 
 ---
 
-## 5. DANH MỤC 3 FILE CỐT LÕI DUY NHẤT CẦN CHỈNH SỬA & TRIỂN KHAI
+## 5. DANH MỤC CÁC FILE CẬP NHẬT HOÀN THIỆN HỆ THỐNG
 
-Để nâng cấp toàn bộ hệ thống lên giao diện mới theo chuẩn Sếp gửi, bạn **chỉ cần thao tác đúng trên 3 file**:
+Để nâng cấp toàn bộ hệ thống lên chuẩn UX/UI trực quan như hệ thống của Sếp gửi và giải quyết dứt điểm vấn đề KPI cố định:
 
-1. **`MEP_OneAI_System/backend/detail_builder.py`** *(Tạo mới)*:
-   - Module bóc tách báo cáo Excel 2 sheet ra JSON 4 tab và cung cấp cơ chế 3-tier fallback an toàn.
-2. **`MEP_OneAI_System/backend/api.py`** *(Chỉnh sửa)*:
-   - Bổ sung 3 API endpoints (`/mep_payment/detail/{keyid}`, `/mep_payment/image/{keyid}/{filename}`, `/mep_payment/rerun/{keyid}`).
-   - Tự động sinh cache `{safe_key}_detail.json` sau khi hoàn tất pipeline AI.
-3. **`MEP_OneAI_System/oneai_integration/frontend/operation/tab/operation.vue`** *(Chỉnh sửa)*:
-   - Thêm 5 thẻ KPI thống kê bấm-để-lọc.
-   - Thêm Modal Dialog 4 Tab (Bảng lỗi, Bản vẽ, Soi ảnh, Nhật ký AI, Duyệt & Rerun).
-   - Tinh chỉnh các cột: tăng độ rộng Tên công việc, định dạng badge Số WO, dọn sạch nút thừa ở cột Báo cáo.
+1. **`MEP_OneAI_System/oneai_integration/frontend/operation/tab/operation.vue`** *(Frontend Vue 3)*:
+   - 5 Thẻ KPI hiển thị số liệu toàn cục **CỐ ĐỊNH** (`kpiStats.value`), không bị co giãn khi chuyển trang hay khi click lọc.
+   - Phân tách độc lập hoàn toàn giữa bộ lọc `Khớp 100%` (`OK`) và `Có sai lệch` (`ERR`).
    - Sửa lỗi STT phân trang bằng công thức `nextStt`.
-   - Gỡ bỏ `@row-dblclick` để bảo toàn tính năng sửa chữ inline.
+   - Gỡ bỏ `@row-dblclick` để bảo toàn tính năng sửa chữ inline cho Task Name, Part, Group.
+   - Thêm Modal Dialog 4 Tab (Bảng lỗi, Bản vẽ, Soi ảnh, Nhật ký AI, Duyệt & Rerun).
+2. **`MEP_OneAI_System/oneai_integration/backend/menu_operation/mep_payment/mep_payment_analysis.py`** *(OneAI Gateway SQL)*:
+   - Thêm truy vấn `searchKpiSummary`: Đếm 5 chỉ số toàn cục (Total, OK, ERR, Running, Waiting) trong 1 lần gọi duy nhất.
+   - Nâng cấp câu query `searchTotalRow` và `getdata_page`: Hỗ trợ tham số `:STATUS = 'OK'` (`ERROR_COUNT = 0`) và `:STATUS = 'ERR'` (`ERROR_COUNT > 0`).
+3. **`MEP_OneAI_System/oneai_integration/frontend/operation/js/mepPayment.js`** *(Frontend API Bridge)*:
+   - Thêm hàm `get_kpi_summary(paymentMonth, keyword)`.
+4. **`MEP_OneAI_System/backend/api.py` & `backend/sql.py`** *(FastAPI Worker & Local Database)*:
+   - Bổ sung 3 API endpoints (`/mep_payment/detail/{keyid}`, `/mep_payment/image/{keyid}/{filename}`, `/mep_payment/rerun/{keyid}`).
+   - Bổ sung endpoint dự phòng `GET /mep_payment/kpi_summary` đảm bảo hệ thống luôn có số liệu KPI ngay cả khi Gateway chưa cập nhật.
+5. **`MEP_OneAI_System/backend/detail_builder.py`** *(Tạo mới)*:
+   - Module bóc tách báo cáo Excel 2 sheet ra JSON 4 tab và cung cấp cơ chế 3-tier fallback an toàn.
 
-> 🛡️ **Bảo toàn 100%:** Toàn bộ các file thuật toán AI lõi (`engine.py`, `excel_reconciler.py`, `pdf_extractor.py`), file DB SQL (`sql.py`, `mep_payment_analysis.py`), và file JavaScript Gateway (`mepPayment.js`) đều được giữ nguyên vẹn, không cần thay đổi bất kỳ dòng code nào!
+> 🛡️ **Bảo toàn 100%:** Toàn bộ các file thuật toán AI lõi (`engine.py`, `excel_reconciler.py`, `pdf_extractor.py`, `config.py`, `utils.py`) đều được giữ nguyên vẹn, không cần thay đổi bất kỳ dòng code nào!
 

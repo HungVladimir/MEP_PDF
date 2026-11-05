@@ -597,7 +597,9 @@
         <option value="ALL">Tất cả trạng thái</option>
         <option value="WAITING">Chờ duyệt (WAITING)</option>
         <option value="RUNNING">Đang xử lý (RUNNING)</option>
-        <option value="COMPLETED">Hoàn tất (COMPLETED)</option>
+        <option value="OK">Khớp 100% (0 lỗi)</option>
+        <option value="ERR">Có sai lệch (Lỗi)</option>
+        <option value="COMPLETED">Tất cả hoàn tất</option>
         <option value="CANCEL">Thất bại (CANCEL)</option>
       </select>
 
@@ -1293,9 +1295,7 @@
     function filterByKpi(kpiKey) {
       currentFilterKpi = kpiKey;
       const sel = document.getElementById("sel-status");
-      if (kpiKey === 'ALL') sel.value = 'ALL';
-      else if (kpiKey === 'OK' || kpiKey === 'ERR') sel.value = 'COMPLETED';
-      else sel.value = kpiKey;
+      sel.value = kpiKey;
 
       const badge = document.getElementById("active-filter-badge");
       if (kpiKey !== 'ALL') {
@@ -1350,9 +1350,9 @@
         const matchM = !month || t.PAYMENT_MONTH === month;
         let matchS = true;
 
-        if (currentFilterKpi === 'OK') {
+        if (currentFilterKpi === 'OK' || status === 'OK') {
           matchS = (t.STATUS === 'COMPLETED' && (t.ERROR_COUNT === 0 || !t.ERROR_COUNT));
-        } else if (currentFilterKpi === 'ERR') {
+        } else if (currentFilterKpi === 'ERR' || status === 'ERR') {
           matchS = (t.STATUS === 'COMPLETED' && t.ERROR_COUNT > 0);
         } else if (status !== 'ALL') {
           matchS = (t.STATUS === status);

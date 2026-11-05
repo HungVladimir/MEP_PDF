@@ -389,3 +389,20 @@ async def rerun_task_endpoint(keyid: str, background_tasks: BackgroundTasks):
         print(f"❌ [FastAPI Error] rerun_task: {e}")
         raise HTTPException(status_code=500, detail=f"Lỗi kích hoạt chạy lại AI: {str(e)}")
 
+
+@app.get("/mep_payment/kpi_summary")
+async def kpi_summary_endpoint(payment_month: str = "ALL", keyword: str = "ALL"):
+    """API trả về 5 chỉ số KPI toàn cục cố định (Tổng, Khớp 100%, Sai lệch, Đang chạy, Chờ duyệt)."""
+    try:
+        from sql import get_kpi_summary
+        data = get_kpi_summary(payment_month, keyword)
+        return {"status": "ok", "data": data}
+    except Exception as e:
+        print(f"❌ [FastAPI Error] kpi_summary: {e}")
+        return {
+            "status": "error",
+            "message": str(e),
+            "data": {"total": 0, "ok": 0, "err": 0, "running": 0, "waiting": 0}
+        }
+
+

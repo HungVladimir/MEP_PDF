@@ -45,3 +45,15 @@ export async function delete_mep_rows(keyids = []) {
   const res = await api.post("/mep_payment/delete_rows", { keyids })
   return res.data
 }
+
+// 5. LẤY THỐNG KÊ 5 CHỈ SỐ KPI TOÀN CỤC CỐ ĐỊNH (KHÔNG BỊ ẢNH HƯỞNG BỞI PHÂN TRANG)
+export async function get_kpi_summary(paymentMonth = "ALL", keyword = "ALL") {
+  const reqId = `${BASE_REQ_ID}:searchKpiSummary`
+  const param = {
+    PAYMENT_MONTH: paymentMonth || "ALL",
+    KEYID: keyword || "ALL"
+  }
+  const parameter = { [reqId]: param }
+  const res = await api.get("/crud/ui", { params: parameter, loading: false })
+  return res.data[reqId].VAL
+}

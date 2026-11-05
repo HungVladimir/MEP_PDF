@@ -41,8 +41,8 @@
 
     <!-- 2. THANH TÌM KIẾM & BỘ LỌC (TOP FILTER) -->
     <div class="toolbar">
-      <el-select v-model="selectedStatus" placeholder="Chọn Trạng Thái" clearable style="width: 170px" @change="activeKpiFilter = selectedStatus || 'ALL'">
-        <el-option v-for="item in statusList" :key="item" :label="item" :value="item" />
+      <el-select v-model="selectedStatus" placeholder="Chọn Trạng Thái" clearable style="width: 200px">
+        <el-option v-for="item in statusOptions" :key="item.value" :label="item.label" :value="item.value" />
       </el-select>
 
       <el-date-picker v-model="selectedMonth" type="month" placeholder="Chọn Tháng Thanh Toán" value-format="YYYY-MM"
@@ -468,7 +468,7 @@
 import { ref, computed, onMounted, onUnmounted, watch } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import axios from 'axios'
-import { get_total_row, get_data_page, save_mep_rows, delete_mep_rows } from '../js/mepPayment'
+import { get_total_row, get_data_page, save_mep_rows, delete_mep_rows, get_kpi_summary } from '../js/mepPayment'
 
 // Địa chỉ Worker API & Kích thước nút bấm
 const FASTAPI_BASE_URL = 'http://127.0.0.1:8000'
@@ -479,7 +479,15 @@ const MAX_UPLOAD_SIZE_MB = 50 // Giới hạn file Excel upload tối đa 50MB
 const selectedStatus = ref('')
 const selectedMonth = ref('')
 const searchKeyword = ref('')
-const statusList = ['ALL', 'WAITING', 'RUNNING', 'COMPLETED', 'CANCEL']
+const statusOptions = [
+  { label: 'Tất cả trạng thái', value: 'ALL' },
+  { label: 'Chờ duyệt / Mới', value: 'WAITING' },
+  { label: 'Đang xử lý (RUNNING)', value: 'RUNNING' },
+  { label: 'Khớp 100% (0 lỗi)', value: 'OK' },
+  { label: 'Có sai lệch (Lỗi)', value: 'ERR' },
+  { label: 'Tất cả hoàn tất', value: 'COMPLETED' },
+  { label: 'Thất bại (CANCEL)', value: 'CANCEL' }
+]
 const activeKpiFilter = ref('ALL')
 
 // Bảng dữ liệu & Phân trang
@@ -579,7 +587,16 @@ const loadData = async () => {
       selectedMonth.value || 'ALL',
       searchKeyword.value || 'ALL'
     )
-    tableData.value = (data || []).map(row => ({
+    let processed = data || []
+
+    // Client-side fallback bảo vệ 2 lớp: Nếu backend cũ trả về tất cả COMPLETED khi filter OK/ERR
+    if (selectedStatus.value === 'OK') {
+      processed = processed.filter(r => r.STATUS === 'COMPLETED' && (Number(r.ERROR_COUNT) === 0 || !r.ERROR_COUNT))
+    } else if (selectedStatus.value === 'ERR') {
+      processed = processed.filter(r => r.STATUS === 'COMPLETED' && Number(r.ERROR_COUNT) > 0)
+    }
+
+    tableData.value = processed.map(row => ({
       ...row,
       isNew: false,
       isEditing: false
@@ -603,36 +620,69 @@ const loadTotal = async () => {
   }
 }
 
+// 2. 5 CHỈ SỐ KPI TOÀN CỤC CỐ ĐỊNH (KHÔNG BỊ THAY ĐỔI THEO PHÂN TRANG HAY KHI BẤM LỌC)
+const kpiStats = ref({
+  total: 0,
+  ok: 0,
+  err: 0,
+  running: 0,
+  waiting: 0
+})
+
+const loadKpiSummary = async () => {
+  try {
+    if (typeof get_kpi_summary === 'function') {
+      const res = await get_kpi_summary(
+        selectedMonth.value || 'ALL',
+        searchKeyword.value || 'ALL'
+      )
+      if (res && res[0]) {
+        kpiStats.value = {
+          total: Number(res[0].TOTAL ?? 0),
+          ok: Number(res[0].OK_COUNT ?? 0),
+          err: Number(res[0].ERR_COUNT ?? 0),
+          running: Number(res[0].RUNNING_COUNT ?? 0),
+          waiting: Number(res[0].WAITING_COUNT ?? 0)
+        }
+        return
+      }
+    }
+  } catch (err) {
+    console.warn("⚠️ [Gateway get_kpi_summary] Chưa cấu hình trên Gateway, dùng kênh FastAPI Worker...")
+  }
+
+  // Kênh dự phòng 2: FastAPI Worker (:8000)
+  try {
+    const resFast = await axios.get(`${FASTAPI_BASE_URL}/mep_payment/kpi_summary`, {
+      params: {
+        payment_month: selectedMonth.value || 'ALL',
+        keyword: searchKeyword.value || 'ALL'
+      }
+    })
+    if (resFast.data?.data) {
+      kpiStats.value = resFast.data.data
+      return
+    }
+  } catch (fastErr) {
+    console.warn("⚠️ [FastAPI kpi_summary Warning]", fastErr)
+  }
+}
+
 const handleReload = async () => {
   isLoading.value = true
   try {
-    await loadData()
+    await loadKpiSummary()
     await loadTotal()
+    await loadData()
   } finally {
     isLoading.value = false
   }
 }
 
-// 2. TÍNH TOÁN CÁC CHỈ SỐ KPI THỐNG KÊ (STAT CARDS)
-const kpiStats = computed(() => {
-  const all = tableData.value || []
-  return {
-    total: total.value || all.length,
-    ok: all.filter(r => r.STATUS === 'COMPLETED' && (Number(r.ERROR_COUNT) === 0 || !r.ERROR_COUNT)).length,
-    err: all.filter(r => r.STATUS === 'COMPLETED' && Number(r.ERROR_COUNT) > 0).length,
-    running: all.filter(r => r.STATUS === 'RUNNING').length,
-    waiting: all.filter(r => r.STATUS === 'WAITING' || !r.STATUS).length
-  }
-})
-
 const handleKpiFilter = (statusKey) => {
   activeKpiFilter.value = statusKey
   if (statusKey === 'ALL') {
-    selectedStatus.value = 'ALL'
-  } else if (statusKey === 'OK') {
-    selectedStatus.value = 'COMPLETED'
-  } else if (statusKey === 'ERR') {
-    selectedStatus.value = 'COMPLETED'
+    selectedStatus.value = ''
   } else {
     selectedStatus.value = statusKey
   }
@@ -990,9 +1040,20 @@ const handleSizeChange = (s) => { pageSize.value = s; page.value = 1; loadData()
 const goFirst = () => { if (page.value > 1) { page.value = 1; loadData(); } }
 const goLast = () => { if (page.value < totalPages.value) { page.value = totalPages.value; loadData(); } }
 
-watch([selectedStatus, selectedMonth], () => {
+watch(selectedMonth, () => {
   page.value = 1
   handleReload()
+})
+
+watch(selectedStatus, (newVal) => {
+  page.value = 1
+  if (!newVal || newVal === 'ALL') {
+    activeKpiFilter.value = 'ALL'
+  } else {
+    activeKpiFilter.value = newVal
+  }
+  loadTotal()
+  loadData()
 })
 </script>
 
@@ -1361,14 +1422,14 @@ watch([selectedStatus, selectedMonth], () => {
   gap: 4px;
   align-items: center;
 }
-
+eeeeeeeee
 .modal-stats-grid {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
   gap: 10px;
   margin-bottom: 12px;
 }
-
+hêllo
 .m-stat {
   background-color: #262727;
   border: 1px solid #363637;
