@@ -610,7 +610,7 @@ def get_smart_cut_points_case2(img, max_chunk_height):
 # ==========================================
 # HÀM XỬ LÝ CHÍNH (HỖ TRỢ GỌI TỪ CLI HOẶC WEB SERVER)
 # ==========================================
-def process_single_pdf(pdf_path, force_mode=None, out_drawing_dir=None, out_gatepass_dir=None):
+def process_single_pdf(pdf_path, force_mode=None, out_drawing_dir=None, out_gatepass_dir=None, out_img_dir=None):
     """
     Xử lý 1 file PDF bất kỳ (Bản vẽ hoặc Gate Pass).
     """
@@ -623,13 +623,23 @@ def process_single_pdf(pdf_path, force_mode=None, out_drawing_dir=None, out_gate
     dir_csv_drawings = out_drawing_dir or config.DIR_CSV_EXTRACTED
     dir_csv_gatepass = out_gatepass_dir or getattr(
         config, 'DIR_GATEPASS_CSV', config.DIR_CSV_EXTRACTED)
+    dir_img_extracted = out_img_dir or config.DIR_IMG_EXTRACTED
     os.makedirs(dir_csv_drawings, exist_ok=True)
     os.makedirs(dir_csv_gatepass, exist_ok=True)
-    os.makedirs(config.DIR_IMG_EXTRACTED, exist_ok=True)
+    os.makedirs(dir_img_extracted, exist_ok=True)
 
     for page_num in range(len(doc)):
         page = doc[page_num]
         print(f"\n📄 Đang quét Trang {page_num + 1}/{len(doc)}...")
+
+        # 0. Render ảnh toàn trang bản vẽ phục vụ xem chi tiết trên Lightbox UI
+        try:
+            page_pix = page.get_pixmap(dpi=150)
+            page_img_path = os.path.join(
+                dir_img_extracted, f"{base_name}_page{page_num+1}_drawing_preview.png")
+            page_pix.save(page_img_path)
+        except Exception:
+            pass
 
         # 1. Trạm điều phối trả về DANH SÁCH ẢNH BẢNG
         table_imgs, case_type = get_table_image_from_page(
@@ -643,7 +653,7 @@ def process_single_pdf(pdf_path, force_mode=None, out_drawing_dir=None, out_gate
 
         if case_type != "gate_pass":
             roi_img = capture_roi_image(page)
-            cv2.imwrite(os.path.join(config.DIR_IMG_EXTRACTED,
+            cv2.imwrite(os.path.join(dir_img_extracted,
                         f"{base_name}_page{page_num+1}_roi_debug.png"), roi_img)
             drawing_no = extract_drawing_no_tier1(page)
             if not drawing_no:
@@ -657,7 +667,7 @@ def process_single_pdf(pdf_path, force_mode=None, out_drawing_dir=None, out_gate
         # 2. VÒNG LẶP XỬ LÝ NHIỀU BẢNG (MULTI-TABLE CHUNKING)
         for tbl_idx, table_img in enumerate(table_imgs):
             h, w = table_img.shape[:2]
-            cv2.imwrite(os.path.join(config.DIR_IMG_EXTRACTED,
+            cv2.imwrite(os.path.join(dir_img_extracted,
                         f"{base_name}_page{page_num+1}_table{tbl_idx+1}_{case_type}.png"), table_img)
 
             if h > config.MAX_CHUNK_HEIGHT:
@@ -675,7 +685,7 @@ def process_single_pdf(pdf_path, force_mode=None, out_drawing_dir=None, out_gate
                         continue
 
                     cv2.imwrite(os.path.join(
-                        config.DIR_IMG_EXTRACTED, f"{base_name}_page{page_num+1}_table{tbl_idx+1}_chunk_{i+1}.png"), img_chunk)
+                        dir_img_extracted, f"{base_name}_page{page_num+1}_table{tbl_idx+1}_chunk_{i+1}.png"), img_chunk)
                     tasks.append({"type": "table", "case_type": case_type,
                                  "img": img_chunk, "label": f"Bảng {tbl_idx+1} - Khúc {i+1}"})
             else:

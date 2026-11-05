@@ -56,9 +56,6 @@
     <div class="table-action-bar">
       <div class="total-count">
         Total: <span class="count-number">{{ total }} rows</span>
-        <span v-if="activeKpiFilter !== 'ALL'" class="badge-filter-notice ms-2">
-          (Đang lọc: {{ activeKpiFilter }})
-        </span>
       </div>
 
       <div class="action-buttons">
@@ -96,8 +93,7 @@
     <!-- 4. BẢNG DỮ LIỆU ĐỐI SOÁT (TABLE GRID HỖ TRỢ INLINE EDIT) -->
     <div class="table-container">
       <el-table ref="tableRef" :data="tableData" border height="660" size="small" style="width: 100%"
-        show-overflow-tooltip empty-text="Không có dữ liệu đối soát"
-        @selection-change="handleSelectionChange">
+        show-overflow-tooltip empty-text="Không có dữ liệu đối soát" @selection-change="handleSelectionChange">
         <!-- CỘT CHECKBOX CHỌN DÒNG -->
         <el-table-column type="selection" width="45" align="center" />
 
@@ -121,7 +117,8 @@
           <template #default="{ row }">
             <el-input v-if="row.isNew || row.isEditing" v-model="row.TASK_NAME" placeholder="Tên công việc..."
               size="mini" class="inline-input" />
-            <span v-else class="cell-text" @dblclick="row.isEditing = true" title="Bấm đúp chuột để chỉnh sửa">{{ row.TASK_NAME || '-' }}</span>
+            <span v-else class="cell-text" @dblclick="row.isEditing = true" title="Bấm đúp chuột để chỉnh sửa">{{
+              row.TASK_NAME || '-' }}</span>
           </template>
         </el-table-column>
 
@@ -130,7 +127,8 @@
           <template #default="{ row }">
             <el-input v-if="row.isNew || row.isEditing" v-model="row.PAYMENT_MONTH" placeholder="YYYY-MM" size="mini"
               class="inline-input" />
-            <span v-else class="cell-text" @dblclick="row.isEditing = true" title="Bấm đúp chuột để chỉnh sửa">{{ row.PAYMENT_MONTH || '-' }}</span>
+            <span v-else class="cell-text" @dblclick="row.isEditing = true" title="Bấm đúp chuột để chỉnh sửa">{{
+              row.PAYMENT_MONTH || '-' }}</span>
           </template>
         </el-table-column>
 
@@ -139,7 +137,8 @@
           <template #default="{ row }">
             <el-input v-if="row.isNew || row.isEditing" v-model="row.PIC" placeholder="PIC..." size="mini"
               class="inline-input" />
-            <span v-else class="cell-text" @dblclick="row.isEditing = true" title="Bấm đúp chuột để chỉnh sửa">{{ row.PIC || '-' }}</span>
+            <span v-else class="cell-text" @dblclick="row.isEditing = true" title="Bấm đúp chuột để chỉnh sửa">{{
+              row.PIC || '-' }}</span>
           </template>
         </el-table-column>
 
@@ -148,7 +147,8 @@
           <template #default="{ row }">
             <el-input v-if="row.isNew || row.isEditing" v-model="row.PART_NAME" placeholder="Part..." size="mini"
               class="inline-input" />
-            <span v-else class="cell-text" @dblclick="row.isEditing = true" title="Bấm đúp chuột để chỉnh sửa">{{ row.PART_NAME || '-' }}</span>
+            <span v-else class="cell-text" @dblclick="row.isEditing = true" title="Bấm đúp chuột để chỉnh sửa">{{
+              row.PART_NAME || '-' }}</span>
           </template>
         </el-table-column>
 
@@ -157,7 +157,8 @@
           <template #default="{ row }">
             <el-input v-if="row.isNew || row.isEditing" v-model="row.GROUP_NAME" placeholder="Group..." size="mini"
               class="inline-input" />
-            <span v-else class="cell-text" @dblclick="row.isEditing = true" title="Bấm đúp chuột để chỉnh sửa">{{ row.GROUP_NAME || '-' }}</span>
+            <span v-else class="cell-text" @dblclick="row.isEditing = true" title="Bấm đúp chuột để chỉnh sửa">{{
+              row.GROUP_NAME || '-' }}</span>
           </template>
         </el-table-column>
 
@@ -180,8 +181,7 @@
         <el-table-column label="TÀI LIỆU ĐÍNH KÈM" width="135" align="center">
           <template #default="{ row }">
             <el-upload :show-file-list="false" :auto-upload="false" accept=".xlsx,.xlsm"
-              :on-change="(file) => handleUploadExcel(file, row)"
-              :disabled="row.STATUS === 'RUNNING' || row.isNew">
+              :on-change="(file) => handleUploadExcel(file, row)" :disabled="row.STATUS === 'RUNNING' || row.isNew">
               <el-button class="btn-upload-file" :size="buttonSize" :loading="row.STATUS === 'RUNNING'"
                 :disabled="row.STATUS === 'RUNNING' || row.isNew">
                 <i class="bi bi-cloud-arrow-up me-1"></i>
@@ -195,13 +195,9 @@
         <el-table-column label="KẾT QUẢ KIỂM TRA" width="150" align="center">
           <template #default="{ row }">
             <div v-if="row.STATUS === 'COMPLETED'">
-              <el-tag
-                :type="Number(row.ERROR_COUNT) === 0 ? 'success' : 'danger'"
-                effect="light"
-                class="cursor-pointer result-tag-badge"
-                :title="`Bấm để xem chi tiết đối soát ${row.KEYID}`"
-                @click="openDetailModal(row)"
-              >
+              <el-tag :type="Number(row.ERROR_COUNT) === 0 ? 'success' : 'danger'" effect="light"
+                class="cursor-pointer result-tag-badge" :title="`Bấm để xem chi tiết đối soát ${row.KEYID}`"
+                @click="openDetailModal(row)">
                 {{ Number(row.ERROR_COUNT) === 0 ? '✅ Khớp 100%' : `❌ Lệch ${row.ERROR_COUNT} lỗi` }}
               </el-tag>
             </div>
@@ -221,6 +217,19 @@
         <el-table-column label="CHI TIẾT BÁO CÁO" width="170" align="center">
           <template #default="{ row }">
             <div v-if="row.STATUS === 'COMPLETED'">
+
+              <!-- Trạng thái duyệt / Nút duyệt -->
+              <div>
+                <el-tag v-if="row.REVIEW_DECISION === 'APPROVED'" type="success" size="mini">Đã
+                  Duyệt</el-tag>
+                <el-tag v-else-if="row.REVIEW_DECISION === 'REJECTED'" type="danger" size="mini">Từ
+                  Chối</el-tag>
+                <div v-else style="display: inline-flex; gap: 4px;">
+                  <el-button type="success" size="mini" @click="handleReview(row, 'APPROVED')">Duyệt</el-button>
+                  <el-button type="danger" size="mini" @click="handleReview(row, 'REJECTED')">Hủy</el-button>
+                </div>
+              </div>
+
               <!-- Nút tải file báo cáo -->
               <div v-if="row.RESULT_LINK" style="margin-bottom: 3px;">
                 <el-button type="text" size="small" class="download-btn" @click="handleDownloadFile(row)">
@@ -228,15 +237,6 @@
                 </el-button>
               </div>
 
-              <!-- Trạng thái duyệt / Nút duyệt -->
-              <div>
-                <el-tag v-if="row.REVIEW_DECISION === 'APPROVED'" type="success" size="mini">Đã Duyệt</el-tag>
-                <el-tag v-else-if="row.REVIEW_DECISION === 'REJECTED'" type="danger" size="mini">Từ Chối</el-tag>
-                <div v-else style="display: inline-flex; gap: 4px;">
-                  <el-button type="success" size="mini" @click="handleReview(row, 'APPROVED')">Duyệt</el-button>
-                  <el-button type="danger" size="mini" @click="handleReview(row, 'REJECTED')">Hủy</el-button>
-                </div>
-              </div>
             </div>
             <div v-else-if="row.STATUS === 'CANCEL'" class="row-cancel-box">
               <span class="text-reason" :title="row.REASON">{{ row.REASON || 'Xử lý thất bại' }}</span>
@@ -261,14 +261,8 @@
     </div>
 
     <!-- 6. DIALOG CHI TIẾT ĐỐI SOÁT (XEM LỖI, BẢN VẼ, SOI ẢNH, LOG VÀ DUYỆT THEO CHUẨN SẾP) -->
-    <el-dialog
-      v-model="showDetailDialog"
-      :title="`📋 Chi Tiết Đối Soát Hồ Sơ: ${currentTask?.KEYID || ''}`"
-      width="85%"
-      top="4vh"
-      destroy-on-close
-      custom-class="mep-detail-dialog"
-    >
+    <el-dialog v-model="showDetailDialog" :title="`📋 Chi Tiết Đối Soát Hồ Sơ: ${currentTask?.KEYID || ''}`" width="85%"
+      top="4vh" destroy-on-close custom-class="mep-detail-dialog">
       <div v-if="detailLoading" class="detail-loading-box">
         <i class="el-icon-loading" style="font-size: 32px; color: #409EFF;"></i>
         <p style="margin-top: 12px; color: #E5EAF3;">Đang tải và đồng bộ kết quả đối soát AI...</p>
@@ -293,8 +287,10 @@
             <el-tag v-else-if="currentTask?.STATUS === 'CANCEL'" type="danger" effect="dark">CANCEL</el-tag>
             <el-tag v-else type="info" effect="dark">{{ currentTask?.STATUS }}</el-tag>
 
-            <el-tag v-if="currentTask?.REVIEW_DECISION === 'APPROVED'" type="success" effect="plain" class="ms-1">ĐÃ DUYỆT</el-tag>
-            <el-tag v-else-if="currentTask?.REVIEW_DECISION === 'REJECTED'" type="danger" effect="plain" class="ms-1">TỪ CHỐI</el-tag>
+            <el-tag v-if="currentTask?.REVIEW_DECISION === 'APPROVED'" type="success" effect="plain" class="ms-1">ĐÃ
+              DUYỆT</el-tag>
+            <el-tag v-else-if="currentTask?.REVIEW_DECISION === 'REJECTED'" type="danger" effect="plain" class="ms-1">TỪ
+              CHỐI</el-tag>
             <el-tag v-else type="warning" effect="plain" class="ms-1">CHỜ DUYỆT</el-tag>
           </div>
         </div>
@@ -334,12 +330,14 @@
           <!-- TAB 1: DANH SÁCH LỖI PHÁT HIỆN -->
           <el-tab-pane name="errors">
             <template #label>
-              <span><i class="bi bi-exclamation-triangle-fill text-danger me-1"></i> Danh Sách Lỗi ({{ currentDetail.errors?.length || 0 }})</span>
+              <span><i class="bi bi-exclamation-triangle-fill text-danger me-1"></i> Danh Sách Lỗi ({{
+                currentDetail.errors?.length || 0 }})</span>
             </template>
             <div v-if="!currentDetail.errors || currentDetail.errors.length === 0" class="clean-state-box">
               <i class="bi bi-check-circle-fill text-success" style="font-size: 42px;"></i>
               <h4>Tuyệt vời! Không phát hiện lỗi sai lệch nào</h4>
-              <p class="text-muted">Tất cả số lượng vật tư giữa Dự toán nhà thầu và Bản vẽ thiết kế bóc tách khớp 100%.</p>
+              <p class="text-muted">Tất cả số lượng vật tư giữa Dự toán nhà thầu và Bản vẽ thiết kế bóc
+                tách khớp 100%.</p>
             </div>
             <el-table v-else :data="currentDetail.errors" border size="small" height="340" style="width: 100%">
               <el-table-column prop="id" label="#" width="50" align="center" />
@@ -356,7 +354,8 @@
               <el-table-column prop="vendor_qty" label="SL Dự toán" width="100" align="center" />
               <el-table-column prop="ai_qty" label="SL Bản vẽ (AI)" width="110" align="center" />
               <el-table-column prop="diff" label="Chênh lệch" width="140" align="center">
-                <template #default="{ row }"><span class="text-danger font-bold">{{ row.diff }}</span></template>
+                <template #default="{ row }"><span class="text-danger font-bold">{{ row.diff
+                }}</span></template>
               </el-table-column>
               <el-table-column prop="msg" label="Chi tiết đối chiếu" min-width="220" show-overflow-tooltip />
             </el-table>
@@ -365,7 +364,8 @@
           <!-- TAB 2: ĐỐI CHIẾU THEO TỪNG BẢN VẼ -->
           <el-tab-pane name="drawings">
             <template #label>
-              <span><i class="bi bi-diagram-3 me-1"></i> Đối Chiếu Theo Bản Vẽ ({{ currentDetail.groups?.length || 0 }})</span>
+              <span><i class="bi bi-diagram-3 me-1"></i> Đối Chiếu Theo Bản Vẽ ({{
+                currentDetail.groups?.length || 0 }})</span>
             </template>
             <div v-if="!currentDetail.groups || currentDetail.groups.length === 0" class="p-4 text-center text-muted">
               Không có nhóm bản vẽ nào trong bảng kết quả.
@@ -401,21 +401,18 @@
           <!-- TAB 3: SOI BẢN VẼ / ẢNH TRÍCH XUẤT -->
           <el-tab-pane name="images">
             <template #label>
-              <span><i class="bi bi-images me-1"></i> Soi Bản Vẽ / Ảnh Trích Xuất ({{ currentDetail.images?.length || 0 }})</span>
+              <span><i class="bi bi-images me-1"></i> Soi Bản Vẽ / Ảnh Trích Xuất ({{
+                currentDetail.images?.length || 0 }})</span>
             </template>
             <div v-if="!currentDetail.images || currentDetail.images.length === 0" class="p-4 text-center text-muted">
               <i class="bi bi-image" style="font-size: 36px;"></i>
-              <p style="margin-top: 10px;">Chưa có ảnh bản vẽ nào được lưu trong phiên này (Hệ thống lưu trữ ảnh sau khi Worker AI render).</p>
+              <p style="margin-top: 10px;">Chưa có ảnh bản vẽ nào được lưu trong phiên này (Hệ thống lưu
+                trữ ảnh sau khi Worker AI render).</p>
             </div>
             <div v-else class="images-strip">
               <div v-for="(img, idx) in currentDetail.images" :key="idx" class="img-thumb-box">
-                <el-image
-                  :src="getImgUrl(img.url)"
-                  :preview-src-list="previewImageList"
-                  :initial-index="idx"
-                  fit="contain"
-                  class="thumb-img"
-                />
+                <el-image :src="getImgUrl(img.url)" :preview-src-list="previewImageList" :initial-index="idx"
+                  fit="contain" class="thumb-img" />
                 <div class="thumb-title">{{ img.title || img.name }}</div>
               </div>
             </div>
@@ -439,7 +436,8 @@
           <h4>✍️ Phê Duyệt & Thao Tác Hồ Sơ</h4>
           <div class="review-inputs-row">
             <div style="flex: 1;">
-              <el-input v-model="detailReviewNote" placeholder="Nhập ghi chú duyệt (VD: Lỗi số 2 đã đối soát hiện trường, nghiệm thu đạt...)" />
+              <el-input v-model="detailReviewNote"
+                placeholder="Nhập ghi chú duyệt (VD: Lỗi số 2 đã đối soát hiện trường, nghiệm thu đạt...)" />
             </div>
             <el-button type="success" :size="buttonSize" @click="submitDetailReview('APPROVED')">
               <i class="bi bi-check-lg me-1"></i> Duyệt (Approve)
@@ -449,10 +447,20 @@
             </el-button>
           </div>
           <div class="review-bottom-actions">
-            <el-button v-if="currentTask?.RESULT_LINK" :size="buttonSize" type="primary" plain @click="handleDownloadFile(currentTask)">
+            <!-- Nút Upload File Excel trực tiếp trong Modal Dialog -->
+            <el-upload :show-file-list="false" :auto-upload="false" accept=".xlsx,.xlsm"
+              :on-change="(file) => handleUploadExcel(file, currentTask)"
+              :disabled="currentTask?.STATUS === 'RUNNING'" style="display: inline-block;">
+              <el-button :size="buttonSize" class="btn-upload-file" :loading="currentTask?.STATUS === 'RUNNING'">
+                <i class="bi bi-cloud-arrow-up me-1"></i>
+                {{ currentTask?.STATUS === 'RUNNING' ? 'Đang chạy...' : 'Upload File Excel' }}
+              </el-button>
+            </el-upload>
+            <el-button v-if="currentTask?.RESULT_LINK" :size="buttonSize" type="primary" plain
+              @click="handleDownloadFile(currentTask)">
               <i class="bi bi-cloud-arrow-down me-1"></i> Tải Báo Cáo (.zip)
             </el-button>
-            <el-button :size="buttonSize" class="btn-rerun" :loading="isRerunning" @click="handleRerun(currentTask)">
+            <el-button :size="buttonSize" class="btn-rerun" :loading="isRerunning || currentTask?.STATUS === 'RUNNING'" @click="handleRerun(currentTask)">
               <i class="bi bi-arrow-clockwise me-1"></i> Chạy Lại AI (Rerun)
             </el-button>
             <div class="spacer"></div>
@@ -472,7 +480,7 @@ import { get_total_row, get_data_page, save_mep_rows, delete_mep_rows, get_kpi_s
 
 // Địa chỉ Worker API & Kích thước nút bấm
 const FASTAPI_BASE_URL = 'http://127.0.0.1:8000'
-const buttonSize = ref('small')
+const buttonSize = ref('default')
 const MAX_UPLOAD_SIZE_MB = 50 // Giới hạn file Excel upload tối đa 50MB
 
 // Bộ lọc
@@ -482,11 +490,9 @@ const searchKeyword = ref('')
 const statusOptions = [
   { label: 'Tất cả trạng thái', value: 'ALL' },
   { label: 'Chờ duyệt / Mới', value: 'WAITING' },
-  { label: 'Đang xử lý (RUNNING)', value: 'RUNNING' },
-  { label: 'Khớp 100% (0 lỗi)', value: 'OK' },
-  { label: 'Có sai lệch (Lỗi)', value: 'ERR' },
-  { label: 'Tất cả hoàn tất', value: 'COMPLETED' },
-  { label: 'Thất bại (CANCEL)', value: 'CANCEL' }
+  { label: 'Đang xử lý', value: 'RUNNING' },
+  { label: 'Hoàn tất', value: 'COMPLETED' },
+  { label: 'Thất bại', value: 'CANCEL' }
 ]
 const activeKpiFilter = ref('ALL')
 
@@ -563,20 +569,26 @@ const startSmartPollingIfNeeded = () => {
             isEditing: oldRow ? oldRow.isEditing : false
           }
         })
+        if (showDetailDialog.value && currentTask.value) {
+          const updatedCurrent = data.find(r => r.KEYID === currentTask.value.KEYID)
+          if (updatedCurrent) {
+            Object.assign(currentTask.value, updatedCurrent)
+          }
+        }
       }
 
-      // Khi không còn dòng nào RUNNING nữa -> Dừng polling ngay lập tức
-      const stillRunning = tableData.value.some(r => r.STATUS === 'RUNNING')
-      if (!stillRunning) {
-        console.log("🎉 [Smart Polling] Tất cả tác vụ AI đã hoàn tất. Tắt polling.")
-        stopSmartPolling()
-        loadTotal()
-      }
-    } catch (err) {
-      console.error("[Smart Polling Error]", err)
-    }
-  }, 3000)
+// Khi không còn dòng nào RUNNING nữa -> Dừng polling ngay lập tức
+const stillRunning = tableData.value.some(r => r.STATUS === 'RUNNING')
+if (!stillRunning) {
+  console.log("🎉 [Smart Polling] Tất cả tác vụ AI đã hoàn tất. Tắt polling.")
+  stopSmartPolling()
+  loadTotal()
 }
+            } catch (err) {
+  console.error("[Smart Polling Error]", err)
+}
+        }, 3000)
+    }
 
 // 1. TẢI DỮ LIỆU TỪ BACKEND
 const loadData = async () => {
@@ -761,7 +773,7 @@ const submitDetailReview = async (decision) => {
   if (!currentTask.value) return
   await handleReview(currentTask.value, decision)
   currentTask.value.REVIEW_NOTE = detailReviewNote.value
-  ElMessage.success(`Đã lưu quyết định: ${decision}`)
+  // ElMessage.success(`Đã lưu quyết định: ${decision}`)
 }
 
 // 4. CHẠY LẠI AI (RERUN AI TASK)
@@ -978,6 +990,11 @@ const handleExportCsv = () => {
 
 // 11. TIẾP NHẬN UPLOAD FILE EXCEL
 const handleUploadExcel = async (file, row) => {
+  if (!row || !row.KEYID) {
+    ElMessage.warning("Vui lòng lưu thông tin Số Công Việc (KEYID) trước khi tải file!")
+    return
+  }
+
   if (!file.name.endsWith('.xlsx') && !file.name.endsWith('.xlsm')) {
     ElMessage.error("Chỉ chấp nhận file Excel (.xlsx / .xlsm)")
     return
@@ -995,6 +1012,20 @@ const handleUploadExcel = async (file, row) => {
   row.STATUS = 'RUNNING'
   row.PROGRESS = 5
   row.REASON = 'Đang đẩy file lên AI Worker...'
+
+  // Đồng bộ cả đối tượng trong bảng và currentTask trong modal dialog nếu đang mở
+  if (currentTask.value && currentTask.value.KEYID === row.KEYID) {
+    currentTask.value.STATUS = 'RUNNING'
+    currentTask.value.PROGRESS = 5
+    currentTask.value.REASON = 'Đang đẩy file lên AI Worker...'
+  }
+  const targetRow = tableData.value.find(r => r.KEYID === row.KEYID)
+  if (targetRow && targetRow !== row) {
+    targetRow.STATUS = 'RUNNING'
+    targetRow.PROGRESS = 5
+    targetRow.REASON = 'Đang đẩy file lên AI Worker...'
+  }
+
   startSmartPollingIfNeeded()
 
   try {
@@ -1005,6 +1036,19 @@ const handleUploadExcel = async (file, row) => {
     row.STATUS = 'WAITING'
     row.PROGRESS = 0
     row.REASON = 'Lỗi upload file'
+
+    if (currentTask.value && currentTask.value.KEYID === row.KEYID) {
+      currentTask.value.STATUS = 'WAITING'
+      currentTask.value.PROGRESS = 0
+      currentTask.value.REASON = 'Lỗi upload file'
+    }
+    const targetRow = tableData.value.find(r => r.KEYID === row.KEYID)
+    if (targetRow && targetRow !== row) {
+      targetRow.STATUS = 'WAITING'
+      targetRow.PROGRESS = 0
+      targetRow.REASON = 'Lỗi upload file'
+    }
+
     stopSmartPolling()
     ElMessage.error("Lỗi khi kết nối Worker: " + (err.response?.data?.detail || err.message))
   }
@@ -1106,11 +1150,30 @@ watch(selectedStatus, (newVal) => {
   font-size: 18px;
 }
 
-.kpi-icon.total { background: #303133; color: #E5EAF3; }
-.kpi-icon.ok { background: #133a20; color: #67C23A; }
-.kpi-icon.err { background: #441e1e; color: #F56C6C; }
-.kpi-icon.running { background: #3d2f14; color: #E6A23C; }
-.kpi-icon.waiting { background: #262727; color: #909399; }
+.kpi-icon.total {
+  background: #303133;
+  color: #E5EAF3;
+}
+
+.kpi-icon.ok {
+  background: #133a20;
+  color: #67C23A;
+}
+
+.kpi-icon.err {
+  background: #441e1e;
+  color: #F56C6C;
+}
+
+.kpi-icon.running {
+  background: #3d2f14;
+  color: #E6A23C;
+}
+
+.kpi-icon.waiting {
+  background: #262727;
+  color: #909399;
+}
 
 .kpi-info {
   display: flex;
@@ -1170,6 +1233,7 @@ watch(selectedStatus, (newVal) => {
   gap: 8px;
 }
 
+/* Vạch ngăn cách nhẹ để tách biệt nút Delete ra khỏi các nút khác */
 .btn-divider {
   display: inline-block;
   width: 1px;
@@ -1178,29 +1242,34 @@ watch(selectedStatus, (newVal) => {
   margin: 0 4px;
 }
 
+/* 1. Nút Reload: Nền tối, viền xám trung tính */
 .btn-reload {
   background-color: #262727;
   border-color: #4C4D4F;
   color: #E5EAF3;
 }
+
 .btn-reload:hover {
   background-color: #363637;
   border-color: #606266;
   color: #409EFF;
 }
 
+/* 2. Nút Insert: Nền tối viền xanh ngọc nổi bật nét thêm mới tích cực */
 .btn-insert {
   background-color: #1A2E22;
   border-color: #2E7D32;
   color: #4ADE80;
   font-weight: 500;
 }
+
 .btn-insert:hover {
   background-color: #2E7D32;
   border-color: #4ADE80;
   color: #FFF;
 }
 
+/* 3. Nút Save: Nút Primary trung tâm CTA, màu xanh dương nổi bật nhất */
 .btn-save {
   background-color: #409EFF;
   border-color: #409EFF;
@@ -1208,43 +1277,51 @@ watch(selectedStatus, (newVal) => {
   font-weight: 600;
   box-shadow: 0 2px 6px rgba(64, 158, 255, 0.25);
 }
+
 .btn-save:hover {
   background-color: #66b1ff;
   border-color: #66b1ff;
 }
 
+/* 4. Nút Export: Nền tối, viền xám tiện ích */
 .btn-export {
   background-color: #262727;
   border-color: #4C4D4F;
   color: #E5EAF3;
 }
+
 .btn-export:hover {
   background-color: #363637;
   border-color: #606266;
   color: #409EFF;
 }
 
+/* 5. Nút Delete: Đặt cuối cùng, màu đỏ cảnh báo nguy hiểm */
 .btn-delete {
   background-color: #F56C6C;
   border-color: #F56C6C;
   color: #FFF;
   font-weight: 500;
 }
+
 .btn-delete:hover:not(:disabled) {
   background-color: #f78989;
   border-color: #f78989;
 }
+
 .btn-delete:disabled {
   opacity: 0.4;
   cursor: not-allowed;
 }
 
+/* NÚT UPLOAD FILE TRONG TỪNG DÒNG CỦA BẢNG: DÙNG MÀU TÍM XANH DỊU MẮT */
 .btn-upload-file {
   background-color: #2c3e50;
   border-color: #34495e;
   color: #409EFF;
   font-weight: 500;
 }
+
 .btn-upload-file:hover:not(:disabled) {
   background-color: #34495e;
   border-color: #409EFF;
@@ -1256,17 +1333,21 @@ watch(selectedStatus, (newVal) => {
   width: 100%;
   overflow-x: auto;
 }
+
 .table-container::-webkit-scrollbar {
   height: 12px;
 }
+
 .table-container::-webkit-scrollbar-track {
   background: #1D1E1F;
   border-radius: 6px;
 }
+
 .table-container::-webkit-scrollbar-thumb {
   background: #4C4D4F;
   border-radius: 6px;
 }
+
 .table-container::-webkit-scrollbar-thumb:hover {
   background: #606266;
 }
@@ -1274,9 +1355,11 @@ watch(selectedStatus, (newVal) => {
 .font-bold {
   font-weight: 600;
 }
+
 .font-mono {
   font-family: ui-monospace, SFMono-Regular, Consolas, monospace;
 }
+
 .cursor-pointer {
   cursor: pointer;
 }
@@ -1286,6 +1369,7 @@ watch(selectedStatus, (newVal) => {
   display: inline-block;
   width: 100%;
 }
+
 .cell-text:hover {
   color: #409EFF;
   text-decoration: underline;
@@ -1304,11 +1388,13 @@ watch(selectedStatus, (newVal) => {
   align-items: center;
   gap: 2px;
 }
+
 .view-detail-link {
   font-size: 11px;
   color: #409EFF;
   text-decoration: underline;
 }
+
 .view-detail-link:hover {
   color: #66b1ff;
 }
@@ -1320,15 +1406,18 @@ watch(selectedStatus, (newVal) => {
   align-items: center;
   margin-bottom: 2px;
 }
+
 .detail-link-btn {
   color: #409EFF;
   font-weight: 600;
 }
+
 .download-btn {
   color: #67C23A;
   font-weight: 600;
   text-decoration: underline;
 }
+
 .download-btn:hover {
   color: #85CE61;
 }
@@ -1340,6 +1429,7 @@ watch(selectedStatus, (newVal) => {
   padding: 3px 6px;
   font-size: 11px;
 }
+
 .btn-rerun-mini:hover {
   background-color: #363637;
   border-color: #E6A23C;
@@ -1352,6 +1442,7 @@ watch(selectedStatus, (newVal) => {
   align-items: center;
   gap: 4px;
 }
+
 .text-reason {
   color: #F56C6C;
   font-size: 11px;
@@ -1365,9 +1456,11 @@ watch(selectedStatus, (newVal) => {
   width: 100%;
   padding: 2px 0;
 }
+
 .progress-bar-inline {
   width: 100%;
 }
+
 .progress-cell :deep(.el-progress__text) {
   font-size: 11px !important;
   color: #E6A23C !important;
@@ -1422,14 +1515,14 @@ watch(selectedStatus, (newVal) => {
   gap: 4px;
   align-items: center;
 }
-eeeeeeeee
+
 .modal-stats-grid {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
   gap: 10px;
   margin-bottom: 12px;
 }
-hêllo
+
 .m-stat {
   background-color: #262727;
   border: 1px solid #363637;
@@ -1438,14 +1531,21 @@ hêllo
   display: flex;
   flex-direction: column;
 }
-.m-stat.border-err { border-left: 4px solid #F56C6C; }
-.m-stat.border-ok { border-left: 4px solid #67C23A; }
+
+.m-stat.border-err {
+  border-left: 4px solid #F56C6C;
+}
+
+.m-stat.border-ok {
+  border-left: 4px solid #67C23A;
+}
 
 .m-stat b {
   font-size: 20px;
   font-weight: 700;
   color: #E5EAF3;
 }
+
 .m-stat span {
   font-size: 11px;
   color: #A3A6AD;
@@ -1459,6 +1559,7 @@ hêllo
   margin-bottom: 12px;
   padding: 6px 0;
 }
+
 .breakdown-label {
   font-size: 12px;
   color: #A3A6AD;
@@ -1476,6 +1577,7 @@ hêllo
   text-align: center;
   padding: 40px 10px;
 }
+
 .clean-state-box h4 {
   margin: 12px 0 4px;
   color: #67C23A;
@@ -1503,16 +1605,19 @@ hêllo
   text-align: center;
   transition: transform 0.15s;
 }
+
 .img-thumb-box:hover {
   transform: translateY(-2px);
   border-color: #409EFF;
 }
+
 .thumb-img {
   width: 100%;
   height: 140px;
   border-radius: 4px;
   background-color: #1D1E1F;
 }
+
 .thumb-title {
   font-size: 11px;
   color: #A3A6AD;
@@ -1534,9 +1639,11 @@ hêllo
   overflow-y: auto;
   color: #A3A6AD;
 }
+
 .log-line {
   margin-bottom: 4px;
 }
+
 .log-index {
   color: #409EFF;
 }
@@ -1547,30 +1654,36 @@ hêllo
   border-radius: 8px;
   padding: 14px 16px;
 }
+
 .detail-review-card h4 {
   margin: 0 0 10px 0;
   font-size: 14px;
   color: #FFF;
 }
+
 .review-inputs-row {
   display: flex;
   gap: 10px;
   margin-bottom: 12px;
 }
+
 .review-bottom-actions {
   display: flex;
   align-items: center;
   gap: 8px;
 }
+
 .btn-rerun {
   background-color: #262727;
   border-color: #E6A23C;
   color: #E6A23C;
 }
+
 .btn-rerun:hover {
   background-color: #E6A23C;
   color: #1D1E1F;
 }
+
 .spacer {
   flex: 1;
 }
@@ -1579,6 +1692,7 @@ hêllo
   background-color: transparent !important;
   border-color: #4C4D4F !important;
 }
+
 :deep(.el-table th.el-table__cell .el-checkbox__input.is-indeterminate .el-checkbox__inner::before),
 :deep(.el-table th.el-table__cell .el-checkbox__input.is-indeterminate .el-checkbox__inner::after) {
   display: none !important;

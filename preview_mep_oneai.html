@@ -774,6 +774,7 @@
           <button class="btn danger" onclick="submitReviewAction('REJECTED')">✕ Từ Chối (Reject)</button>
         </div>
         <div style="display:flex;gap:8px;align-items:center">
+          <button class="btn" style="border-color:#409EFF;color:#409EFF" onclick="simulateUploadInModal()">☁️ Upload File Excel</button>
           <button class="btn primary" onclick="toast('Đang tải file báo cáo .zip đối soát 2 sheet...')">📥 Tải Báo Cáo (.zip)</button>
           <button class="btn" style="border-color:var(--warn);color:var(--warn)" onclick="simulateRerunInModal()">🔄 Chạy Lại AI (Rerun)</button>
           <div class="spacer"></div>
@@ -1791,6 +1792,11 @@
       toast(decision === 'APPROVED' ? '✅ Đã lưu phê duyệt: APPROVED' : '❌ Đã lưu quyết định: REJECTED');
       openDetailModal(currentModalTask);
       renderTable();
+    }
+
+    function simulateUploadInModal() {
+      if (!currentModalTask) return;
+      triggerUpload(currentModalTask.KEYID);
     }
 
     function simulateRerunInModal() {

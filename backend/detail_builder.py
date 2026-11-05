@@ -176,13 +176,34 @@ def parse_excel_report_to_detail(excel_path: Path, keyid: str, session_dir: Path
                     for img_file in s_dir.glob(ext):
                         if img_file.name not in seen_names:
                             seen_names.add(img_file.name)
+                            stem_lower = img_file.stem.lower()
+                            if "drawing_preview" in stem_lower:
+                                title = f"Toàn cảnh Bản vẽ ({img_file.name})"
+                            elif "roi_debug" in stem_lower:
+                                title = f"Vùng ROI Khung tên / Số bản vẽ ({img_file.name})"
+                            elif "table" in stem_lower:
+                                title = f"Bảng bóc tách ({img_file.name})"
+                            else:
+                                title = f"Ảnh trích xuất {len(images) + 1}: {img_file.name}"
+
                             images.append({
                                 "name": img_file.name,
-                                "title": f"Bản vẽ trang {len(images) + 1} ({img_file.stem})",
+                                "title": title,
                                 "url": f"/mep_payment/image/{safe_key}/{img_file.name}"
                             })
 
     # 4. NHẬT KÝ XỬ LÝ (LOGS)
+    if not logs:
+        pipe_log_file = (session_dir / "pipeline.log") if session_dir else None
+        if pipe_log_file and pipe_log_file.exists():
+            try:
+                with open(pipe_log_file, "r", encoding="utf-8") as plf:
+                    loaded_logs = [line.strip() for line in plf.readlines() if line.strip()]
+                    if loaded_logs:
+                        logs = loaded_logs
+            except Exception:
+                pass
+
     if not logs:
         logs = [
             f"[{Path(excel_path).name}] Đã tiếp nhận file và giải mã nhị phân OLE",

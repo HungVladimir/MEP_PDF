@@ -1,3 +1,4 @@
+
 import os
 import sys
 from pathlib import Path
@@ -49,54 +50,27 @@ def get_cur():
 # ==============================================================================
 
 def check_keyid_exists(keyid: str) -> bool:
-    """
-    Kiểm tra xem KEYID đã tồn tại trong bảng LOCAL_AI.MEP_PAYMENT_ANALYSIS hay chưa.
-    Tương thích cả thư viện OneAI SDV lẫn oracledb Connection chuẩn.
-    """
+    """Kiểm tra xem KEYID đã tồn tại trong bảng LOCAL_AI.MEP_PAYMENT_ANALYSIS hay chưa."""
     if not keyid or not str(keyid).strip():
         return False
     try:
-        sql = "SELECT COUNT(*) AS CNT FROM LOCAL_AI.MEP_PAYMENT_ANALYSIS WHERE KEYID = :KEYID"
-        params = {"KEYID": str(keyid).strip()}
+        sql = "SELECT COUNT(*) FROM LOCAL_AI.MEP_PAYMENT_ANALYSIS WHERE KEYID = :KEYID"
         cur = get_cur()
-
-        # 1. Nếu là thư viện nội bộ OneAI SDV hỗ trợ DATAFRAME
-        if result_type and hasattr(result_type, 'DATAFRAME'):
-            try:
-                df = cur.execute(sql=sql, params=params, res=result_type.DATAFRAME)
-                if df is not None and not df.empty:
-                    return int(df.iloc[0, 0]) > 0
-            except Exception:
-                pass
-
-        # 2. Nếu cur là đối tượng Connection chuẩn (có method .cursor())
-        if hasattr(cur, 'cursor'):
-            c = cur.cursor()
-            c.execute(sql, params)
-            row = c.fetchone()
-            c.close()
-            return (row[0] if row else 0) > 0
-
-        # 3. Nếu cur.execute trả về kết quả hoặc cursor trực tiếp
-        res = cur.execute(sql, params=params)
-        if hasattr(res, 'fetchone'):
-            row = res.fetchone()
-            return (row[0] if row else 0) > 0
-        if isinstance(res, (list, tuple)) and len(res) > 0:
-            return int(res[0][0]) > 0
-
-        return False
+        cur.execute(sql, params={"KEYID": str(keyid).strip()})
+        res = cur.fetchall()
+        count = res[0][0] if res else 0
+        return count > 0
     except Exception as e:
-        print(f"[Oracle DB Warning] check_keyid_exists error: {e}")
+        print(f"[Oracle DB Warning] check_keyid_exists: {e}")
         return False
 
 
 def insert_task(cur, r: dict):
     """Thêm 1 dòng mới vào bảng LOCAL_AI.MEP_PAYMENT_ANALYSIS (Chỉ INSERT)."""
     sql = """
-        INSERT INTO LOCAL_AI.MEP_PAYMENT_ANALYSIS 
+        INSERT INTO LOCAL_AI.MEP_PAYMENT_ANALYSIS
         (KEYID, TASK_NAME, PAYMENT_MONTH, PIC, PART_NAME, GROUP_NAME, STATUS, PROGRESS, ERROR_COUNT, UPLOAD_TIME)
-        VALUES 
+        VALUES
         (:KEYID, :TASK_NAME, :PAYMENT_MONTH, :PIC, :PART_NAME, :GROUP_NAME, :STATUS, :PROGRESS, 0, SYSDATE)
     """
     params = {
@@ -160,11 +134,13 @@ def save_tasks(rows: list) -> int:
         if hasattr(cur, 'commit'):
             cur.commit()
 
-        print(f"[Oracle DB] Da luu thanh cong: {ins_count} dong moi (INSERT), {upd_count} dong cap nhat (UPDATE).")
+        print(
+            f"[Oracle DB] Da luu thanh cong: {ins_count} dong moi (INSERT), {upd_count} dong cap nhat (UPDATE).")
         return len(rows)
     except Exception as e:
         print(f"[Oracle DB Error] save_tasks: {e}")
         raise
+
 
 # Tương thích ngược với mã nguồn api.py hiện tại
 batch_upsert_tasks = save_tasks
@@ -184,7 +160,8 @@ def delete_tasks(keyids: list) -> int:
         if hasattr(cur, 'commit'):
             cur.commit()
 
-        print(f"[Oracle DB] Da xoa {len(keyids)} dong khoi MEP_PAYMENT_ANALYSIS.")
+        print(
+            f"[Oracle DB] Da xoa {len(keyids)} dong khoi MEP_PAYMENT_ANALYSIS.")
         return len(keyids)
     except Exception as e:
         print(f"[Oracle DB Error] delete_tasks: {e}")
@@ -219,7 +196,8 @@ def update_task_status(keyid: str, status: str, error_count: int = 0, result_lin
         cur.execute(sql, params=params)
         if hasattr(cur, 'commit'):
             cur.commit()
-        print(f"[Oracle DB] Da cap nhat KEYID={keyid} -> STATUS={status}, PROGRESS={progress}%")
+        print(
+            f"[Oracle DB] Da cap nhat KEYID={keyid} -> STATUS={status}, PROGRESS={progress}%")
     except Exception as e:
         print(f"[Oracle DB Error] update_task_status: {e}")
         raise
@@ -273,7 +251,8 @@ def get_kpi_summary(payment_month: str = "ALL", keyword: str = "ALL") -> dict:
         cur = get_cur()
         if result_type and hasattr(result_type, 'DATAFRAME'):
             try:
-                df = cur.execute(sql=sql, params=params, res=result_type.DATAFRAME)
+                df = cur.execute(sql=sql, params=params,
+                                 res=result_type.DATAFRAME)
                 if df is not None and not df.empty:
                     r = df.iloc[0]
                     return {
@@ -315,4 +294,3 @@ def get_kpi_summary(payment_month: str = "ALL", keyword: str = "ALL") -> dict:
         print(f"[Oracle DB Warning] get_kpi_summary error: {e}")
 
     return {"total": 0, "ok": 0, "err": 0, "running": 0, "waiting": 0}
-

@@ -1,4 +1,6 @@
+
 import os
+import sys
 import shutil
 import time
 import zipfile
@@ -27,8 +29,10 @@ app.add_middleware(
 
 # 2. KHỞI TẠO THƯ MỤC LƯU TRỮ
 BASE_DIR = Path(__file__).resolve().parent
-STORAGE_DIR = BASE_DIR / "sessions"
-FINAL_REPORT_DIR = BASE_DIR / "final_reports"
+# STORAGE_DIR = BASE_DIR / "sessions"
+# FINAL_REPORT_DIR = BASE_DIR / "final_reports"
+STORAGE_DIR = Path(r"D:\Private_Documents\Doc\AI-Infra\FinalReport\sessions")
+FINAL_REPORT_DIR = Path(r"D:\Private_Documents\Doc\AI-Infra\FinalReport")
 
 STORAGE_DIR.mkdir(exist_ok=True)
 FINAL_REPORT_DIR.mkdir(exist_ok=True)
@@ -49,7 +53,49 @@ class DeleteRowsRequest(BaseModel):
     keyids: list
     reviewer: str = "PIC"
 
-# 3. TIẾN TRÌNH XỬ LÝ CHẠY NGẦM (BACKGROUND TASK)
+# 3. TIẾN TRÌNH XỬ LÝ CHẠY NGẦM (BACKGROUND TASK) VÀ LỚP BẮT FULL LOG
+
+class StreamLogTee:
+    """Lớp chuyển hướng và đồng bộ log stdout ra cả console và mảng log / file pipeline.log."""
+    def __init__(self, original_stdout, log_file_path: Path = None):
+        self.original_stdout = original_stdout
+        self.log_file_path = log_file_path
+        self.log_lines = []
+        self._buffer = ""
+
+    def write(self, text):
+        if self.original_stdout:
+            self.original_stdout.write(text)
+            self.original_stdout.flush()
+        self._buffer += text
+        while "\n" in self._buffer:
+            line, self._buffer = self._buffer.split("\n", 1)
+            stripped = line.strip()
+            if stripped:
+                timestamp = time.strftime("[%H:%M:%S] ")
+                formatted = f"{timestamp}{stripped}"
+                self.log_lines.append(formatted)
+                if self.log_file_path:
+                    try:
+                        with open(self.log_file_path, "a", encoding="utf-8") as lf:
+                            lf.write(formatted + "\n")
+                    except Exception:
+                        pass
+
+    def flush(self):
+        if self.original_stdout:
+            self.original_stdout.flush()
+        if self._buffer.strip():
+            timestamp = time.strftime("[%H:%M:%S] ")
+            formatted = f"{timestamp}{self._buffer.strip()}"
+            self.log_lines.append(formatted)
+            if self.log_file_path:
+                try:
+                    with open(self.log_file_path, "a", encoding="utf-8") as lf:
+                        lf.write(formatted + "\n")
+                except Exception:
+                    pass
+            self._buffer = ""
 
 
 def run_ai_task_background(keyid: str, session_dir: Path, excel_path: str):
@@ -57,6 +103,11 @@ def run_ai_task_background(keyid: str, session_dir: Path, excel_path: str):
     Hàm này chạy hoàn toàn độc lập dưới nền (Background).
     Không làm đơ hay timeout giao diện người dùng trên OneAI.
     """
+    pipeline_log_path = session_dir / "pipeline.log"
+    tee = StreamLogTee(sys.stdout, pipeline_log_path)
+    old_stdout = sys.stdout
+    sys.stdout = tee
+
     try:
         print(f"\n🚀 [TASK {keyid}] Bắt đầu thực thi Pipeline MEP AI...")
 
@@ -71,7 +122,8 @@ def run_ai_task_background(keyid: str, session_dir: Path, excel_path: str):
                     progress=pct
                 )
             except Exception as prog_err:
-                print(f"⚠️ [Progress Warning] Không thể cập nhật tiến độ: {prog_err}")
+                print(
+                    f"⚠️ [Progress Warning] Không thể cập nhật tiến độ: {prog_err}")
 
         update_task_status(keyid=keyid, status="RUNNING",
                            reason="AI đang bóc tách bản vẽ & đối soát...", progress=5)
@@ -81,6 +133,7 @@ def run_ai_task_background(keyid: str, session_dir: Path, excel_path: str):
         csv_drawings = session_dir / "csv_drawings"
         csv_gatepass = session_dir / "csv_gatepass"
         evidence_dir = session_dir / "evidence_images"
+        evidence_dir.mkdir(parents=True, exist_ok=True)
 
         final_excel_path = run_mep_pipeline(
             pdf_drawing_dir=str(pdf_drawings),
@@ -91,7 +144,8 @@ def run_ai_task_background(keyid: str, session_dir: Path, excel_path: str):
             csv_drawing_dir=str(csv_drawings),
             csv_gatepass_dir=str(csv_gatepass),
             skip_existing=False,
-            status_callback=on_pipeline_progress
+            status_callback=on_pipeline_progress,
+            evidence_dir=str(evidence_dir)
         )
 
         # ĐẾM SỐ LỖI THỰC TẾ TRONG SHEET 1 ĐỂ BÁO LÊN GIAO DIỆN
@@ -123,12 +177,23 @@ def run_ai_task_background(keyid: str, session_dir: Path, excel_path: str):
         try:
             from detail_builder import parse_excel_report_to_detail, safe_id
             import json
-            detail_data = parse_excel_report_to_detail(Path(final_excel_path), keyid, session_dir)
+
+            tee.flush()
+            conclusion_logs = [
+                f"[KẾT LUẬN] Đã đối soát xong: Phát hiện {error_count} sai lệch.",
+                f"[BÁO CÁO] File Excel kết quả: {os.path.basename(final_excel_path)}",
+                f"[LƯU TRỮ] File nén phục vụ tải về: {zip_name}"
+            ]
+            full_logs = list(tee.log_lines) + conclusion_logs
+
+            detail_data = parse_excel_report_to_detail(
+                Path(final_excel_path), keyid, session_dir, logs=full_logs)
             if detail_data:
                 json_path = FINAL_REPORT_DIR / f"{safe_id(keyid)}_detail.json"
                 with open(json_path, "w", encoding="utf-8") as jf:
                     json.dump(detail_data, jf, ensure_ascii=False, indent=2)
-                print(f"💾 [Detail Cache] Đã lưu chi tiết đối soát: {json_path.name}")
+                print(
+                    f"💾 [Detail Cache] Đã lưu chi tiết đối soát: {json_path.name}")
         except Exception as det_err:
             print(f"⚠️ [Detail Cache Warning] {det_err}")
 
@@ -153,6 +218,9 @@ def run_ai_task_background(keyid: str, session_dir: Path, excel_path: str):
             reason=error_msg[:900],
             progress=0
         )
+    finally:
+        tee.flush()
+        sys.stdout = old_stdout
 
 # 4. CÁC ENDPOINT API GIAO TIẾP VỚI WEB
 
@@ -315,11 +383,13 @@ async def get_task_detail(keyid: str, status: str = "COMPLETED", error_count: in
             "error_count": int(error_count or 0),
             "reason": reason or ""
         }
-        detail = build_or_load_task_detail(keyid, FINAL_REPORT_DIR, STORAGE_DIR, fallback_info)
+        detail = build_or_load_task_detail(
+            keyid, FINAL_REPORT_DIR, STORAGE_DIR, fallback_info)
         return detail
     except Exception as e:
         print(f"❌ [FastAPI Error] get_task_detail: {e}")
-        raise HTTPException(status_code=500, detail=f"Lỗi đọc chi tiết đối soát: {str(e)}")
+        raise HTTPException(
+            status_code=500, detail=f"Lỗi đọc chi tiết đối soát: {str(e)}")
 
 
 @app.get("/mep_payment/image/{keyid}/{filename}")
@@ -338,7 +408,8 @@ async def get_task_image(keyid: str, filename: str):
                     media_type = "image/png" if ext == ".png" else "image/jpeg"
                     return FileResponse(str(target), media_type=media_type)
 
-        raise HTTPException(status_code=404, detail="Không tìm thấy file ảnh bản vẽ.")
+        raise HTTPException(
+            status_code=404, detail="Không tìm thấy file ảnh bản vẽ.")
     except HTTPException:
         raise
     except Exception as e:
@@ -356,7 +427,8 @@ async def rerun_task_endpoint(keyid: str, background_tasks: BackgroundTasks):
         safe_key = safe_id(keyid)
 
         # 1. Tìm phiên làm việc (session) gần nhất của KEYID
-        sess_candidates = sorted(STORAGE_DIR.glob(f"*session_{safe_key}*"), key=os.path.getmtime, reverse=True)
+        sess_candidates = sorted(STORAGE_DIR.glob(
+            f"*session_{safe_key}*"), key=os.path.getmtime, reverse=True)
         if not sess_candidates:
             raise HTTPException(
                 status_code=404,
@@ -364,7 +436,8 @@ async def rerun_task_endpoint(keyid: str, background_tasks: BackgroundTasks):
             )
 
         session_dir = sess_candidates[0]
-        excels = list(session_dir.glob("*.xlsx")) + list(session_dir.glob("*.xlsm"))
+        excels = list(session_dir.glob("*.xlsx")) + \
+            list(session_dir.glob("*.xlsm"))
         if not excels:
             raise HTTPException(
                 status_code=404,
@@ -372,7 +445,8 @@ async def rerun_task_endpoint(keyid: str, background_tasks: BackgroundTasks):
             )
 
         excel_path = excels[0]
-        print(f"🔄 [RERUN] Bắt đầu kích hoạt chạy lại AI cho KEYID={keyid} với file {excel_path.name}")
+        print(
+            f"🔄 [RERUN] Bắt đầu kích hoạt chạy lại AI cho KEYID={keyid} với file {excel_path.name}")
 
         update_task_status(
             keyid=keyid,
@@ -380,14 +454,16 @@ async def rerun_task_endpoint(keyid: str, background_tasks: BackgroundTasks):
             reason="Đang chạy lại AI đối soát...",
             progress=5
         )
-        background_tasks.add_task(run_ai_task_background, keyid, session_dir, str(excel_path))
+        background_tasks.add_task(
+            run_ai_task_background, keyid, session_dir, str(excel_path))
 
         return {"status": "ok", "message": f"Đã bắt đầu chạy lại tác vụ AI cho [{keyid}]."}
     except HTTPException:
         raise
     except Exception as e:
         print(f"❌ [FastAPI Error] rerun_task: {e}")
-        raise HTTPException(status_code=500, detail=f"Lỗi kích hoạt chạy lại AI: {str(e)}")
+        raise HTTPException(
+            status_code=500, detail=f"Lỗi kích hoạt chạy lại AI: {str(e)}")
 
 
 @app.get("/mep_payment/kpi_summary")
@@ -404,5 +480,3 @@ async def kpi_summary_endpoint(payment_month: str = "ALL", keyword: str = "ALL")
             "message": str(e),
             "data": {"total": 0, "ok": 0, "err": 0, "running": 0, "waiting": 0}
         }
-
-

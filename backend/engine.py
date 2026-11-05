@@ -238,7 +238,8 @@ def run_mep_pipeline(
     csv_gatepass_dir,       # Thư mục lưu các file CSV của Gate Pass
     skip_existing=False,    # Cờ: Có dùng lại CSV cũ để chạy cho nhanh không?
     # Hàm gọi ngược (Callback) đẩy % lên thanh Loading của Web
-    status_callback=None
+    status_callback=None,
+    evidence_dir=None       # Thư mục lưu ảnh trích xuất / bằng chứng đối soát
 ):
     """
     Quy trình End-to-End:
@@ -293,7 +294,7 @@ def run_mep_pipeline(
                 update_status(
                     f"Đang bóc tách Bản vẽ ({i+1}/{len(pdf_drawings)}): {os.path.basename(pdf_path)}", progress)
                 pdf_extractor.process_single_pdf(
-                    pdf_path, force_mode="drawing", out_drawing_dir=csv_drawing_dir)
+                    pdf_path, force_mode="drawing", out_drawing_dir=csv_drawing_dir, out_img_dir=evidence_dir)
 
         # 1B. Xử lý Gate Pass (Biên bản vật tư mang vào)
         existing_csv_gp = glob.glob(os.path.join(csv_gatepass_dir, "*.csv"))
@@ -306,7 +307,7 @@ def run_mep_pipeline(
                 update_status(
                     f"Đang bóc tách Gate Pass ({i+1}/{len(pdf_gatepasses)}): {os.path.basename(pdf_path)}", progress)
                 pdf_extractor.process_single_pdf(
-                    pdf_path, force_mode="gate_pass", out_gatepass_dir=csv_gatepass_dir)
+                    pdf_path, force_mode="gate_pass", out_gatepass_dir=csv_gatepass_dir, out_img_dir=evidence_dir)
 
         # BƯỚC 2: GOM NHÓM DỮ LIỆU CSV
         update_status(
