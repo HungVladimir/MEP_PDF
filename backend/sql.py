@@ -56,9 +56,15 @@ def check_keyid_exists(keyid: str) -> bool:
     try:
         sql = "SELECT COUNT(*) FROM LOCAL_AI.MEP_PAYMENT_ANALYSIS WHERE KEYID = :KEYID"
         cur = get_cur()
-        cur.execute(sql, params={"KEYID": str(keyid).strip()})
-        res = cur.fetchall()
+        cursor = cur.cursor() if hasattr(cur, 'cursor') else cur
+        cursor.execute(sql, params={"KEYID": str(keyid).strip()})
+        res = cursor.fetchall() if hasattr(cursor, 'fetchall') else None
         count = res[0][0] if res else 0
+        if hasattr(cursor, 'close') and cursor != cur:
+            try:
+                cursor.close()
+            except Exception:
+                pass
         return count > 0
     except Exception as e:
         print(f"[Oracle DB Warning] check_keyid_exists: {e}")

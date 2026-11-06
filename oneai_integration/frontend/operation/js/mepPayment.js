@@ -1,4 +1,3 @@
-
 import { api } from '@/aiPlugins/aiApiConfig'
 
 const BASE_REQ_ID = "menu_operation.mep_payment.mep_payment_analysis"

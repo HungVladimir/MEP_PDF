@@ -1,4 +1,3 @@
-
 import os
 import sys
 import shutil
@@ -41,14 +40,14 @@ if COMPANY_PRIVATE_ROOT.exists():
     # - File Excel kết quả & zip: lưu vào FinalReport trong Private
     # - Toàn bộ Ảnh trích xuất, PDF, CSV, Log: lưu trong Project để không bị DLP chặn
     PRIVATE_EXCEL_DIR = COMPANY_PRIVATE_ROOT / "sessions"
-    FINAL_REPORT_DIR  = COMPANY_PRIVATE_ROOT / "FinalReport"
+    FINAL_REPORT_DIR = COMPANY_PRIVATE_ROOT / "FinalReport"
     PROJECT_STORAGE_DIR = BASE_DIR / "sessions"
     print("🏢 [Môi trường] Đang chạy trên Máy Local Công Ty (Bật chế độ DLP 2 vùng lưu trữ)")
 else:
     # 🌐 [MÔI TRƯỜNG SERVER / LINUX / MÁY KHÔNG CÓ DLP]:
     # Tự động gộp tất cả về 1 vùng duy nhất ngay trong Project
     PRIVATE_EXCEL_DIR = BASE_DIR / "sessions"
-    FINAL_REPORT_DIR  = BASE_DIR / "final_reports"
+    FINAL_REPORT_DIR = BASE_DIR / "final_reports"
     PROJECT_STORAGE_DIR = BASE_DIR / "sessions"
     print("🌐 [Môi trường] Đang chạy trên Server (Bật chế độ Thống Nhất 1 vùng lưu trữ)")
 
@@ -74,8 +73,10 @@ class DeleteRowsRequest(BaseModel):
 
 # 3. TIẾN TRÌNH XỬ LÝ CHẠY NGẦM (BACKGROUND TASK) VÀ LỚP BẮT FULL LOG
 
+
 class StreamLogTee:
     """Lớp chuyển hướng và đồng bộ log stdout ra cả console và mảng log / file pipeline.log."""
+
     def __init__(self, original_stdout, log_file_path: Path = None):
         self.original_stdout = original_stdout
         self.log_file_path = log_file_path
@@ -211,12 +212,14 @@ def run_ai_task_background(keyid: str, session_dir: Path, excel_path: str):
                 json_name = f"{safe_id(keyid)}_detail.json"
                 try:
                     with open(FINAL_REPORT_DIR / json_name, "w", encoding="utf-8") as jf:
-                        json.dump(detail_data, jf, ensure_ascii=False, indent=2)
+                        json.dump(detail_data, jf,
+                                  ensure_ascii=False, indent=2)
                 except Exception:
                     pass
                 try:
                     with open(session_dir / json_name, "w", encoding="utf-8") as jf:
-                        json.dump(detail_data, jf, ensure_ascii=False, indent=2)
+                        json.dump(detail_data, jf,
+                                  ensure_ascii=False, indent=2)
                 except Exception:
                     pass
                 print(
@@ -229,14 +232,19 @@ def run_ai_task_background(keyid: str, session_dir: Path, excel_path: str):
             try:
                 # 1. Upload ZIP & Excel Báo cáo
                 if zip_path.exists():
-                    minio_storage.upload_file(zip_path, minio_storage.get_obj_key(keyid, "reports", zip_name), "application/zip")
-                    minio_storage.upload_file(zip_path, f"{MINIO_PREFIX}/reports/{zip_name}", "application/zip")
+                    minio_storage.upload_file(zip_path, minio_storage.get_obj_key(
+                        keyid, "reports", zip_name), "application/zip")
+                    minio_storage.upload_file(
+                        zip_path, f"{MINIO_PREFIX}/reports/{zip_name}", "application/zip")
                 if Path(final_excel_path).exists():
-                    minio_storage.upload_file(final_excel_path, minio_storage.get_obj_key(keyid, "reports", file_name), "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")
-                    minio_storage.upload_file(final_excel_path, f"{MINIO_PREFIX}/reports/{file_name}", "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")
+                    minio_storage.upload_file(final_excel_path, minio_storage.get_obj_key(
+                        keyid, "reports", file_name), "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")
+                    minio_storage.upload_file(
+                        final_excel_path, f"{MINIO_PREFIX}/reports/{file_name}", "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")
 
                 # 2. Upload Toàn bộ ảnh bằng chứng / thumbnail đối soát
-                search_imgs = list(evidence_dir.glob("*.*")) + list(session_dir.glob("*.png")) + list(session_dir.glob("*.jpg"))
+                search_imgs = list(evidence_dir.glob(
+                    "*.*")) + list(session_dir.glob("*.png")) + list(session_dir.glob("*.jpg"))
                 uploaded_count = 0
                 for img_p in search_imgs:
                     if img_p.is_file() and img_p.suffix.lower() in ('.png', '.jpg', '.jpeg'):
@@ -245,12 +253,16 @@ def run_ai_task_background(keyid: str, session_dir: Path, excel_path: str):
 
                 # 3. Upload cache chi tiết JSON lên MinIO
                 if detail_data:
-                    json_bytes = json.dumps(detail_data, ensure_ascii=False, indent=2).encode('utf-8')
-                    minio_storage.upload_bytes(json_bytes, minio_storage.get_obj_key(keyid, "cache", "detail.json"), "application/json")
+                    json_bytes = json.dumps(
+                        detail_data, ensure_ascii=False, indent=2).encode('utf-8')
+                    minio_storage.upload_bytes(json_bytes, minio_storage.get_obj_key(
+                        keyid, "cache", "detail.json"), "application/json")
 
-                print(f"☁️ [MinIO Storage] Đã đồng bộ lên MinIO: Báo cáo={zip_name}, Ảnh={uploaded_count} files (KEYID={keyid})")
+                print(
+                    f"☁️ [MinIO Storage] Đã đồng bộ lên MinIO: Báo cáo={zip_name}, Ảnh={uploaded_count} files (KEYID={keyid})")
             except Exception as minio_sync_err:
-                print(f"⚠️ [MinIO Sync Warning] Lỗi đồng bộ MinIO: {minio_sync_err}")
+                print(
+                    f"⚠️ [MinIO Sync Warning] Lỗi đồng bộ MinIO: {minio_sync_err}")
 
         update_task_status(
             keyid=keyid,
@@ -331,7 +343,8 @@ async def upload_excel_task(
         # 3. Nếu MinIO đang hoạt động, sao lưu thêm 1 bản Excel input lên MinIO
         if minio_storage.is_available():
             try:
-                minio_storage.upload_file(excel_path, minio_storage.get_obj_key(KEYID, "inputs", file.filename))
+                minio_storage.upload_file(
+                    excel_path, minio_storage.get_obj_key(KEYID, "inputs", file.filename))
             except Exception:
                 pass
 
@@ -354,7 +367,8 @@ async def download_report_file(filename: str):
     if minio_storage.is_available():
         minio_candidates = [
             f"{MINIO_PREFIX}/reports/{filename}",
-            f"{MINIO_PREFIX}/reports/{filename.replace('.zip', '.xlsx')}" if filename.endswith('.zip') else f"{MINIO_PREFIX}/reports/{filename.replace('.xlsx', '.zip')}"
+            f"{MINIO_PREFIX}/reports/{filename.replace('.zip', '.xlsx')}" if filename.endswith(
+                '.zip') else f"{MINIO_PREFIX}/reports/{filename.replace('.xlsx', '.zip')}"
         ]
         for m_key in minio_candidates:
             if minio_storage.object_exists(m_key):
@@ -448,9 +462,11 @@ async def delete_rows_endpoint(req: DeleteRowsRequest):
             for kid in req.keyids:
                 try:
                     safe_k = safe_id(kid)
-                    deleted_minio_count = minio_storage.remove_prefix(f"{MINIO_PREFIX}/{safe_k}/")
+                    deleted_minio_count = minio_storage.remove_prefix(
+                        f"{MINIO_PREFIX}/{safe_k}/")
                     if deleted_minio_count > 0:
-                        print(f"🗑️ [MinIO Cleanup] Đã xóa {deleted_minio_count} objects trên MinIO cho KEYID={kid}")
+                        print(
+                            f"🗑️ [MinIO Cleanup] Đã xóa {deleted_minio_count} objects trên MinIO cho KEYID={kid}")
                 except Exception as m_del_err:
                     print(f"⚠️ [MinIO Cleanup Warning] {m_del_err}")
         return {"status": "ok", "message": f"Đã xóa thành công {count} bản ghi khỏi Database."}
@@ -482,13 +498,26 @@ async def get_task_detail(keyid: str, status: str = "COMPLETED", error_count: in
         import json
         from detail_builder import build_or_load_task_detail
 
-        # 1. Thử đọc nhanh từ MinIO cache JSON nếu có
+        # 1. Thử đọc nhanh từ MinIO cache JSON nếu có (chỉ nhận nếu là cache định dạng mới)
         if minio_storage.is_available():
-            detail_key = minio_storage.get_obj_key(keyid, "cache", "detail.json")
+            detail_key = minio_storage.get_obj_key(
+                keyid, "cache", "detail.json")
             data_bytes = minio_storage.download_bytes(detail_key)
             if data_bytes:
                 try:
-                    return json.loads(data_bytes.decode('utf-8'))
+                    cached_data = json.loads(data_bytes.decode('utf-8'))
+                    # Kiểm tra xem có phải cache cũ chưa bóc tách riêng số lượng từng bản vẽ không
+                    is_old = False
+                    if cached_data.get("errors") and any(
+                        "Lệch BV" in str(e.get("diff", "")) and "(AI:" in str(e.get("diff", ""))
+                        for e in cached_data["errors"]
+                    ):
+                        is_old = True
+
+                    if not is_old:
+                        return cached_data
+                    else:
+                        print(f"🔄 [MinIO Cache] Phát hiện cache cũ chưa bóc tách số liệu cho KEYID={keyid}, tiến hành rebuild...")
                 except Exception:
                     pass
 
@@ -500,6 +529,15 @@ async def get_task_detail(keyid: str, status: str = "COMPLETED", error_count: in
         }
         detail = build_or_load_task_detail(
             keyid, FINAL_REPORT_DIR, PROJECT_STORAGE_DIR, fallback_info)
+
+        # Nếu có kết quả mới và MinIO đang hoạt động, đồng bộ đè bản mới lên MinIO
+        if minio_storage.is_available() and detail:
+            try:
+                json_bytes = json.dumps(detail, ensure_ascii=False, indent=2).encode('utf-8')
+                minio_storage.upload_bytes(json_bytes, minio_storage.get_obj_key(keyid, "cache", "detail.json"), "application/json")
+            except Exception:
+                pass
+
         return detail
     except Exception as e:
         print(f"❌ [FastAPI Error] get_task_detail: {e}")
@@ -536,7 +574,8 @@ async def get_task_image(keyid: str, filename: str):
             if root.exists():
                 for s_dir in root.glob(f"*session_{safe_key}*"):
                     for sub in ["", "evidence_images", "drawings", "pages"]:
-                        target = (s_dir / sub / filename) if sub else (s_dir / filename)
+                        target = (s_dir / sub /
+                                  filename) if sub else (s_dir / filename)
                         if target.exists() and target.is_file():
                             return FileResponse(str(target), media_type=media_type)
 
@@ -564,7 +603,8 @@ async def rerun_task_endpoint(keyid: str, background_tasks: BackgroundTasks):
         for root in search_roots:
             if root.exists():
                 sess_candidates.extend(root.glob(f"*session_{safe_key}*"))
-        sess_candidates = sorted(sess_candidates, key=os.path.getmtime, reverse=True)
+        sess_candidates = sorted(
+            sess_candidates, key=os.path.getmtime, reverse=True)
 
         excel_path = None
         for s_dir in sess_candidates:

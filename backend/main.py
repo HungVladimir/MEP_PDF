@@ -1,8 +1,3 @@
-# ====================================================================
-# LAUNCHER SERVICE (MEP PAYMENT AI WORKER)
-# File: backend/main.py
-# Khởi động FastAPI Worker Server và luồng giám sát dọn dẹp tự động
-# ====================================================================
 import os
 import sys
 import time

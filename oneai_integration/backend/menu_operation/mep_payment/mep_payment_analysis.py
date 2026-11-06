@@ -1,4 +1,3 @@
-
 from database.query_utils import QuerySettings
 
 # 1. QUERY ĐẾM TỔNG SỐ DÒNG (PHỤC VỤ PHÂN TRANG TOTAL PAGE)

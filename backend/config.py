@@ -4,8 +4,10 @@
 import os
 
 # 1. CẤU HÌNH API & AI MODEL (NextAI-SDV)
-API_URL = os.getenv("MEP_API_URL", "http://107.126.11.129:32200/api/v1/chat/completions")
-API_KEY = os.getenv("MEP_API_KEY", "sk-pEqadpi8UZjOr2RWUTdXliuxXcTFVc-dezojIsgbJ0Y")
+API_URL = os.getenv(
+    "MEP_API_URL", "http://107.126.11.129:32200/api/v1/chat/completions")
+API_KEY = os.getenv(
+    "MEP_API_KEY", "sk-pEqadpi8UZjOr2RWUTdXliuxXcTFVc-dezojIsgbJ0Y")
 MODEL_NAME = os.getenv("MEP_MODEL_NAME", "NextAI-SDV")
 TEMPERATURE = 0.0
 MAX_RETRIES = 3
@@ -36,14 +38,16 @@ BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 # --- THƯ MỤC ĐẦU VÀO PDF (HỖ TRỢ CẢ 2 CHẾ ĐỘ VẬN HÀNH) ---
 # Cách 1 (Thả chung): Thả tất cả PDF vào DIR_PDF_INPUT, hệ thống tự đọc Text phân loại Bản vẽ vs Gate Pass.
 # Cách 2 (Tách riêng / Web Server): Bỏ Bản vẽ vào DIR_PDF_DRAWINGS, bỏ Gate Pass vào DIR_PDF_GATEPASS.
-DIR_PDF_INPUT    = os.path.join(BASE_DIR, "input_pdf")
+DIR_PDF_INPUT = os.path.join(BASE_DIR, "input_pdf")
 DIR_PDF_DRAWINGS = os.path.join(BASE_DIR, "input_pdf", "drawings")
 DIR_PDF_GATEPASS = os.path.join(BASE_DIR, "input_pdf", "gate_pass")
 
 # --- THƯ MỤC LƯU TRỮ TRUNG GIAN (IMAGES & CSV) ---
 DIR_IMG_EXTRACTED = os.path.join(BASE_DIR, "output", "images")
-DIR_CSV_EXTRACTED = os.path.join(BASE_DIR, "output", "extracted_csv")   # Lưu CSV của Bản vẽ CAD
-DIR_GATEPASS_CSV  = os.path.join(BASE_DIR, "output", "gatepass_csv")    # Lưu CSV của Biên bản vật tư (Gate Pass)
+DIR_CSV_EXTRACTED = os.path.join(
+    BASE_DIR, "output", "extracted_csv")   # Lưu CSV của Bản vẽ CAD
+# Lưu CSV của Biên bản vật tư (Gate Pass)
+DIR_GATEPASS_CSV = os.path.join(BASE_DIR, "output", "gatepass_csv")
 
 # --- THƯ MỤC CHỨA DỮ LIỆU EXCEL THỰC TẾ & BÁO CÁO ĐẦU RA ---
 DIR_VENDOR_EXCEL = r"D:/Private_Documents/Doc/AI-Infra"
@@ -60,21 +64,22 @@ for folder in [
 # ==========================================
 # 4. CẤU HÌNH FILE VENDOR (BẢNG KHỐI QLƯỢNG)
 # ==========================================
-VENDOR_FILE_NAME  = "Sample 3. 03.PAYMENT WOR2512230006V.xlsx"
+VENDOR_FILE_NAME = "Sample 3. 03.PAYMENT WOR2512230006V.xlsx"
 VENDOR_SHEET_NAME = "3.Bảng khối lượng"
-VENDOR_COL_CODE   = "Code"
-VENDOR_COL_EXTRA  = "Phụ trội"
+VENDOR_COL_CODE = "Code"
+VENDOR_COL_EXTRA = "Phụ trội"
 VENDOR_COL_REMARK = "Remark"
 
 # ==========================================
 # 5. CẤU HÌNH FILE MAPPING (SHEET BOQ TRONG FILE THANH TOÁN)
 # ==========================================
 MASTER_DATA_FILE_NAME = "Sample 3. 03.PAYMENT WOR2512230006V.xlsx"
-MASTER_SHEET_NAME     = "BOQ"
+MASTER_SHEET_NAME = "BOQ"
 
 # Từ điển ánh xạ cột chuẩn của hệ thống (Bên trái) với tên cột thực tế trên sheet BOQ (Bên phải)
 MASTER_COL_MAP = {
-    "Code_Master":         "Code SDAC vật tư",      # Cột chứa SDAC Code dùng để dò tìm
+    # Cột chứa SDAC Code dùng để dò tìm
+    "Code_Master":         "Code SDAC vật tư",
     "SDAC Code nhân công": "Code SDAC nhân công",
     "Description":         "Description",
     "Specification":       "Specification",
@@ -92,5 +97,7 @@ SHEET_KEYWORDS_GATEPASS = ['bbgn', 'gate', 'mang vào', 'biên bản']
 # ==========================================
 # 6. CẤU HÌNH VẬN HÀNH PIPELINE & GIỚI HẠN UPLOAD
 # ==========================================
-SKIP_EXTRACTED_CSV = False   # True: File nào đã có sẵn .csv thì bỏ qua không gọi lại AI
-MAX_UPLOAD_SIZE_MB = int(os.getenv("MAX_UPLOAD_SIZE_MB", 50))  # Giới hạn dung lượng file Excel upload tối đa (MB)
+# True: File nào đã có sẵn .csv thì bỏ qua không gọi lại AI
+SKIP_EXTRACTED_CSV = False
+# Giới hạn dung lượng file Excel upload tối đa (MB)
+MAX_UPLOAD_SIZE_MB = int(os.getenv("MAX_UPLOAD_SIZE_MB", 50))

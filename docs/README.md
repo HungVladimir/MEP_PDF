@@ -1,29 +1,80 @@
 # TỔNG MỤC TÀI LIỆU DỰ ÁN MEP ONEAI SYSTEM
 
-Thư mục tài liệu này đã được tinh gọn và quy hoạch thành **5 BỘ TÀI LIỆU MASTER HOÀN CHỈNH**, bao quát 100% tất cả các khía cạnh từ hướng dẫn thực chiến từng bước cho người mới, kiến trúc toàn cảnh, giải thích từng file & luồng dữ liệu, hướng dẫn triển khai thực tế, đến giải mã code của sếp và thuật toán thị giác máy tính:
+Thư mục tài liệu này đã được tinh gọn, quy hoạch và nâng cấp thành **10 BỘ TÀI LIỆU MASTER HOÀN CHỈNH**, bao quát 100% tất cả các khía cạnh từ hướng dẫn thực chiến từng bước cho người mới, kiến trúc toàn cảnh 4 tầng, giải mã code của sếp, thuật toán thị giác máy tính, bóc tách CAD vector, giao diện trực quan 4 tab, tích hợp MinIO Cloud Storage chuẩn Enterprise, đến cẩm nang phân giải chi tiết từng con số trên màn hình và giải mã chuyên sâu 2 module lõi:
 
 ---
 
-### 🌟 [5. Cẩm Nang Thực Chiến Từng Bước: Từ Code AI Local Lên Màn Hình OneAI](./05_HUONG_DAN_CHI_TIET_TU_CODE_LOCAL_LEN_ONEAI_STEP_BY_STEP.md) 🚀 *(DÀNH CHO NGƯỜI CHƯA LÀM BAO GIỜ - COOKBOOK)*
+### 🌟 [10. Giải Mã Toàn Diện Về minio_storage.py & detail_builder.py: Bản Chất, Luồng Hoạt Động & Vị Trí Đặt File](./10_GIAI_MA_LUONG_MINIO_STORAGE_VA_DETAIL_BUILDER.md) 🚀 *(GIẢI THÍCH CHUYÊN SÂU 2 MODULE THEN CHỐT)*
+* **Tên file:** `10_GIAI_MA_LUONG_MINIO_STORAGE_VA_DETAIL_BUILDER.md`
+* **Nội dung:** Giải thích cặn kẽ bản chất, lý do tồn tại và vị trí triển khai của 2 module:
+  * **Vị trí đặt file chuẩn xác:** Khẳng định dứt khoát cả 2 file **bắt buộc phải đặt trong dự án gốc của bạn** (FastAPI Worker Service `backend/`), tuyệt đối không đặt vào OneAI Core.
+  * **Tại sao phải dùng chúng:** Phân tích hậu quả nếu không có (trình duyệt không đọc được Excel nhị phân, mất dữ liệu khi restart container, lỗi 404 khi chạy phân tán).
+  * **Bản chất của `minio_storage.py`:** Bộ điều phối Cloud Storage Adapter Dual-Mode, quản lý stream ảnh/báo cáo, presigned URL và dọn dẹp bù trừ khi xóa dòng.
+  * **Bản chất của `detail_builder.py`:** Bộ biên dịch dữ liệu (Data Reconcile Compiler), bóc tách từng bản vẽ, tính chênh lệch, gom ảnh, gom log đóng gói thành JSON cache `detail.json` chỉ 0.05s hiển thị.
+  * **Vòng đời 4 giai đoạn & Sơ đồ tương tác mạng:** Sequence Diagram từng bước và sơ đồ kết nối mạng giữa Vue $\rightarrow$ Gateway $\rightarrow$ Worker (:8000) $\rightarrow$ Oracle DB / MinIO S3.
+
+---
+
+### 🌟 [9. Hướng Dẫn Chi Tiết Luồng Code Hiển Thị Form & Bản Đồ Ánh Xạ Dữ Liệu Toàn Phần](./09_HUONG_DAN_CHI_TIET_LUONG_CODE_HIEN_THI_FORM_VA_DU_LIEU.md) 🚀 *(CẨM NANG BÓC TÁCH TỪNG CON SỐ TRÊN GIAO DIỆN)*
+* **Tên file:** `09_HUONG_DAN_CHI_TIET_LUONG_CODE_HIEN_THI_FORM_VA_DU_LIEU.md`
+* **Nội dung:** Phân giải chi tiết 100% từng thành phần trên giao diện:
+  * **Hình 1 (Bảng quản trị & 5 Thẻ KPI):** Bản đồ con số thực tế (41, 5, 7, 0, 29), câu lệnh SQL `searchTotalRow` và `get_kpi_summary`, các cột bảng và phân trang.
+  * **Hình 2 (Modal Header, 4 Thẻ thống kê & Tab 1: Danh sách lỗi):** Cơ chế gọi `GET /mep_payment/detail/{id}`, bóc tách số lượng cụ thể từng bản vẽ (`59.0` vs `58.0` $\rightarrow$ `Thiếu 1.0`), tooltip hover và chi tiết đối chiếu.
+  * **Hình 3 (Tab 2: Đối chiếu theo từng bản vẽ):** Cơ chế Accordion đa tầng theo 5 bản vẽ (`0105`..`0505`), quy tắc gán SL Dự toán $=$ SL Bản vẽ này nếu Khớp 100%.
+  * **Tab 3 (Soi bản vẽ & ảnh trích xuất):** Quét 19 ảnh bằng chứng từ `drawings/`, `evidence_images/` hoặc MinIO Storage, cơ chế phóng to Lightbox chống nhấp nháy bằng `:preview-teleported="true"`.
+  * **Tab 4 (Nhật ký AI):** Console hộp đen màu đen hiển thị log bóc tách thời gian thực từ buffer `TeeStream` và `pipeline.log`.
+  * **Khung Phê duyệt & Thao tác:** Ghi chú duyệt, nút Duyệt (`APPROVED`), Từ chối (`REJECTED`), Rerun và Tải báo cáo ZIP/Excel.
+  * **Bảng Ma trận Ánh xạ Tổng thể (Master Mapping Matrix):** Bảng tra cứu trực diện từ phần tử UI $\rightarrow$ biến Vue $\rightarrow$ API Endpoint $\rightarrow$ File Backend $\rightarrow$ Cột Database / File Excel.
+
+---
+
+### 🌟 [8. Hướng Dẫn Tích Hợp MinIO Storage, Bóc Tách Sai Lệch Chi Tiết & Tối Ưu Giao Diện](./08_HUONG_DAN_TICH_HOP_MINIO_STORAGE_VA_XU_LY_SAI_LECH_CHI_TIET.md) ⚡ *(PHIÊN BẢN v2.5 LATEST)*
+* **Tên file:** `08_HUONG_DAN_TICH_HOP_MINIO_STORAGE_VA_XU_LY_SAI_LECH_CHI_TIET.md`
+* **Nội dung:** Toàn bộ giải pháp nâng cấp hạ tầng lưu trữ và chuẩn hóa dữ liệu đối chiếu:
+  * **MinIO Object Storage Adapter Dual-Mode:** Tự nhận diện biến môi trường `ONEAI_MINIO_*` hoặc `MINIO_*` trong `.env`. Cơ chế Graceful Fallback tự chuyển sang đĩa cục bộ mà không crash nếu MinIO offline.
+  * **Chuẩn hóa số liệu Tab 1 & Tab 2 (`detail_builder.py`):** Xây dựng hàm `parse_dwg_segments` trích xuất chính xác số lượng Vendor khai và số lượng AI bóc tách cho riêng bản vẽ đó (chấm dứt tình trạng $101 = 101$ mà báo lỗi hoặc $3.0 \neq 0.4$ mà báo khớp).
+  * **Cơ chế Auto-Detect & Rebuild Cache:** Tự động phát hiện cache cũ trên MinIO / Local Disk và tự động rebuild lại từ file Excel báo cáo sang định dạng mới chuẩn xác ngay khi mở modal.
+  * **Tách rời CSS (`operation.css`):** Giảm dung lượng file `operation.vue`, fix triệt để lỗi nhấp nháy thumbnail khi xem ảnh bằng `:preview-teleported="true"`.
+  * **Sửa lỗi Smart Polling:** Tự động làm biến mất dòng 100% khi lọc tab "Đang đối soát AI", dừng polling ngầm và tự động cập nhật số liệu 5 thẻ KPI.
+  * **Sửa lỗi Oracle DB Connection:** Xử lý `cursor = cur.cursor()` trong `check_keyid_exists`, triệt tiêu cảnh báo `'Connection' has no attribute 'fetchall'`.
+
+---
+
+### 🎨 [7. Nâng Cấp Giao Diện Trực Quan 4 Tab Theo Chuẩn Sếp Gửi](./07_KIEN_TRUC_NANG_CAP_GIAO_DIEN_TRUC_QUAN_THEO_CHUAN_SEP_GUI.md) *(PHIÊN BẢN v2.0)*
+* **Tên file:** `07_KIEN_TRUC_NANG_CAP_GIAO_DIEN_TRUC_QUAN_THEO_CHUAN_SEP_GUI.md`
+* **Nội dung:** Toàn bộ giải pháp nâng cấp giao diện trực quan và trải nghiệm người dùng (UX):
+  * **Hệ thống 5 Thẻ KPI:** Tổng hồ sơ, Khớp 100%, Có sai lệch, Đang đối soát, Chờ duyệt (Click-to-filter nhanh danh sách).
+  * **Hộp thoại Đối soát 4 Tab (Modal Dialog):** 
+    - Tab 1: Danh sách chi tiết lỗi sai lệch (Bản vẽ, Mã SDAC, Tên vật tư, SL Dự toán, SL Bản vẽ, Chênh lệch).
+    - Tab 2: Đối chiếu gom nhóm theo từng Bản vẽ kỹ thuật (Accordion đa tầng).
+    - Tab 3: Băng chuyền soi ảnh bản vẽ & xem phóng to độ phân giải cao (Lightbox SVG/PNG).
+    - Tab 4: Console hiển thị nhật ký bóc tách của AI theo thời gian thực.
+  * **Quy trình Phê duyệt & Chạy lại AI (Rerun):** Kỹ sư nhập ghi chú nghiệm thu, bấm Duyệt (Approve) hoặc Từ chối (Reject), và kích hoạt Chạy lại AI (Rerun) ngay trong modal hoặc khi tác vụ thất bại.
+  * **Phân tách sự kiện triệt để (Không xung đột):** Gỡ bỏ `@row-dblclick` để bảo toàn tính năng click đúp sửa inline các ô Part/Group/Task Name, mở modal chỉ bằng click chuột trái vào Kết quả kiểm tra.
+  * **Sửa lỗi STT phân trang:** Công thức `nextStt` toàn cục đảm bảo thêm dòng mới ở bất kỳ trang nào cũng mang số thứ tự tiếp theo chính xác.
+
+---
+
+### 🌟 [5. Cẩm Nang Thực Chiến Từng Bước: Từ Code AI Local Lên Màn Hình OneAI](./05_HUONG_DAN_CHI_TIET_TU_CODE_LOCAL_LEN_ONEAI_STEP_BY_STEP.md) 🚀 *(DÀNH CHO NGƯỜI MỚI - COOKBOOK)*
 * **Tên file:** `05_HUONG_DAN_CHI_TIET_TU_CODE_LOCAL_LEN_ONEAI_STEP_BY_STEP.md`
 * **Nội dung:** Bản đồ thực thi chi tiết cầm tay chỉ việc:
   * Điểm xuất phát: Trong tay chỉ có 5 file code AI chạy local terminal.
-  * **Bước 0:** Cách phân tích bài toán để xác định danh sách các cột/trường hiển thị trên màn hình.
+  * **Bước 0:** Phân tích bài toán để xác định danh sách các cột/trường hiển thị trên màn hình.
   * **Bước 1:** Thiết kế bảng Oracle DB `create_table.sql` và thao tác trên DBeaver.
   * **Bước 2:** Cấu hình truy vấn tĩnh OneAI Gateway `mep_payment_analysis.py` (Bind Variable, phân trang `ROW_NUMBER()`).
   * **Bước 3:** Đóng gói API Javascript `mep_payment.js` gọi Gateway `/crud/ui`.
   * **Bước 4:** Xây dựng màn hình Vue 3 Dark Theme (`main.vue`, `tab/operation.vue`), cơ chế Insert vào cuối bảng (`push`), tính STT tự động, khóa timer Polling khi đang nhập, phòng thủ chống trùng mã `KEYID`.
   * **Bước 5:** Dựng máy chủ FastAPI Worker (`main.py`, `api.py`, `sql.py`) xử lý ngầm bằng `BackgroundTasks` và đóng gói `.zip` lách tường lửa DLP.
-  * **Bước 6:** Tích hợp 5 file AI lõi vào Background Task.
+  * **Bước 6:** Tích hợp các module AI lõi vào Background Task.
   * **Bước 7 & Cạm bẫy:** Checklist kiểm thử từng bước và bảng tổng hợp 6 cạm bẫy kinh điển (trùng mã `KEYID`, lỗi mật khẩu `0x939`, timer 10s xóa RAM, quên `commit()`...).
 
 ---
 
-### 📕 [4. Kiến Trúc Toàn Cảnh & Giải Mã Toàn Bộ Luồng Liên Kết Hệ Thống](./04_KIEN_TRUC_TOAN_CANH_VA_LUONG_DU_LIEU_CHI_TIET.md) ⭐ *(TÀI LIỆU QUAN TRỌNG NHẤT ĐỂ ĐI BÁO CÁO SẾP)*
+### 📕 [4. Kiến Trúc Toàn Cảnh & Giải Mã Toàn Bộ Luồng Liên Kết Hệ Thống](./04_KIEN_TRUC_TOAN_CANH_VA_LUONG_DU_LIEU_CHI_TIET.md) ⭐ *(TÀI LIỆU QUAN TRỌNG ĐỂ BÁO CÁO SẾP)*
 * **Tên file:** `04_KIEN_TRUC_TOAN_CANH_VA_LUONG_DU_LIEU_CHI_TIET.md`
 * **Nội dung:** Được biên soạn dưới góc nhìn của Senior System & Solution Architect:
   * **Bức tranh toàn cảnh 4 tầng (4-Tier Enterprise Architecture):** OneAI Vue Frontend $\rightarrow$ OneAI Gateway (`/crud/ui`) $\rightarrow$ FastAPI Worker (:8000) $\rightarrow$ Oracle DB 19c (`LOCAL_AI`).
-  * **Từ điển từng file trong hệ thống:** Giải thích cặn kẽ từng file làm gì, vì sao phải có, kết nối với ai (Nhóm Core Pipeline: `config`, `utils`, `pdf_extractor`, `excel_reconciler`, `engine`; Nhóm Worker: `main`, `api`, `sql`; Nhóm OneAI: `create_table.sql`, `mep_payment_analysis.py`, `mepPayment.js`, `operation.vue`).
+  * **Từ điển từng file trong hệ thống:** Giải thích cặn kẽ từng file làm gì, vì sao phải có, kết nối với ai (Nhóm Core Pipeline: `config`, `utils`, `pdf_extractor`, `excel_reconciler`, `engine`; Nhóm Worker: `main`, `api`, `sql`, `minio_storage`, `detail_builder`; Nhóm OneAI: `create_table.sql`, `mep_payment_analysis.py`, `mep_payment.js`, `operation.vue`, `operation.css`).
   * **Ma trận dòng chảy dữ liệu End-to-End:** 4 Sequence diagram chi tiết từng bước (Tải phân trang, CRUD Insert/Edit/Delete/Save, Upload kích hoạt AI ngầm, Tải file báo cáo Blob ZIP).
   * **Giải mã các quyết định kỹ thuật cốt lõi:** Tại sao cần 2 Backend? Tại sao dùng `BackgroundTasks`? Bản chất lỗi `DPY-3015: password verifier 0x939` và cơ chế cứu cánh của `Oracle Thick Client` (`oci.dll`). Vì sao phải nén `.zip` lách tường lửa DLP?
   * **Kịch bản thuyết minh bảo vệ dự án trước Sếp:** Bài nói 2 phút (Elevator Pitch), kịch bản Demo trực tiếp và bộ câu hỏi vấn đáp hóc búa từ Sếp kèm câu trả lời mẫu chuẩn Senior Architect.
@@ -35,8 +86,8 @@ Thư mục tài liệu này đã được tinh gọn và quy hoạch thành **5 
 * **Nội dung:** Cuốn cẩm nang thi công trọn gói từ A-Z:
   * Toàn bộ mã nguồn DDL tạo bảng Oracle Database (`LOCAL_AI.MEP_PAYMENT_ANALYSIS`).
   * Cấu hình OneAI Backend QuerySettings (`mep_payment_analysis.py`).
-  * Cấu hình Javascript gọi Gateway OneAI (`mepPayment.js`).
-  * Giao diện hoàn chỉnh Vue 3 Element Plus Dark Theme (`MepOperation.vue`) tích hợp Toolbar chuẩn OneAI: **Delete, Insert, Export, Save**, Checkbox chọn dòng, ô gõ inline trực tiếp và hàm tải file Blob download chống chặn mạng nội bộ.
+  * Cấu hình Javascript gọi Gateway OneAI (`mep_payment.js`).
+  * Giao diện hoàn chỉnh Vue 3 Element Plus Dark Theme tích hợp Toolbar chuẩn OneAI: **Delete, Insert, Export, Save**, Checkbox chọn dòng, ô gõ inline trực tiếp và hàm tải file Blob download chống chặn mạng nội bộ.
   * Dịch vụ Worker chạy ngầm (`api.py` & `sql.py`) tự động đóng gói file báo cáo `.zip` lách hệ thống bảo mật DLP doanh nghiệp.
   * Quy trình dọn dẹp ảnh bằng chứng tự động định kỳ 15–30 ngày.
 
@@ -73,22 +124,6 @@ Thư mục tài liệu này đã được tinh gọn và quy hoạch thành **5 
   * **Giải mã quy chuẩn ký hiệu (Symbol Key & Legend):** Phân tích bảng ký hiệu chuẩn có sẵn trên bản vẽ thực tế `img1.png`, `img2.png` (`SPARE CABLE`, `CABLE LINE UP/DN`, `STEEL CONDUIT`, `FLEXIBLE CONDUIT`, `CABLE DUCT & TRAY`) và cách lưu trữ trong CAD (Layer, Linetype, Lineweight, Text tags `22C`).
   * **Kịch bản dự phòng khi KHÔNG CÓ CAD:** Quy trình 5 bước Computer Vision (OpenCV Crop bảng chú giải, lọc hình thái học nét đậm, vector hóa Skeletonization, đo tỷ lệ pixel theo trục cột `9,000` mm, Qwen 3.8 đọc cao độ `UP/DN`).
   * **Ma trận yêu cầu hai bên:** Chuẩn hóa Layer & Block cho nhà thầu, xây dựng 4 module cho đội ngũ phát triển, thuật toán Python mẫu và lộ trình 4 tuần.
-
----
-
-### 🎨 [7. Nâng Cấp Giao Diện Trực Quan 4 Tab Theo Chuẩn Sếp Gửi](./07_KIEN_TRUC_NANG_CAP_GIAO_DIEN_TRUC_QUAN_THEO_CHUAN_SEP_GUI.md) ⚡ *(PHIÊN BẢN MỚI NHẤT - LATEST)*
-* **Tên file:** `07_KIEN_TRUC_NANG_CAP_GIAO_DIEN_TRUC_QUAN_THEO_CHUAN_SEP_GUI.md`
-* **Nội dung:** Toàn bộ giải pháp nâng cấp giao diện trực quan và trải nghiệm người dùng (UX):
-  * **Hệ thống 5 Thẻ KPI:** Tổng hồ sơ, Khớp 100%, Có sai lệch, Đang đối soát, Chờ duyệt (Click-to-filter nhanh danh sách).
-  * **Hộp thoại Đối soát 4 Tab (Modal Dialog):** 
-    - Tab 1: Danh sách chi tiết lỗi sai lệch (Bản vẽ, Mã SDAC, Tên vật tư, SL Dự toán, SL Bản vẽ, Chênh lệch).
-    - Tab 2: Đối chiếu gom nhóm theo từng Bản vẽ kỹ thuật (Accordion đa tầng).
-    - Tab 3: Băng chuyền soi ảnh bản vẽ & xem phóng to độ phân giải cao (Lightbox SVG/PNG).
-    - Tab 4: Console hiển thị nhật ký bóc tách của AI theo thời gian thực.
-  * **Quy trình Phê duyệt & Chạy lại AI (Rerun):** Kỹ sư nhập ghi chú nghiệm thu, bấm Duyệt (Approve) hoặc Từ chối (Reject), và kích hoạt Chạy lại AI (Rerun) ngay trong modal hoặc khi tác vụ thất bại.
-  * **Phân tách sự kiện triệt để (Không xung đột):** Gỡ bỏ `@row-dblclick` để bảo toàn tính năng click đúp sửa inline các ô Part/Group/Task Name, mở modal chỉ bằng click chuột trái vào Số WO hoặc Kết quả kiểm tra.
-  * **Sửa lỗi STT phân trang:** Công thức `nextStt` toàn cục đảm bảo thêm dòng mới ở bất kỳ trang nào cũng mang số thứ tự tiếp theo chính xác.
-  * **Danh mục tối giản:** Chỉ cần sửa duy nhất 3 file (`detail_builder.py`, `api.py`, `operation.vue`), giữ nguyên 100% logic thuật toán lõi.
 
 ---
 

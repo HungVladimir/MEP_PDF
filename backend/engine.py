@@ -1,6 +1,3 @@
-# ==========================================
-# ĐIỀU PHỐI TỔNG TÀI (MEP PIPELINE ENGINE)
-# ==========================================
 import os
 import glob
 import time
@@ -16,7 +13,7 @@ import excel_reconciler
 import utils as ut
 
 # --------------------------------------------------------------------------
-# KHỐI GIẢI MÃ NHỊ PHÂN OLE COMPOUND FILE (NÂNG CẤP TỪ THIẾT KẾ CỦA SẾP)
+# KHỐI GIẢI MÃ NHỊ PHÂN OLE COMPOUND FILE
 # --------------------------------------------------------------------------
 PDF_HEAD, PDF_EOF = b"%PDF-", b"%%EOF"
 CFB_SIG = bytes.fromhex("D0CF11E0A1B11AE1")
@@ -337,7 +334,8 @@ def run_mep_pipeline(
             "BƯỚC 4/4: Đang đối soát 2 Vòng và tô màu báo cáo...", 0.85)
 
         # Đặt tên file báo cáo kết quả theo đúng tên file Excel Vendor upload lên
-        vendor_stem = os.path.splitext(os.path.basename(vendor_excel_path))[0] if vendor_excel_path else first_pdf_name
+        vendor_stem = os.path.splitext(os.path.basename(vendor_excel_path))[
+            0] if vendor_excel_path else first_pdf_name
         base_output_path = os.path.join(
             output_dir, f"{vendor_stem}_Report.xlsx")
         final_excel_path = excel_reconciler.get_unique_path(base_output_path)
