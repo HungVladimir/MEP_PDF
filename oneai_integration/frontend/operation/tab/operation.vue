@@ -100,15 +100,12 @@
         <!-- CỘT STT -->
         <el-table-column prop="STT" label="STT" width="55" align="center" />
 
-        <!-- CỘT: SỐ CÔNG VIỆC (SỐ WO) - BẤM VÀO ĐỂ XEM CHI TIẾT -->
+        <!-- CỘT: SỐ CÔNG VIỆC (SỐ WO) - HIỂN THỊ DẠNG CHỮ BÌNH THƯỜNG -->
         <el-table-column prop="KEYID" label="SỐ CÔNG VIỆC (WO)" width="165" sortable align="center">
           <template #default="{ row }">
             <el-input v-if="row.isNew" v-model="row.KEYID" placeholder="Nhập số WO..." size="mini"
               class="inline-input" />
-            <el-tag v-else type="primary" effect="plain" class="font-bold cursor-pointer wo-keyid-badge"
-              :title="`Bấm để xem chi tiết đối soát ${row.KEYID}`" @click="openDetailModal(row)">
-              {{ row.KEYID }}
-            </el-tag>
+            <span v-else class="font-bold font-mono">{{ row.KEYID }}</span>
           </template>
         </el-table-column>
 
@@ -351,8 +348,18 @@
                 <template #default="{ row }"><b class="font-mono">{{ row.code }}</b></template>
               </el-table-column>
               <el-table-column prop="name" label="Tên vật tư" min-width="180" show-overflow-tooltip />
+              <el-table-column prop="unit" label="ĐVT" width="65" align="center" />
               <el-table-column prop="vendor_qty" label="SL Dự toán" width="100" align="center" />
-              <el-table-column prop="ai_qty" label="SL Bản vẽ (AI)" width="110" align="center" />
+              <el-table-column prop="ai_qty" label="SL Bản vẽ (AI)" width="125" align="center">
+                <template #default="{ row }">
+                  <el-tooltip v-if="row.ai_breakdown" :content="`Bóc tách từ: ${row.ai_breakdown}`" placement="top">
+                    <span class="font-bold text-primary cursor-pointer">
+                      {{ row.ai_qty }} <i class="bi bi-info-circle ms-1" style="font-size: 11px;"></i>
+                    </span>
+                  </el-tooltip>
+                  <span v-else class="font-bold">{{ row.ai_qty }}</span>
+                </template>
+              </el-table-column>
               <el-table-column prop="diff" label="Chênh lệch" width="140" align="center">
                 <template #default="{ row }"><span class="text-danger font-bold">{{ row.diff
                 }}</span></template>
@@ -361,7 +368,10 @@
             </el-table>
           </el-tab-pane>
 
-          <!-- TAB 2: ĐỐI CHIẾU THEO TỪNG BẢN VẼ -->
+          <!-- ================================================================= -->
+          <!-- TAB 2: ĐỐI CHIẾU THEO TỪNG BẢN VẼ (ĐÃ TỐI ƯU GIAO DIỆN DỄ HIỂU)     -->
+          <!-- (NẾU KHÔNG MUỐN HIỂN THỊ: COMMENT TOÀN BỘ KHỐI <el-tab-pane> NÀY) -->
+          <!-- ================================================================= -->
           <el-tab-pane name="drawings">
             <template #label>
               <span><i class="bi bi-diagram-3 me-1"></i> Đối Chiếu Theo Bản Vẽ ({{
@@ -383,11 +393,15 @@
                   </div>
                 </template>
                 <el-table :data="g.rows" border size="mini" height="220" style="width: 100%">
-                  <el-table-column prop="code" label="Mã vật tư" width="150" align="center">
+                  <el-table-column prop="code" label="Mã vật tư" width="140" align="center">
                     <template #default="{ row }"><b class="font-mono">{{ row.code }}</b></template>
                   </el-table-column>
-                  <el-table-column prop="name" label="Tên vật tư" min-width="200" show-overflow-tooltip />
-                  <el-table-column prop="qty" label="Số lượng AI đọc" width="130" align="center" />
+                  <el-table-column prop="name" label="Tên vật tư" min-width="180" show-overflow-tooltip />
+                  <el-table-column prop="unit" label="ĐVT" width="65" align="center" />
+                  <el-table-column prop="vendor_qty" label="SL Dự toán" width="100" align="center" />
+                  <el-table-column prop="qty" label="SL Bản vẽ này" width="120" align="center">
+                    <template #default="{ row }"><b class="text-primary">{{ row.qty }}</b></template>
+                  </el-table-column>
                   <el-table-column prop="why" label="Kết quả đối chiếu" width="180" align="center">
                     <template #default="{ row }">
                       <span :class="row.ok ? 'text-success' : 'text-danger'">{{ row.why }}</span>
@@ -397,6 +411,9 @@
               </el-collapse-item>
             </el-collapse>
           </el-tab-pane>
+          <!-- ================================================================= -->
+          <!-- KẾT THÚC KHỐI TAB 2: ĐỐI CHIẾU THEO BẢN VẼ                         -->
+          <!-- ================================================================= -->
 
           <!-- TAB 3: SOI BẢN VẼ / ẢNH TRÍCH XUẤT -->
           <el-tab-pane name="images">

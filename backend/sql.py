@@ -133,6 +133,11 @@ def save_tasks(rows: list) -> int:
 
         if hasattr(cur, 'commit'):
             cur.commit()
+        if hasattr(cur, 'connection') and hasattr(cur.connection, 'commit'):
+            try:
+                cur.connection.commit()
+            except Exception:
+                pass
 
         print(
             f"[Oracle DB] Da luu thanh cong: {ins_count} dong moi (INSERT), {upd_count} dong cap nhat (UPDATE).")
@@ -159,6 +164,11 @@ def delete_tasks(keyids: list) -> int:
             cur.execute(sql, params=p)
         if hasattr(cur, 'commit'):
             cur.commit()
+        if hasattr(cur, 'connection') and hasattr(cur.connection, 'commit'):
+            try:
+                cur.connection.commit()
+            except Exception:
+                pass
 
         print(
             f"[Oracle DB] Da xoa {len(keyids)} dong khoi MEP_PAYMENT_ANALYSIS.")
@@ -196,6 +206,16 @@ def update_task_status(keyid: str, status: str, error_count: int = 0, result_lin
         cur.execute(sql, params=params)
         if hasattr(cur, 'commit'):
             cur.commit()
+        if hasattr(cur, 'connection') and hasattr(cur.connection, 'commit'):
+            try:
+                cur.connection.commit()
+            except Exception:
+                pass
+        if hasattr(cur, 'connection') and hasattr(cur.connection, 'commit'):
+            try:
+                cur.connection.commit()
+            except Exception:
+                pass
         print(
             f"[Oracle DB] Da cap nhat KEYID={keyid} -> STATUS={status}, PROGRESS={progress}%")
     except Exception as e:
@@ -223,6 +243,11 @@ def update_review_decision(keyid: str, decision: str, note: str, reviewer: str):
         cur.execute(sql, params=params)
         if hasattr(cur, 'commit'):
             cur.commit()
+        if hasattr(cur, 'connection') and hasattr(cur.connection, 'commit'):
+            try:
+                cur.connection.commit()
+            except Exception:
+                pass
         print(f"[Oracle DB] Da luu Review cho KEYID={keyid} -> {decision}")
     except Exception as e:
         print(f"[Oracle DB Error] update_review_decision: {e}")

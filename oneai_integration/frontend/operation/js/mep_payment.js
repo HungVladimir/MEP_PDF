@@ -11,7 +11,7 @@ export async function get_total_row(status = "ALL", paymentMonth = "ALL", keywor
     KEYID: keyword || "ALL"
   }
   const parameter = { [reqId]: param }
-  const res = await api.get("/crud/ui", { params: parameter, loading: false })
+  const res = await api.get(`/crud/ui?_t=${Date.now()}`, { params: parameter, loading: false })
   return res.data[reqId].VAL
 }
 
@@ -30,7 +30,7 @@ export async function get_data_page(page = 1, pageSize = 50, status = "ALL", pay
   }
 
   const parameter = { [reqId]: param }
-  const res = await api.get("/crud/ui", { params: parameter, loading: false })
+  const res = await api.get(`/crud/ui?_t=${Date.now()}`, { params: parameter, loading: false })
   return res.data[reqId].VAL
 }
 
@@ -54,6 +54,6 @@ export async function get_kpi_summary(paymentMonth = "ALL", keyword = "ALL") {
     KEYID: keyword || "ALL"
   }
   const parameter = { [reqId]: param }
-  const res = await api.get("/crud/ui", { params: parameter, loading: false })
+  const res = await api.get(`/crud/ui?_t=${Date.now()}`, { params: parameter, loading: false })
   return res.data[reqId].VAL
 }

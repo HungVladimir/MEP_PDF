@@ -45,26 +45,47 @@ def parse_excel_report_to_detail(excel_path: Path, keyid: str, session_dir: Path
             df_s1 = xl.parse(target_s1)
             total_items = len(df_s1)
 
-            # Xác định các cột Bản vẽ (loại trừ các cột metadata)
-            meta_cols = {
-                'stt', 'sdac code', 'sdac_code', 'mã vật tư', 'tên vật tư',
-                'material cost', 'labor cost', 'khối lượng tổng', 'phụ trội',
-                'phu_troi', 'ghi chú', 'remark', 'note', 'kết quả'
-            }
-            drawing_names = [
-                c for c in df_s1.columns 
-                if str(c).strip().lower() not in meta_cols and not str(c).startswith('Unnamed:')
-            ]
+            # Xác định các cột Bản vẽ (loại trừ toàn bộ các cột thông tin metadata hệ thống/dự toán)
+            def is_metadata_col(col_name: str) -> bool:
+                s = str(col_name).strip().lower()
+                if s.startswith('unnamed:') or not s:
+                    return True
+                meta_terms = [
+                    'stt', 'no', 'no.', 'số tt',
+                    'sdac', 'mã vật tư', 'ma vat tu', 'mã vt', 'item code', 'code',
+                    'nhân công', 'labor', 'nhan cong',
+                    'description', 'tên vật tư', 'ten vat tu', 'tên hàng', 'diễn giải',
+                    'specification', 'quy cách', 'quy cach', 'thông số',
+                    'unit', 'đơn vị', 'don vi', 'dvt',
+                    'material cost', 'labor cost', 'đơn giá', 'don gia', 'cost',
+                    'khối lượng tổng', 'khoi luong tong', 'tổng kl', 'kl tổng', 'total qty', 'khối lượng',
+                    'phụ trội', 'phu troi', 'extra',
+                    'ghi chú', 'ghi chu', 'remark', 'note', 'kết quả', 'ket qua'
+                ]
+                for term in meta_terms:
+                    if term == s or term in s:
+                        return True
+                return False
 
-            note_col = next((c for c in df_s1.columns if 'note' in str(c).lower()), None)
-            code_col = next((c for c in df_s1.columns if 'sdac' in str(c).lower() or 'code' in str(c).lower() or 'mã' in str(c).lower()), df_s1.columns[0])
-            name_col = next((c for c in df_s1.columns if 'tên' in str(c).lower() or 'name' in str(c).lower()), None)
+            drawing_names = [c for c in df_s1.columns if not is_metadata_col(c)]
+
+            note_col = next((c for c in df_s1.columns if 'note' in str(c).lower() or 'ghi chú' in str(c).lower()), None)
+            code_col = next((c for c in df_s1.columns if ('sdac' in str(c).lower() and 'nhân công' not in str(c).lower() and 'labor' not in str(c).lower()) or ('mã' in str(c).lower() and 'nhân công' not in str(c).lower())), df_s1.columns[0])
+            name_col = next((c for c in df_s1.columns if 'description' in str(c).lower() or 'tên vật tư' in str(c).lower() or 'ten vat tu' in str(c).lower() or str(c).strip().lower() == 'tên'), None)
+            spec_col = next((c for c in df_s1.columns if 'specification' in str(c).lower() or 'quy cách' in str(c).lower()), None)
+            unit_col = next((c for c in df_s1.columns if str(c).strip().lower() in ('unit', 'đơn vị', 'dvt') or 'đơn vị' in str(c).lower()), None)
+            total_qty_col = next((c for c in df_s1.columns if 'khối lượng tổng' in str(c).lower() or 'khoi luong tong' in str(c).lower() or 'tổng' in str(c).lower()), None)
 
             # Dò tìm các dòng có lỗi trong Sheet 1
             for idx, row in df_s1.iterrows():
                 note_val = str(row.get(note_col, "")).strip() if note_col else ""
                 code_val = str(row.get(code_col, f"ITEM-{idx+1}")).strip()
                 name_val = str(row.get(name_col, code_val)).strip() if name_col else code_val
+                if name_val.lower() == 'nan' or not name_val:
+                    name_val = code_val
+                unit_val = str(row.get(unit_col, "")).strip() if unit_col else ""
+                if unit_val.lower() == 'nan':
+                    unit_val = ""
 
                 # Nhận diện lỗi từ cột Note
                 is_err = bool(re.search(r'(lệch|mồ côi|thiếu|thừa|không tìm thấy|sai)', note_val, re.IGNORECASE))
@@ -86,9 +107,31 @@ def parse_excel_report_to_detail(excel_path: Path, keyid: str, session_dir: Path
                     # Tìm bản vẽ liên quan
                     dwg_found = "Chung"
                     for d in drawing_names:
-                        if d.lower() in note_val.lower():
-                            dwg_found = d
+                        if str(d).lower() in note_val.lower():
+                            dwg_found = str(d)
                             break
+
+                    # Tính tổng số lượng thực tế AI bóc được từ tất cả các cột bản vẽ
+                    ai_sum = 0.0
+                    ai_breakdowns = []
+                    has_ai_val = False
+                    for d in drawing_names:
+                        d_val = row.get(d)
+                        if pd.notna(d_val) and str(d_val).strip() not in ("", "0", "nan"):
+                            try:
+                                num_v = float(str(d_val).replace(',', '').strip())
+                                ai_sum += num_v
+                                has_ai_val = True
+                                if num_v != 0:
+                                    ai_breakdowns.append(f"BV {d}: {num_v:g}")
+                            except (ValueError, TypeError):
+                                pass
+
+                    ai_qty_display = f"{ai_sum:g}" if has_ai_val else "0"
+                    ai_breakdown_text = ", ".join(ai_breakdowns) if ai_breakdowns else ""
+
+                    v_qty_raw = row.get(total_qty_col, '—') if total_qty_col else '—'
+                    v_qty_display = str(v_qty_raw) if pd.notna(v_qty_raw) else '—'
 
                     error_items.append({
                         "id": len(error_items) + 1,
@@ -96,35 +139,61 @@ def parse_excel_report_to_detail(excel_path: Path, keyid: str, session_dir: Path
                         "dwg": dwg_found,
                         "code": code_val,
                         "name": name_val,
-                        "vendor_qty": row.get('Khối lượng tổng', '—'),
-                        "ai_qty": "Xem chi tiết",
+                        "unit": unit_val,
+                        "vendor_qty": v_qty_display,
+                        "ai_qty": ai_qty_display,
+                        "ai_breakdown": ai_breakdown_text,
                         "diff": note_val.split('|')[0] if '|' in note_val else note_val,
                         "cell": f"Row {idx + 2}",
                         "msg": note_val or "Phát hiện sai lệch đối chiếu giữa Dự toán và Bản vẽ AI"
                     })
 
-            # Xây dựng cấu trúc nhóm theo Bản vẽ (Drawing Groups)
+            # Xây dựng cấu trúc nhóm theo Bản vẽ (Drawing Groups) - Chỉ duyệt các bản vẽ CAD thực tế
             for d in drawing_names:
                 dwg_rows = []
                 for idx, row in df_s1.iterrows():
                     val = row.get(d)
-                    if pd.notna(val) and val != 0 and str(val).strip() != "":
+                    if pd.notna(val) and str(val).strip() not in ("", "0", "nan"):
+                        try:
+                            num_qty = float(str(val).replace(',', '').strip())
+                            if num_qty == 0:
+                                continue
+                        except (ValueError, TypeError):
+                            continue
+
                         c_val = str(row.get(code_col, "")).strip()
                         n_val = str(row.get(name_col, c_val)).strip() if name_col else c_val
+                        if n_val.lower() == 'nan' or not n_val:
+                            n_val = c_val
+                        u_val = str(row.get(unit_col, "")).strip() if unit_col else ""
+                        if u_val.lower() == 'nan':
+                            u_val = ""
+
+                        v_qty_raw = row.get(total_qty_col, "—") if total_qty_col else "—"
+                        v_qty_str = str(v_qty_raw) if pd.notna(v_qty_raw) else "—"
+
+                        # Kiểm tra xem vật tư này trong bản vẽ này có bị lỗi không
+                        note_text = str(row.get(note_col, "")).strip() if note_col else ""
+                        is_this_dwg_err = (str(d).lower() in note_text.lower()) and bool(re.search(r'(lệch|mồ côi|thiếu|thừa|không tìm thấy|sai)', note_text, re.IGNORECASE))
+
                         dwg_rows.append({
                             "code": c_val,
                             "name": n_val,
-                            "qty": val,
-                            "ok": not any(e["code"] == c_val for e in error_items),
-                            "why": next((e["msg"] for e in error_items if e["code"] == c_val), "✓ Khớp")
+                            "unit": u_val,
+                            "vendor_qty": v_qty_str,
+                            "qty": f"{num_qty:g}",
+                            "ok": not is_this_dwg_err,
+                            "why": note_text if is_this_dwg_err else "✓ Khớp"
                         })
+
                 if dwg_rows:
                     err_in_group = [r for r in dwg_rows if not r["ok"]]
                     drawing_groups.append({
                         "drawing_no": str(d),
                         "total_items": len(dwg_rows),
                         "error_count": len(err_in_group),
-                        "rows": dwg_rows
+                        "rows": dwg_rows,
+                        "items": dwg_rows
                     })
 
         # 2. PHÂN TÍCH SHEET 2: ĐỐI SOÁT GATE PASS (NẾU CÓ)
