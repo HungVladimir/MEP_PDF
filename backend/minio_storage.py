@@ -1,0 +1,260 @@
+"""
+====================================================================
+MEP ONEAI SYSTEM - MINIO OBJECT STORAGE ADAPTER
+File: backend/minio_storage.py
+Pattern: Chuẩn hóa 100% theo kiến trúc OneAI (visionGuard.py & ai_bill.py)
+Chức năng:
+  - Tự động tích hợp singleton `minio_object` của OneAI Server nếu chạy trong hệ thống OneAI.
+  - Tự động kết nối Minio Client bằng cấu hình từ .env nếu chạy độc lập / local.
+  - Quản lý upload / stream / download / delete cho:
+      + Báo cáo Excel kết quả ({vendor_stem}_Report.xlsx)
+      + Báo cáo ZIP ({vendor_stem}_Report.zip)
+      + Toàn bộ ảnh trích xuất / ảnh bằng chứng (evidence_images, drawings, roi)
+      + File cache chi tiết đối soát (detail.json)
+  - Cơ chế Graceful Fallback: Nếu MinIO chưa bật hoặc mất kết nối,
+    hệ thống tự động dùng đĩa cứng cục bộ (không làm crash pipeline hay web).
+====================================================================
+"""
+
+import os
+import io
+import mimetypes
+from pathlib import Path
+from typing import Optional, Generator, Union
+from dotenv import load_dotenv, find_dotenv
+
+# Nạp biến môi trường
+load_dotenv(find_dotenv())
+
+# 1. Thử nạp module minio_object có sẵn của nền tảng OneAI (nếu có)
+try:
+    from minio_object import minio_object as _oneai_minio_object
+except ImportError:
+    _oneai_minio_object = None
+
+try:
+    from minio import Minio
+    from minio.error import S3Error
+except ImportError:
+    Minio = None
+    S3Error = Exception
+
+MINIO_PREFIX = os.getenv("MINIO_PREFIX", "mep_payment")
+USE_MINIO_CONFIG = os.getenv("USE_MINIO", "true").lower() in ("true", "1", "yes")
+
+
+class MinioStorageManager:
+    """Quản trị viên kết nối và thao tác với MinIO Object Storage."""
+
+    def __init__(self):
+        self.client = None
+        self.bucket_name = (
+            os.getenv("ONEAI_MINIO_BUCKETNAME")
+            or os.getenv("ONEAI_MINIO_BUCKET_NAME")
+            or os.getenv("MINIO_BUCKET_NAME")
+            or "oneai"
+        )
+        self.enabled = False
+        self._init_connection()
+
+    def _init_connection(self):
+        """Khởi tạo kết nối tới MinIO."""
+        if not USE_MINIO_CONFIG:
+            print("📦 [MinIO] Cấu hình USE_MINIO=false -> Tắt MinIO, sử dụng ổ đĩa cục bộ.")
+            return
+
+        # 1. Ưu tiên sử dụng minio_object của OneAI Platform nếu chạy trên môi trường Server OneAI
+        if _oneai_minio_object is not None:
+            try:
+                self.client = _oneai_minio_object.client
+                self.bucket_name = getattr(_oneai_minio_object, "bucket_name", self.bucket_name)
+                self.enabled = True
+                print(f"📦 [MinIO] Đã tích hợp OneAI Platform minio_object (Bucket: {self.bucket_name})")
+                return
+            except Exception as e:
+                print(f"⚠️ [MinIO Warning] Không thể dùng OneAI Platform minio_object: {e}")
+
+        # 2. Khởi tạo trực tiếp từ biến môi trường trong .env (hỗ trợ cả ONEAI_MINIO_* và MINIO_*)
+        endpoint = os.getenv("ONEAI_MINIO_ENDPOINT") or os.getenv("MINIO_ENDPOINT")
+        access_key = os.getenv("ONEAI_MINIO_ACCESS") or os.getenv("MINIO_ACCESS_KEY")
+        secret_key = os.getenv("ONEAI_MINIO_SECRET") or os.getenv("MINIO_SECRET_KEY")
+        secure_val = os.getenv("ONEAI_MINIO_SECURE", os.getenv("MINIO_SECURE", "false"))
+        secure = secure_val.lower() in ("true", "1", "yes")
+
+        if endpoint and access_key and secret_key and Minio:
+            try:
+                clean_endpoint = endpoint.replace("http://", "").replace("https://", "").strip()
+                self.client = Minio(
+                    clean_endpoint,
+                    access_key=access_key,
+                    secret_key=secret_key,
+                    secure=secure
+                )
+                self.enabled = True
+                print(f"📦 [MinIO] Đã kết nối MinIO Server ({clean_endpoint}, Bucket: {self.bucket_name})")
+            except Exception as e:
+                print(f"⚠️ [MinIO Warning] Không thể kết nối MinIO Server ({e}) -> Fallback sang lưu đĩa.")
+                self.enabled = False
+        else:
+            if not Minio:
+                print("ℹ️ [MinIO] Chưa cài thư viện 'minio' -> Tự động chuyển sang lưu đĩa.")
+            else:
+                print("ℹ️ [MinIO] Chưa cấu hình ONEAI_MINIO_ENDPOINT / MINIO_ENDPOINT trong .env -> Tự động chuyển sang lưu đĩa.")
+            self.enabled = False
+
+    def is_available(self) -> bool:
+        """Kiểm tra MinIO đã sẵn sàng sử dụng hay chưa."""
+        return bool(self.enabled and self.client)
+
+    def get_obj_key(self, keyid: str, subfolder: str, filename: str) -> str:
+        """Tạo khóa object chuẩn Posix: mep_payment/<safe_keyid>/<subfolder>/<filename>"""
+        safe_key = str(keyid).replace('/', '_').replace('\\', '_').replace(':', '_').strip()
+        sub = subfolder.strip('/') if subfolder else ''
+        fname = filename.strip('/')
+        if sub:
+            return f"{MINIO_PREFIX}/{safe_key}/{sub}/{fname}"
+        return f"{MINIO_PREFIX}/{safe_key}/{fname}"
+
+    def upload_file(self, local_path: Union[str, Path], object_key: str, content_type: Optional[str] = None) -> bool:
+        """Upload file vật lý từ ổ cứng lên MinIO (Wrapper quanh client.put_object theo chuẩn visionGuard)."""
+        if not self.is_available():
+            return False
+        local_p = Path(local_path)
+        if not local_p.exists() or not local_p.is_file():
+            return False
+
+        try:
+            if not content_type:
+                content_type, _ = mimetypes.guess_type(str(local_p))
+            content_type = content_type or "application/octet-stream"
+
+            file_size = local_p.stat().st_size
+            with open(local_p, "rb") as f_data:
+                self.client.put_object(
+                    bucket_name=self.bucket_name,
+                    object_name=object_key,
+                    data=f_data,
+                    length=file_size,
+                    content_type=content_type
+                )
+            return True
+        except Exception as exc:
+            print(f"⚠️ [MinIO Put Warning] Thất bại khi upload {object_key}: {exc}")
+            return False
+
+    def upload_bytes(self, data: bytes, object_key: str, content_type: str = "application/octet-stream") -> bool:
+        """Upload dữ liệu byte trực tiếp lên MinIO mà không cần ghi file tạm ra đĩa."""
+        if not self.is_available():
+            return False
+        try:
+            self.client.put_object(
+                bucket_name=self.bucket_name,
+                object_name=object_key,
+                data=io.BytesIO(data),
+                length=len(data),
+                content_type=content_type
+            )
+            return True
+        except Exception as exc:
+            print(f"⚠️ [MinIO Put Warning] Thất bại khi upload bytes {object_key}: {exc}")
+            return False
+
+    def download_bytes(self, object_key: str) -> Optional[bytes]:
+        """Tải toàn bộ nội dung object từ MinIO về dạng bytes."""
+        if not self.is_available() or not object_key:
+            return None
+        try:
+            resp = self.client.get_object(self.bucket_name, object_key)
+            try:
+                return resp.read()
+            finally:
+                resp.close()
+                resp.release_conn()
+        except Exception as exc:
+            print(f"⚠️ [MinIO Get Warning] Thất bại khi tải {object_key}: {exc}")
+            return None
+
+    def open_object(self, object_key: str):
+        """Mở kết nối stream đọc object từ MinIO (phục vụ StreamingResponse)."""
+        if not self.is_available() or not object_key:
+            return None
+        try:
+            return self.client.get_object(self.bucket_name, object_key)
+        except Exception as exc:
+            print(f"⚠️ [MinIO Open Warning] Không thể mở object {object_key}: {exc}")
+            return None
+
+    @staticmethod
+    def stream_object(response, chunk_size: int = 32 * 1024) -> Generator[bytes, None, None]:
+        """Generator stream dữ liệu từng chunk từ MinIO response và tự giải phóng kết nối."""
+        try:
+            for chunk in response.stream(chunk_size):
+                yield chunk
+        finally:
+            try:
+                response.close()
+                response.release_conn()
+            except Exception:
+                pass
+
+    def remove_object(self, object_key: str) -> bool:
+        """Xóa một object trên MinIO."""
+        if not self.is_available() or not object_key:
+            return False
+        try:
+            self.client.remove_object(self.bucket_name, object_key)
+            return True
+        except Exception as exc:
+            print(f"⚠️ [MinIO Remove Warning] Thất bại khi xóa {object_key}: {exc}")
+            return False
+
+    def remove_prefix(self, prefix: str) -> int:
+        """Xóa toàn bộ các object nằm trong 1 thư mục / prefix (dùng khi xóa Task KEYID)."""
+        if not self.is_available() or not prefix:
+            return 0
+        try:
+            objects_to_del = self.client.list_objects(self.bucket_name, prefix=prefix, recursive=True)
+            count = 0
+            for obj in objects_to_del:
+                try:
+                    self.client.remove_object(self.bucket_name, obj.object_name)
+                    count += 1
+                except Exception:
+                    pass
+            return count
+        except Exception as exc:
+            print(f"⚠️ [MinIO Remove Prefix Warning] Thất bại khi xóa prefix {prefix}: {exc}")
+            return 0
+
+    def object_exists(self, object_key: str) -> bool:
+        """Kiểm tra xem object có tồn tại trên MinIO hay không."""
+        if not self.is_available() or not object_key:
+            return False
+        try:
+            self.client.stat_object(self.bucket_name, object_key)
+            return True
+        except Exception:
+            return False
+
+    def get_presigned_url(self, object_key: str, expires_days: int = 1) -> Optional[str]:
+        """
+        Tạo đường link presigned URL tạm thời cho phép người dùng mở/tải trực tiếp từ MinIO
+        (Đồng bộ theo pattern minio.py của OneAI).
+        """
+        if not self.is_available() or not object_key:
+            return None
+        try:
+            from datetime import timedelta
+            return self.client.presigned_get_object(
+                bucket_name=self.bucket_name,
+                object_name=object_key,
+                expires=timedelta(days=expires_days),
+            )
+        except Exception as exc:
+            print(f"⚠️ [MinIO Presigned Warning] Lỗi tạo presigned URL cho {object_key}: {exc}")
+            return None
+
+
+# Singleton instance dùng chung toàn bộ backend
+minio_storage = MinioStorageManager()
+
