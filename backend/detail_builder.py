@@ -15,6 +15,38 @@ def safe_id(keyid: str) -> str:
     return str(keyid).replace('/', '_').replace('\\', '_').replace(':', '_').strip()
 
 
+def parse_dwg_segments(text: str) -> list:
+    """
+    Tách chuỗi ghi chú note_col thành danh sách các segment theo từng bản vẽ hoặc lỗi đơn lẻ.
+    Ví dụ: 'Lệch BV 0205 (AI:1.4 | Ven:1.8) | Lệch BV 0405 (AI:58.0 | Ven:59.0)'
+    -> [{'dwg': '0205', 'ai': 1.4, 'ven': 1.8, 'raw': '...'}, {'dwg': '0405', 'ai': 58.0, 'ven': 59.0, 'raw': '...'}]
+    """
+    if not text or not str(text).strip():
+        return []
+    s = str(text).strip()
+    segments = re.split(r'(?=Lệch BV\s+)', s, flags=re.IGNORECASE)
+    results = []
+    for seg in segments:
+        seg = seg.strip(' |')
+        if not seg:
+            continue
+        m_dwg = re.search(r'Lệch BV\s+([\w\-\.]+)', seg, re.IGNORECASE)
+        dwg = m_dwg.group(1).strip() if m_dwg else None
+
+        m_ai = re.search(r'AI\s*(?:\[[^\]]*\])?\s*[:=]\s*([\d\.]+)', seg, re.IGNORECASE)
+        m_ven = re.search(r'Ven(?:dor)?\s*(?:\[[^\]]*\])?\s*[:=]\s*([\d\.]+)', seg, re.IGNORECASE)
+
+        ai_val = float(m_ai.group(1)) if m_ai else None
+        ven_val = float(m_ven.group(1)) if m_ven else None
+        results.append({
+            'dwg': dwg,
+            'ai': ai_val,
+            'ven': ven_val,
+            'raw': seg
+        })
+    return results
+
+
 def parse_excel_report_to_detail(excel_path: Path, keyid: str, session_dir: Path = None, logs: list = None) -> dict:
     """
     Đọc file Excel báo cáo 2 sheet (Consolidated_Report.xlsx hoặc {KEYID}.xlsx)
@@ -91,25 +123,7 @@ def parse_excel_report_to_detail(excel_path: Path, keyid: str, session_dir: Path
                 is_err = bool(re.search(r'(lệch|mồ côi|thiếu|thừa|không tìm thấy|sai)', note_val, re.IGNORECASE))
 
                 if is_err:
-                    # Phân loại lỗi
-                    err_type = "Lệch khối lượng"
-                    if "mồ côi" in note_val.lower():
-                        err_type = "Mã mồ côi (Chưa khai báo)"
-                    elif "thiếu" in note_val.lower():
-                        err_type = "Thiếu vật tư"
-                    elif "thừa" in note_val.lower():
-                        err_type = "Thừa vật tư ngoài BOM"
-                    elif "sai" in note_val.lower():
-                        err_type = "Sai thông số / đơn giá"
-
-                    error_type_counts[err_type] = error_type_counts.get(err_type, 0) + 1
-
-                    # Tìm bản vẽ liên quan
-                    dwg_found = "Chung"
-                    for d in drawing_names:
-                        if str(d).lower() in note_val.lower():
-                            dwg_found = str(d)
-                            break
+                    err_segments = parse_dwg_segments(note_val)
 
                     # Tính tổng số lượng thực tế AI bóc được từ tất cả các cột bản vẽ
                     ai_sum = 0.0
@@ -127,26 +141,91 @@ def parse_excel_report_to_detail(excel_path: Path, keyid: str, session_dir: Path
                             except (ValueError, TypeError):
                                 pass
 
-                    ai_qty_display = f"{ai_sum:g}" if has_ai_val else "0"
-                    ai_breakdown_text = ", ".join(ai_breakdowns) if ai_breakdowns else ""
-
                     v_qty_raw = row.get(total_qty_col, '—') if total_qty_col else '—'
-                    v_qty_display = str(v_qty_raw) if pd.notna(v_qty_raw) else '—'
+                    total_summary_note = f" (Tổng hồ sơ: Dự toán {v_qty_raw} | AI {ai_sum:g})" if pd.notna(v_qty_raw) and has_ai_val else ""
+                    ai_breakdown_text = (", ".join(ai_breakdowns) + total_summary_note) if ai_breakdowns else ""
 
-                    error_items.append({
-                        "id": len(error_items) + 1,
-                        "type": err_type,
-                        "dwg": dwg_found,
-                        "code": code_val,
-                        "name": name_val,
-                        "unit": unit_val,
-                        "vendor_qty": v_qty_display,
-                        "ai_qty": ai_qty_display,
-                        "ai_breakdown": ai_breakdown_text,
-                        "diff": note_val.split('|')[0] if '|' in note_val else note_val,
-                        "cell": f"Row {idx + 2}",
-                        "msg": note_val or "Phát hiện sai lệch đối chiếu giữa Dự toán và Bản vẽ AI"
-                    })
+                    # Nếu bóc tách được các phân đoạn lỗi theo từng bản vẽ (ví dụ BV 0405, BV 0205)
+                    if err_segments and any(seg.get('dwg') for seg in err_segments):
+                        for seg in err_segments:
+                            dwg_s = seg.get('dwg') or "Chung"
+                            ai_s = seg.get('ai')
+                            ven_s = seg.get('ven')
+
+                            err_type = "Lệch khối lượng"
+                            if "mồ côi" in seg['raw'].lower():
+                                err_type = "Mã mồ côi (Chưa khai báo)"
+                            elif "thiếu" in seg['raw'].lower():
+                                err_type = "Thiếu vật tư"
+                            elif "thừa" in seg['raw'].lower():
+                                err_type = "Thừa vật tư ngoài BOM"
+                            elif "sai" in seg['raw'].lower():
+                                err_type = "Sai thông số / đơn giá"
+
+                            error_type_counts[err_type] = error_type_counts.get(err_type, 0) + 1
+
+                            # Số lượng Vendor và AI tại bản vẽ cụ thể này
+                            v_qty_display = f"{ven_s:g}" if ven_s is not None else str(v_qty_raw)
+                            ai_qty_display = f"{ai_s:g}" if ai_s is not None else (f"{ai_sum:g}" if has_ai_val else "0")
+
+                            # Chênh lệch
+                            if ai_s is not None and ven_s is not None:
+                                delta = round(ai_s - ven_s, 2)
+                                diff_text = f"Thiếu {abs(delta):g}" if delta < 0 else (f"Thừa {delta:g}" if delta > 0 else "Khớp")
+                            else:
+                                diff_text = seg['raw'].split('|')[0] if '|' in seg['raw'] else seg['raw']
+
+                            error_items.append({
+                                "id": len(error_items) + 1,
+                                "type": err_type,
+                                "dwg": dwg_s,
+                                "code": code_val,
+                                "name": name_val,
+                                "unit": unit_val,
+                                "vendor_qty": v_qty_display,
+                                "ai_qty": ai_qty_display,
+                                "ai_breakdown": ai_breakdown_text,
+                                "diff": diff_text,
+                                "cell": f"Row {idx + 2}",
+                                "msg": seg['raw']
+                            })
+                    else:
+                        # Fallback cho trường hợp không có tên bản vẽ rõ ràng (ví dụ Mã mồ côi chung)
+                        err_type = "Lệch khối lượng"
+                        if "mồ côi" in note_val.lower():
+                            err_type = "Mã mồ côi (Chưa khai báo)"
+                        elif "thiếu" in note_val.lower():
+                            err_type = "Thiếu vật tư"
+                        elif "thừa" in note_val.lower():
+                            err_type = "Thừa vật tư ngoài BOM"
+                        elif "sai" in note_val.lower():
+                            err_type = "Sai thông số / đơn giá"
+
+                        error_type_counts[err_type] = error_type_counts.get(err_type, 0) + 1
+
+                        dwg_found = "Chung"
+                        for d in drawing_names:
+                            if str(d).lower() in note_val.lower():
+                                dwg_found = str(d)
+                                break
+
+                        v_qty_display = str(v_qty_raw) if pd.notna(v_qty_raw) else '—'
+                        ai_qty_display = f"{ai_sum:g}" if has_ai_val else "0"
+
+                        error_items.append({
+                            "id": len(error_items) + 1,
+                            "type": err_type,
+                            "dwg": dwg_found,
+                            "code": code_val,
+                            "name": name_val,
+                            "unit": unit_val,
+                            "vendor_qty": v_qty_display,
+                            "ai_qty": ai_qty_display,
+                            "ai_breakdown": ai_breakdown_text,
+                            "diff": note_val.split('|')[0] if '|' in note_val else note_val,
+                            "cell": f"Row {idx + 2}",
+                            "msg": note_val or "Phát hiện sai lệch đối chiếu giữa Dự toán và Bản vẽ AI"
+                        })
 
             # Xây dựng cấu trúc nhóm theo Bản vẽ (Drawing Groups) - Chỉ duyệt các bản vẽ CAD thực tế
             for d in drawing_names:
@@ -169,12 +248,36 @@ def parse_excel_report_to_detail(excel_path: Path, keyid: str, session_dir: Path
                         if u_val.lower() == 'nan':
                             u_val = ""
 
-                        v_qty_raw = row.get(total_qty_col, "—") if total_qty_col else "—"
-                        v_qty_str = str(v_qty_raw) if pd.notna(v_qty_raw) else "—"
-
-                        # Kiểm tra xem vật tư này trong bản vẽ này có bị lỗi không
+                        # Kiểm tra xem vật tư này trong bản vẽ d này có bị lỗi không
                         note_text = str(row.get(note_col, "")).strip() if note_col else ""
-                        is_this_dwg_err = (str(d).lower() in note_text.lower()) and bool(re.search(r'(lệch|mồ côi|thiếu|thừa|không tìm thấy|sai)', note_text, re.IGNORECASE))
+                        err_segs = parse_dwg_segments(note_text)
+
+                        # Tìm segment khớp với bản vẽ d hiện tại
+                        matched_seg = None
+                        for s in err_segs:
+                            if s.get('dwg') and str(s['dwg']).lower() == str(d).lower():
+                                matched_seg = s
+                                break
+                            elif str(d).lower() in s['raw'].lower():
+                                matched_seg = s
+                                break
+
+                        is_this_dwg_err = (matched_seg is not None) or (
+                            (str(d).lower() in note_text.lower()) and bool(re.search(r'(lệch|mồ côi|thiếu|thừa|không tìm thấy|sai)', note_text, re.IGNORECASE))
+                        )
+
+                        if is_this_dwg_err:
+                            # Nếu bản vẽ này bị lỗi: lấy đúng số lượng Vendor kê khai từ segment lỗi
+                            if matched_seg and matched_seg.get('ven') is not None:
+                                v_qty_str = f"{matched_seg['ven']:g}"
+                            else:
+                                v_qty_str = "—"
+                            why_text = matched_seg['raw'] if matched_seg else note_text
+                        else:
+                            # NẾU KHÔNG CÓ LỖI Ở BẢN VẼ NÀY: VENDOR VÀ AI KHỚP NHAU 100%!
+                            # Số lượng Dự toán bằng chính số lượng AI bóc tách ở bản vẽ này
+                            v_qty_str = f"{num_qty:g}"
+                            why_text = "✓ Khớp"
 
                         dwg_rows.append({
                             "code": c_val,
@@ -183,7 +286,7 @@ def parse_excel_report_to_detail(excel_path: Path, keyid: str, session_dir: Path
                             "vendor_qty": v_qty_str,
                             "qty": f"{num_qty:g}",
                             "ok": not is_this_dwg_err,
-                            "why": note_text if is_this_dwg_err else "✓ Khớp"
+                            "why": why_text
                         })
 
                 if dwg_rows:
@@ -302,20 +405,12 @@ def parse_excel_report_to_detail(excel_path: Path, keyid: str, session_dir: Path
 def build_or_load_task_detail(keyid: str, final_report_dir: Path, storage_dir: Path, fallback_info: dict = None) -> dict:
     """
     Hàm trung tâm lấy chi tiết task:
-    1. Ưu tiên đọc file cache JSON: final_reports/{KEYID}_detail.json
-    2. Nếu chưa có, quét tìm file Excel báo cáo và tự parse ra JSON
+    1. Ưu tiên đọc file cache JSON: final_reports/{KEYID}_detail.json (tự rebuild nếu là cache cũ)
+    2. Nếu chưa có hoặc cache cũ, quét tìm file Excel báo cáo và tự parse ra JSON chuẩn mới
     3. Nếu không có file Excel, tạo cấu trúc phản hồi an toàn dựa trên fallback_info (chống crash)
     """
     safe_key = safe_id(keyid)
     cache_json_path = final_report_dir / f"{safe_key}_detail.json"
-
-    # 1. Đã có file cache JSON trong final_report_dir
-    if cache_json_path.exists():
-        try:
-            with open(cache_json_path, "r", encoding="utf-8") as f:
-                return json.load(f)
-        except Exception as e:
-            print(f"⚠️ Lỗi đọc cache detail: {e}")
 
     # Tìm session_dir gần nhất trong storage_dir
     session_dir = None
@@ -323,20 +418,32 @@ def build_or_load_task_detail(keyid: str, final_report_dir: Path, storage_dir: P
         sess_candidates = sorted(storage_dir.glob(f"*session_{safe_key}*"), key=os.path.getmtime, reverse=True)
         if sess_candidates:
             session_dir = sess_candidates[0]
-            # Kiểm tra cache JSON trong session_dir
-            sess_json = session_dir / f"{safe_key}_detail.json"
-            if sess_json.exists():
-                try:
-                    with open(sess_json, "r", encoding="utf-8") as f:
-                        return json.load(f)
-                except Exception:
-                    pass
 
-    # 2. Tìm file Excel báo cáo trong final_reports
+    # Tìm file Excel báo cáo
     possible_excels = list(final_report_dir.glob(f"*{safe_key}*.xlsx"))
     if not possible_excels:
         possible_excels = list(final_report_dir.glob("*.xlsx"))
 
+    # 1. Đã có file cache JSON trong final_report_dir
+    if cache_json_path.exists():
+        try:
+            should_rebuild = False
+            # Nếu file Excel mới hơn cache -> rebuild
+            if possible_excels and (possible_excels[0].stat().st_mtime > cache_json_path.stat().st_mtime):
+                should_rebuild = True
+
+            with open(cache_json_path, "r", encoding="utf-8") as f:
+                data = json.load(f)
+                # Tự động nhận diện cache cũ (cột diff chưa bóc tách chuẩn mà vẫn chứa chuỗi gộp 'AI:...')
+                if data.get("errors") and any("Lệch BV" in str(e.get("diff", "")) and "(AI:" in str(e.get("diff", "")) for e in data["errors"]):
+                    should_rebuild = True
+
+            if not should_rebuild:
+                return data
+        except Exception as e:
+            print(f"⚠️ Lỗi đọc cache detail: {e}")
+
+    # 2. Tìm file Excel báo cáo trong final_reports và parse lại
     if possible_excels:
         target_excel = possible_excels[0]
         detail = parse_excel_report_to_detail(target_excel, keyid, session_dir)

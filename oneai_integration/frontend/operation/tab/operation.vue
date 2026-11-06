@@ -577,8 +577,15 @@ const startSmartPollingIfNeeded = () => {
         selectedMonth.value || 'ALL',
         searchKeyword.value || 'ALL'
       )
-      if (data && data.length > 0) {
-        tableData.value = data.map(newRow => {
+      if (Array.isArray(data)) {
+        let processed = data
+        if (selectedStatus.value === 'OK') {
+          processed = processed.filter(r => r.STATUS === 'COMPLETED' && (Number(r.ERROR_COUNT) === 0 || !r.ERROR_COUNT))
+        } else if (selectedStatus.value === 'ERR') {
+          processed = processed.filter(r => r.STATUS === 'COMPLETED' && Number(r.ERROR_COUNT) > 0)
+        }
+
+        tableData.value = processed.map(newRow => {
           const oldRow = tableData.value.find(r => r.KEYID === newRow.KEYID)
           return {
             ...newRow,
@@ -599,7 +606,7 @@ const startSmartPollingIfNeeded = () => {
         loadKpiSummary()
       }
 
-      // Khi không còn dòng nào RUNNING nữa -> Dừng polling ngay lập tức và làm mới KPI
+      // Khi không còn dòng nào RUNNING nữa -> Dừng polling ngay lập tức và làm mới KPI + total
       const stillRunning = tableData.value.some(r => r.STATUS === 'RUNNING')
       if (!stillRunning) {
         console.log("🎉 [Smart Polling] Tất cả tác vụ AI đã hoàn tất. Tắt polling.")
