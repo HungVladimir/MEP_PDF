@@ -498,28 +498,16 @@ async def get_task_detail(keyid: str, status: str = "COMPLETED", error_count: in
         import json
         from detail_builder import build_or_load_task_detail
 
-        # 1. Thử đọc nhanh từ MinIO cache JSON nếu có (chỉ nhận nếu là cache định dạng mới)
+        # 1. Thử đọc nhanh từ MinIO cache JSON nếu có (đọc trực tiếp, không rebuild)
         if minio_storage.is_available():
             detail_key = minio_storage.get_obj_key(
                 keyid, "cache", "detail.json")
             data_bytes = minio_storage.download_bytes(detail_key)
             if data_bytes:
                 try:
-                    cached_data = json.loads(data_bytes.decode('utf-8'))
-                    # Kiểm tra xem có phải cache cũ chưa bóc tách riêng số lượng từng bản vẽ không
-                    is_old = False
-                    if cached_data.get("errors") and any(
-                        "Lệch BV" in str(e.get("diff", "")) and "(AI:" in str(e.get("diff", ""))
-                        for e in cached_data["errors"]
-                    ):
-                        is_old = True
-
-                    if not is_old:
-                        return cached_data
-                    else:
-                        print(f"🔄 [MinIO Cache] Phát hiện cache cũ chưa bóc tách số liệu cho KEYID={keyid}, tiến hành rebuild...")
-                except Exception:
-                    pass
+                    return json.loads(data_bytes.decode('utf-8'))
+                except Exception as e:
+                    print(f"⚠️ [MinIO Cache] Lỗi đọc JSON cache cho KEYID={keyid}: {e}")
 
         # 2. Quét từ đĩa cục bộ / parse từ file Excel
         fallback_info = {
@@ -529,14 +517,6 @@ async def get_task_detail(keyid: str, status: str = "COMPLETED", error_count: in
         }
         detail = build_or_load_task_detail(
             keyid, FINAL_REPORT_DIR, PROJECT_STORAGE_DIR, fallback_info)
-
-        # Nếu có kết quả mới và MinIO đang hoạt động, đồng bộ đè bản mới lên MinIO
-        if minio_storage.is_available() and detail:
-            try:
-                json_bytes = json.dumps(detail, ensure_ascii=False, indent=2).encode('utf-8')
-                minio_storage.upload_bytes(json_bytes, minio_storage.get_obj_key(keyid, "cache", "detail.json"), "application/json")
-            except Exception:
-                pass
 
         return detail
     except Exception as e:

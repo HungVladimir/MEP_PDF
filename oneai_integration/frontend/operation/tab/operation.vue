@@ -259,9 +259,9 @@
 
     <!-- 6. DIALOG CHI TIẾT ĐỐI SOÁT (XEM LỖI, BẢN VẼ, SOI ẢNH, LOG VÀ DUYỆT THEO CHUẨN SẾP) -->
     <el-dialog v-model="showDetailDialog" :title="`📋 Chi Tiết Đối Soát Hồ Sơ: ${currentTask?.KEYID || ''}`" width="85%"
-      top="4vh" destroy-on-close custom-class="mep-detail-dialog">
+      top="4vh" :before-close="handleCloseDetailDialog" destroy-on-close custom-class="mep-detail-dialog">
       <div v-if="detailLoading" class="detail-loading-box">
-        <i class="el-icon-loading" style="font-size: 32px; color: #409EFF;"></i>
+        <i class="bi bi-arrow-repeat mep-spin-icon" style="font-size: 36px; color: #409EFF; display: inline-block;"></i>
         <p style="margin-top: 12px; color: #E5EAF3;">Đang tải và đồng bộ kết quả đối soát AI...</p>
       </div>
 
@@ -372,7 +372,7 @@
           <!-- TAB 2: ĐỐI CHIẾU THEO TỪNG BẢN VẼ (ĐÃ TỐI ƯU GIAO DIỆN DỄ HIỂU)     -->
           <!-- (NẾU KHÔNG MUỐN HIỂN THỊ: COMMENT TOÀN BỘ KHỐI <el-tab-pane> NÀY) -->
           <!-- ================================================================= -->
-          <el-tab-pane name="drawings">
+          <el-tab-pane name="drawings" lazy>
             <template #label>
               <span><i class="bi bi-diagram-3 me-1"></i> Đối Chiếu Theo Bản Vẽ ({{
                 currentDetail.groups?.length || 0 }})</span>
@@ -392,7 +392,7 @@
                     <el-tag v-else type="success" size="mini" class="ms-2">Khớp 100%</el-tag>
                   </div>
                 </template>
-                <el-table :data="g.rows" border size="mini" height="220" style="width: 100%">
+                <el-table :data="g.rows || g.items || []" border size="mini" height="220" style="width: 100%">
                   <el-table-column prop="code" label="Mã vật tư" width="140" align="center">
                     <template #default="{ row }"><b class="font-mono">{{ row.code }}</b></template>
                   </el-table-column>
@@ -416,7 +416,7 @@
           <!-- ================================================================= -->
 
           <!-- TAB 3: SOI BẢN VẼ / ẢNH TRÍCH XUẤT -->
-          <el-tab-pane name="images">
+          <el-tab-pane name="images" lazy>
             <template #label>
               <span><i class="bi bi-images me-1"></i> Soi Bản Vẽ / Ảnh Trích Xuất ({{
                 currentDetail.images?.length || 0 }})</span>
@@ -429,14 +429,14 @@
             <div v-else class="images-strip">
               <div v-for="(img, idx) in currentDetail.images" :key="idx" class="img-thumb-box">
                 <el-image :src="getImgUrl(img.url)" :preview-src-list="previewImageList" :initial-index="idx"
-                  :preview-teleported="true" :hide-on-click-modal="true" fit="contain" class="thumb-img" />
+                  :preview-teleported="true" :hide-on-click-modal="true" fit="contain" loading="lazy" class="thumb-img" />
                 <div class="thumb-title">{{ img.title || img.name }}</div>
               </div>
             </div>
           </el-tab-pane>
 
           <!-- TAB 4: NHẬT KÝ XỬ LÝ (PIPELINE LOGS) -->
-          <el-tab-pane name="logs">
+          <el-tab-pane name="logs" lazy>
             <template #label>
               <span><i class="bi bi-terminal me-1"></i> Nhật Ký AI</span>
             </template>
@@ -481,9 +481,15 @@
               <i class="bi bi-arrow-clockwise me-1"></i> Chạy Lại AI (Rerun)
             </el-button>
             <div class="spacer"></div>
-            <el-button :size="buttonSize" @click="showDetailDialog = false">Đóng</el-button>
+            <el-button :size="buttonSize" @click="handleCloseDetailDialog">Đóng</el-button>
           </div>
         </div>
+      </div>
+
+      <div v-else class="detail-loading-box">
+        <i class="bi bi-exclamation-circle text-warning" style="font-size: 36px;"></i>
+        <p style="margin-top: 12px; color: #E5EAF3;">Chưa có dữ liệu chi tiết cho hồ sơ này.</p>
+        <el-button size="small" type="primary" @click="handleCloseDetailDialog">Đóng</el-button>
       </div>
     </el-dialog>
   </div>
@@ -732,6 +738,13 @@ const handleKpiFilter = (statusKey) => {
 }
 
 // 3. DIALOG CHI TIẾT ĐỐI SOÁT (OPEN DETAIL MODAL)
+const handleCloseDetailDialog = (done) => {
+  showDetailDialog.value = false
+  if (typeof done === 'function') {
+    done()
+  }
+}
+
 const openDetailModal = async (row) => {
   if (!row || !row.KEYID) return
   currentTask.value = row
@@ -749,7 +762,20 @@ const openDetailModal = async (row) => {
         reason: row.REASON || ''
       }
     })
-    currentDetail.value = res.data
+    const data = res.data || {}
+    currentDetail.value = {
+      keyid: data.keyid || row.KEYID,
+      mode: data.mode || 'MEP AI Vision (Qwen)',
+      error_count: Number(data.error_count ?? row.ERROR_COUNT ?? 0),
+      error_types: (data.error_types && typeof data.error_types === 'object') ? data.error_types : {},
+      drawings_count: Number(data.drawings_count ?? 1),
+      total_items: Number(data.total_items ?? 0),
+      sheet: data.sheet || '1. Đối Soát Bản Vẽ',
+      errors: Array.isArray(data.errors) ? data.errors : [],
+      groups: Array.isArray(data.groups) ? data.groups : [],
+      images: Array.isArray(data.images) ? data.images : [],
+      logs: Array.isArray(data.logs) ? data.logs : []
+    }
   } catch (err) {
     console.warn("Không thể tải chi tiết từ API Worker, dùng dữ liệu fallback:", err)
     currentDetail.value = {
@@ -786,8 +812,15 @@ const openDetailModal = async (row) => {
 }
 
 const errorTypeEntries = computed(() => {
-  if (!currentDetail.value?.error_types) return []
-  return Object.entries(currentDetail.value.error_types)
+  const et = currentDetail.value?.error_types
+  if (!et) return []
+  if (Array.isArray(et)) {
+    return et.map(item => [String(item), 1])
+  }
+  if (typeof et === 'object') {
+    return Object.entries(et)
+  }
+  return []
 })
 
 const getImgUrl = (url) => {
@@ -796,8 +829,9 @@ const getImgUrl = (url) => {
 }
 
 const previewImageList = computed(() => {
-  if (!currentDetail.value?.images) return []
-  return currentDetail.value.images.map(img => getImgUrl(img.url))
+  const imgs = currentDetail.value?.images
+  if (!imgs || !Array.isArray(imgs)) return []
+  return imgs.filter(img => img && img.url).map(img => getImgUrl(img.url))
 })
 
 const submitDetailReview = async (decision) => {

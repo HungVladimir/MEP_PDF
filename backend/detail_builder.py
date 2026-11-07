@@ -405,12 +405,20 @@ def parse_excel_report_to_detail(excel_path: Path, keyid: str, session_dir: Path
 def build_or_load_task_detail(keyid: str, final_report_dir: Path, storage_dir: Path, fallback_info: dict = None) -> dict:
     """
     Hàm trung tâm lấy chi tiết task:
-    1. Ưu tiên đọc file cache JSON: final_reports/{KEYID}_detail.json (tự rebuild nếu là cache cũ)
-    2. Nếu chưa có hoặc cache cũ, quét tìm file Excel báo cáo và tự parse ra JSON chuẩn mới
+    1. Ưu tiên đọc file cache JSON: final_reports/{KEYID}_detail.json (đọc trực tiếp, không rebuild)
+    2. Nếu chưa có, quét tìm file Excel báo cáo cụ thể của task và tự parse ra JSON
     3. Nếu không có file Excel, tạo cấu trúc phản hồi an toàn dựa trên fallback_info (chống crash)
     """
     safe_key = safe_id(keyid)
     cache_json_path = final_report_dir / f"{safe_key}_detail.json"
+
+    # 1. Đã có file cache JSON trong final_report_dir -> Trả về ngay
+    if cache_json_path.exists():
+        try:
+            with open(cache_json_path, "r", encoding="utf-8") as f:
+                return json.load(f)
+        except Exception as e:
+            print(f"⚠️ Lỗi đọc cache detail: {e}")
 
     # Tìm session_dir gần nhất trong storage_dir
     session_dir = None
@@ -418,32 +426,23 @@ def build_or_load_task_detail(keyid: str, final_report_dir: Path, storage_dir: P
         sess_candidates = sorted(storage_dir.glob(f"*session_{safe_key}*"), key=os.path.getmtime, reverse=True)
         if sess_candidates:
             session_dir = sess_candidates[0]
+            # Kiểm tra cache JSON trong session_dir
+            sess_json = session_dir / f"{safe_key}_detail.json"
+            if sess_json.exists():
+                try:
+                    with open(sess_json, "r", encoding="utf-8") as f:
+                        return json.load(f)
+                except Exception:
+                    pass
 
-    # Tìm file Excel báo cáo
-    possible_excels = list(final_report_dir.glob(f"*{safe_key}*.xlsx"))
-    if not possible_excels:
-        possible_excels = list(final_report_dir.glob("*.xlsx"))
+    # 2. Tìm file Excel báo cáo cụ thể của task này (trong final_report_dir hoặc session_dir)
+    possible_excels = []
+    if final_report_dir.exists():
+        possible_excels = list(final_report_dir.glob(f"*{safe_key}*.xlsx")) + list(final_report_dir.glob(f"*{safe_key}*.xlsm"))
+    if not possible_excels and session_dir and session_dir.exists():
+        possible_excels = list(session_dir.glob("*.xlsx")) + list(session_dir.glob("*.xlsm"))
 
-    # 1. Đã có file cache JSON trong final_report_dir
-    if cache_json_path.exists():
-        try:
-            should_rebuild = False
-            # Nếu file Excel mới hơn cache -> rebuild
-            if possible_excels and (possible_excels[0].stat().st_mtime > cache_json_path.stat().st_mtime):
-                should_rebuild = True
-
-            with open(cache_json_path, "r", encoding="utf-8") as f:
-                data = json.load(f)
-                # Tự động nhận diện cache cũ (cột diff chưa bóc tách chuẩn mà vẫn chứa chuỗi gộp 'AI:...')
-                if data.get("errors") and any("Lệch BV" in str(e.get("diff", "")) and "(AI:" in str(e.get("diff", "")) for e in data["errors"]):
-                    should_rebuild = True
-
-            if not should_rebuild:
-                return data
-        except Exception as e:
-            print(f"⚠️ Lỗi đọc cache detail: {e}")
-
-    # 2. Tìm file Excel báo cáo trong final_reports và parse lại
+    # Parse file Excel báo cáo nếu tìm thấy đúng file của task
     if possible_excels:
         target_excel = possible_excels[0]
         detail = parse_excel_report_to_detail(target_excel, keyid, session_dir)
