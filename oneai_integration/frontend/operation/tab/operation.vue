@@ -120,12 +120,25 @@
         </el-table-column>
 
         <!-- CỘT: THÁNG THANH TOÁN -->
-        <el-table-column prop="PAYMENT_MONTH" label="THÁNG TT" width="110" align="center" sortable>
+        <el-table-column prop="PAYMENT_MONTH" label="THÁNG TT" width="115" align="center" sortable>
           <template #default="{ row }">
-            <el-input v-if="row.isNew || row.isEditing" v-model="row.PAYMENT_MONTH" placeholder="YYYY-MM" size="mini"
-              class="inline-input" />
-            <span v-else class="cell-text" @dblclick="row.isEditing = true" title="Bấm đúp chuột để chỉnh sửa">{{
-              row.PAYMENT_MONTH || '-' }}</span>
+            <el-input 
+              v-if="row.isNew || row.isEditing" 
+              v-model="row.PAYMENT_MONTH" 
+              placeholder="YYYY-MM" 
+              size="mini"
+              :disabled="row.STATUS === 'RUNNING'"
+              class="inline-input" 
+            />
+            <span 
+              v-else 
+              class="cell-text" 
+              :class="{ 'cursor-not-allowed': row.STATUS === 'RUNNING' }"
+              @dblclick="row.STATUS !== 'RUNNING' && (row.isEditing = true)" 
+              :title="row.STATUS === 'RUNNING' ? 'Không thể đổi tháng khi AI đang chạy' : 'Bấm đúp chuột để chỉnh sửa'"
+            >
+              {{ row.PAYMENT_MONTH || '-' }}
+            </span>
           </template>
         </el-table-column>
 
@@ -139,23 +152,52 @@
           </template>
         </el-table-column>
 
-        <!-- CỘT: PART -->
-        <el-table-column prop="PART_NAME" label="PART" width="105" align="center">
+        <!-- CỘT: GROUP (CHỌN GROUP ĐỂ LỌC PART TƯƠNG ỨNG) -->
+        <el-table-column prop="GROUP_NAME" label="GROUP" width="160" align="center">
           <template #default="{ row }">
-            <el-input v-if="row.isNew || row.isEditing" v-model="row.PART_NAME" placeholder="Part..." size="mini"
-              class="inline-input" />
-            <span v-else class="cell-text" @dblclick="row.isEditing = true" title="Bấm đúp chuột để chỉnh sửa">{{
-              row.PART_NAME || '-' }}</span>
+            <el-select
+              v-if="row.isNew || row.isEditing"
+              v-model="row.GROUP_NAME"
+              placeholder="Chọn Group..."
+              size="mini"
+              filterable
+              clearable
+              @change="onGroupChange(row)"
+            >
+              <el-option
+                v-for="g in groupOptions"
+                :key="g.value"
+                :label="g.label"
+                :value="g.value"
+              />
+            </el-select>
+            <span v-else class="cell-text" @dblclick="row.isEditing = true" title="Bấm đúp chuột để chỉnh sửa">
+              {{ row.GROUP_NAME || '-' }}
+            </span>
           </template>
         </el-table-column>
 
-        <!-- CỘT: GROUP -->
-        <el-table-column prop="GROUP_NAME" label="GROUP" width="115" align="center">
+        <!-- CỘT: PART (PHỤ THUỘC VÀO GROUP ĐÃ CHỌN) -->
+        <el-table-column prop="PART_NAME" label="PART" width="170" align="center">
           <template #default="{ row }">
-            <el-input v-if="row.isNew || row.isEditing" v-model="row.GROUP_NAME" placeholder="Group..." size="mini"
-              class="inline-input" />
-            <span v-else class="cell-text" @dblclick="row.isEditing = true" title="Bấm đúp chuột để chỉnh sửa">{{
-              row.GROUP_NAME || '-' }}</span>
+            <el-select
+              v-if="row.isNew || row.isEditing"
+              v-model="row.PART_NAME"
+              :placeholder="row.GROUP_NAME ? 'Chọn Part...' : 'Chọn Group trước'"
+              size="mini"
+              filterable
+              clearable
+            >
+              <el-option
+                v-for="p in getPartsByGroup(row.GROUP_NAME)"
+                :key="p.value"
+                :label="p.label"
+                :value="p.value"
+              />
+            </el-select>
+            <span v-else class="cell-text" @dblclick="row.isEditing = true" title="Bấm đúp chuột để chỉnh sửa">
+              {{ row.PART_NAME || '-' }}
+            </span>
           </template>
         </el-table-column>
 
@@ -518,6 +560,64 @@ const statusOptions = [
   { label: 'Thất bại', value: 'CANCEL' }
 ]
 const activeKpiFilter = ref('ALL')
+
+// DANH MỤC PHÂN CẤP CỦA GROUP VÀ PART (CASCADING DROPDOWN)
+const groupOptions = [
+  { label: 'Group A (Khối Cơ Điện)', value: 'Group A' },
+  { label: 'Group B (Khối Cấp Thoát Nước & PCCC)', value: 'Group B' },
+  { label: 'Group C (Khối Điều Hòa Thông Gió)', value: 'Group C' }
+]
+
+const partMapping = {
+  'Group A': [
+    { label: 'Part 1: Cáp điện trung thế', value: 'Part 1' },
+    { label: 'Part 2: Cáp điện hạ thế', value: 'Part 2' },
+    { label: 'Part 3: Trạm biến áp & Tủ điện', value: 'Part 3' },
+    { label: 'Part 4: Thang máng cáp', value: 'Part 4' }
+  ],
+  'Group B': [
+    { label: 'Part 5: Ống cấp nước PPR', value: 'Part 5' },
+    { label: 'Part 6: Ống thoát uPVC/HDPE', value: 'Part 6' },
+    { label: 'Part 7: Đầu phun Sprinkler PCCC', value: 'Part 7' },
+    { label: 'Part 8: Bơm cứu hỏa & Van PCCC', value: 'Part 8' }
+  ],
+  'Group C': [
+    { label: 'Part 9: Ống gió & Miệng gió', value: 'Part 9' },
+    { label: 'Part 10: Máy lạnh VRV / Chiller', value: 'Part 10' },
+    { label: 'Part 11: Ống đồng & Bảo ôn', value: 'Part 11' }
+  ]
+}
+
+const defaultParts = [
+  { label: 'MEP (Mặc định)', value: 'MEP' },
+  { label: 'Part 1: Cáp điện trung thế', value: 'Part 1' },
+  { label: 'Part 2: Cáp điện hạ thế', value: 'Part 2' },
+  { label: 'Part 3: Trạm biến áp & Tủ điện', value: 'Part 3' },
+  { label: 'Part 4: Thang máng cáp', value: 'Part 4' },
+  { label: 'Part 5: Ống cấp nước PPR', value: 'Part 5' },
+  { label: 'Part 6: Ống thoát uPVC/HDPE', value: 'Part 6' },
+  { label: 'Part 7: Đầu phun Sprinkler PCCC', value: 'Part 7' },
+  { label: 'Part 8: Bơm cứu hỏa & Van PCCC', value: 'Part 8' },
+  { label: 'Part 9: Ống gió & Miệng gió', value: 'Part 9' },
+  { label: 'Part 10: Máy lạnh VRV / Chiller', value: 'Part 10' },
+  { label: 'Part 11: Ống đồng & Bảo ôn', value: 'Part 11' }
+]
+
+const getPartsByGroup = (groupName) => {
+  if (!groupName || !partMapping[groupName]) {
+    return defaultParts
+  }
+  return partMapping[groupName]
+}
+
+const onGroupChange = (row) => {
+  if (!row) return
+  const validParts = getPartsByGroup(row.GROUP_NAME).map(p => p.value)
+  // Nếu Part hiện tại không nằm trong danh sách của Group mới -> Tự động reset
+  if (row.PART_NAME && !validParts.includes(row.PART_NAME)) {
+    row.PART_NAME = ''
+  }
+}
 
 // Bảng dữ liệu & Phân trang
 const tableRef = ref(null)
@@ -889,8 +989,8 @@ const handleInsert = () => {
     TASK_NAME: '',
     PAYMENT_MONTH: selectedMonth.value || new Date().toISOString().slice(0, 7),
     PIC: '',
-    PART_NAME: 'MEP',
-    GROUP_NAME: '',
+    GROUP_NAME: 'Group A',
+    PART_NAME: 'Part 1',
     STATUS: 'WAITING',
     ERROR_COUNT: 0,
     isNew: true,

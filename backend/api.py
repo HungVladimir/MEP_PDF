@@ -471,6 +471,24 @@ async def save_rows(req: SaveRowsRequest):
     try:
         print(
             f"📥 [FastAPI Worker] Nhận yêu cầu /save_rows ({len(req.rows)} dòng): {req.rows}")
+
+        # TỰ ĐỘNG DỜI FOLDER TRÊN MINIO NẾU USER SỬA THÁNG THANH TOÁN (PAYMENT_MONTH)
+        if minio_storage.is_available():
+            for r in req.rows:
+                if not r.get("isNew"):
+                    kid = str(r.get("KEYID", "")).strip()
+                    new_m = str(r.get("PAYMENT_MONTH", "")).strip()
+                    if kid and new_m:
+                        old_m = get_task_payment_month(kid)
+                        if old_m and old_m != new_m:
+                            try:
+                                moved = minio_storage.move_task_month(kid, old_m, new_m)
+                                if moved > 0:
+                                    print(f"📦 [save_rows] Đã dời {moved} files trên MinIO cho {kid} từ {old_m} sang {new_m}")
+                            except Exception as m_err:
+                                print(f"⚠️ [save_rows] Không thể dời MinIO folder: {m_err}")
+                            cache_task_month(kid, new_m)
+
         count = batch_upsert_tasks(req.rows)
         return {"status": "ok", "message": f"Đã lưu thành công {count} bản ghi vào Database."}
     except HTTPException:
