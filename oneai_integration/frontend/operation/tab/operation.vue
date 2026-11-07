@@ -181,7 +181,7 @@
               :on-change="(file) => handleUploadExcel(file, row)" :disabled="row.STATUS === 'RUNNING' || row.isNew">
               <el-button class="btn-upload-file" :size="buttonSize" :loading="row.STATUS === 'RUNNING'"
                 :disabled="row.STATUS === 'RUNNING' || row.isNew">
-                <i class="bi bi-cloud-arrow-up me-1"></i>
+                <i v-if="row?.STATUS !== 'RUNNING'" class="bi bi-cloud-arrow-up me-1"></i>
                 {{ row.STATUS === 'RUNNING' ? 'Đang chạy...' : 'Upload' }}
               </el-button>
             </el-upload>
@@ -469,7 +469,7 @@
               :on-change="(file) => handleUploadExcel(file, currentTask)"
               :disabled="currentTask?.STATUS === 'RUNNING'" style="display: inline-block;">
               <el-button :size="buttonSize" class="btn-upload-file" :loading="currentTask?.STATUS === 'RUNNING'">
-                <i class="bi bi-cloud-arrow-up me-1"></i>
+                <i v-if="currentTask?.STATUS !== 'RUNNING'" class="bi bi-cloud-arrow-up me-1"></i>
                 {{ currentTask?.STATUS === 'RUNNING' ? 'Đang chạy...' : 'Upload File Excel' }}
               </el-button>
             </el-upload>
