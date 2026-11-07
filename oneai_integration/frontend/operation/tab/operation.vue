@@ -759,7 +759,8 @@ const openDetailModal = async (row) => {
       params: {
         status: row.STATUS || 'COMPLETED',
         error_count: row.ERROR_COUNT || 0,
-        reason: row.REASON || ''
+        reason: row.REASON || '',
+        month: row.PAYMENT_MONTH || ''
       }
     })
     const data = res.data || {}

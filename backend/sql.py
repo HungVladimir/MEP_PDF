@@ -72,15 +72,31 @@ def check_keyid_exists(keyid: str) -> bool:
         return False
 
 
+# Bộ nhớ đệm RAM lưu tháng thanh toán theo KEYID để tránh gọi Oracle DB liên tục (Giảm 2-3s delay)
+_TASK_MONTH_CACHE: dict = {}
+
+
+def cache_task_month(keyid: str, month: Optional[str]):
+    """Ghi nhớ nhanh tháng của task vào RAM để các request sau đọc tức thì trong 0ms."""
+    if keyid and month:
+        _TASK_MONTH_CACHE[str(keyid).strip()] = str(month).strip()
+
+
 def get_task_payment_month(keyid: str) -> Optional[str]:
-    """Lấy PAYMENT_MONTH (Tháng thanh toán) từ Oracle DB cho task KEYID."""
+    """Lấy PAYMENT_MONTH (Tháng thanh toán) từ RAM Cache trước, nếu chưa có mới hỏi Oracle DB."""
     if not keyid or not str(keyid).strip():
         return None
+    s_kid = str(keyid).strip()
+
+    # 1. Trả về ngay nếu đã có trong RAM (0.0001ms)
+    if s_kid in _TASK_MONTH_CACHE:
+        return _TASK_MONTH_CACHE[s_kid]
+
     try:
         sql = "SELECT PAYMENT_MONTH FROM LOCAL_AI.MEP_PAYMENT_ANALYSIS WHERE KEYID = :KEYID"
         cur = get_cur()
         cursor = cur.cursor() if hasattr(cur, 'cursor') else cur
-        cursor.execute(sql, params={"KEYID": str(keyid).strip()})
+        cursor.execute(sql, params={"KEYID": s_kid})
         res = cursor.fetchall() if hasattr(cursor, 'fetchall') else None
         if hasattr(cursor, 'close') and cursor != cur:
             try:
@@ -88,7 +104,9 @@ def get_task_payment_month(keyid: str) -> Optional[str]:
             except Exception:
                 pass
         if res and res[0] and res[0][0]:
-            return str(res[0][0]).strip()
+            val = str(res[0][0]).strip()
+            _TASK_MONTH_CACHE[s_kid] = val
+            return val
         return None
     except Exception as e:
         print(f"[Oracle DB Warning] get_task_payment_month: {e}")

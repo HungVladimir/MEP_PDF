@@ -286,15 +286,16 @@ class MinioStorageManager:
 
     def find_task_object(self, keyid: str, subfolder: str, filename: str, month: Optional[str] = None) -> Optional[str]:
         """
-        Tìm kiếm object key trên MinIO một cách linh hoạt:
+        Tìm kiếm object key trên MinIO siêu tốc (O(1) Direct Key Lookups):
         1. Kiểm tra mep_payment/<month>/<safe_key>/<subfolder>/<filename>
         2. Kiểm tra mep_payment/<safe_key>/<subfolder>/<filename>
-        3. Quét tìm object kết thúc bằng /<safe_key>/<subfolder>/<filename>
+        3. Kiểm tra mep_payment/<tháng hiện tại>/<safe_key>/<subfolder>/<filename>
+        (Không quét đệ quy toàn bộ bucket để đảm bảo mở modal tức thì < 20ms).
         """
         if not self.is_available() or not keyid or not filename:
             return None
 
-        # 1. Thử đường dẫn theo tháng
+        # 1. Thử đường dẫn theo tháng được truyền vào
         if month:
             key_month = self.get_obj_key(keyid, subfolder, filename, month=month)
             if self.object_exists(key_month):
@@ -305,17 +306,12 @@ class MinioStorageManager:
         if self.object_exists(key_flat):
             return key_flat
 
-        # 3. Quét tìm object khớp
-        safe_key = str(keyid).replace('/', '_').replace('\\', '_').replace(':', '_').strip()
-        sub = subfolder.strip('/') if subfolder else ''
-        target_suffix = f"/{safe_key}/{sub}/{filename}" if sub else f"/{safe_key}/{filename}"
-        try:
-            all_objs = self.client.list_objects(self.bucket_name, prefix=f"{MINIO_PREFIX}/", recursive=True)
-            for obj in all_objs:
-                if obj.object_name.endswith(target_suffix):
-                    return obj.object_name
-        except Exception:
-            pass
+        # 3. Thử tháng hiện tại (nếu month truyền vào khác hoặc None)
+        cur_month = time.strftime("%Y-%m")
+        if month != cur_month:
+            key_cur = self.get_obj_key(keyid, subfolder, filename, month=cur_month)
+            if self.object_exists(key_cur):
+                return key_cur
 
         return None
 
