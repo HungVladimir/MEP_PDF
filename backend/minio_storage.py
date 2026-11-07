@@ -106,14 +106,26 @@ class MinioStorageManager:
         """Kiểm tra MinIO đã sẵn sàng sử dụng hay chưa."""
         return bool(self.enabled and self.client)
 
-    def get_obj_key(self, keyid: str, subfolder: str, filename: str) -> str:
-        """Tạo khóa object chuẩn Posix: mep_payment/<safe_keyid>/<subfolder>/<filename>"""
+    def get_obj_key(self, keyid: str, subfolder: str, filename: str, month: Optional[str] = None) -> str:
+        """
+        Tạo khóa object chuẩn Posix theo phân cấp tháng:
+        mep_payment/[<month>/]<safe_keyid>/<subfolder>/<filename>
+        Ví dụ: mep_payment/2026-11/WOR2510150002/reports/Sample_Report.zip
+        """
         safe_key = str(keyid).replace('/', '_').replace('\\', '_').replace(':', '_').strip()
         sub = subfolder.strip('/') if subfolder else ''
         fname = filename.strip('/')
+
+        parts = [MINIO_PREFIX]
+        if month:
+            safe_month = str(month).replace('/', '_').replace('\\', '_').replace(':', '_').strip()
+            if safe_month:
+                parts.append(safe_month)
+        parts.append(safe_key)
         if sub:
-            return f"{MINIO_PREFIX}/{safe_key}/{sub}/{fname}"
-        return f"{MINIO_PREFIX}/{safe_key}/{fname}"
+            parts.append(sub)
+        parts.append(fname)
+        return "/".join(parts)
 
     def upload_file(self, local_path: Union[str, Path], object_key: str, content_type: Optional[str] = None) -> bool:
         """Upload file vật lý từ ổ cứng lên MinIO (Wrapper quanh client.put_object theo chuẩn visionGuard)."""
@@ -225,6 +237,118 @@ class MinioStorageManager:
         except Exception as exc:
             print(f"⚠️ [MinIO Remove Prefix Warning] Thất bại khi xóa prefix {prefix}: {exc}")
             return 0
+
+    def remove_task_objects(self, keyid: str, month: Optional[str] = None) -> int:
+        """
+        Xóa sạch 100% tất cả các objects trên MinIO liên quan đến task KEYID (Cascade Cleanup).
+        Xóa cả cấu trúc theo tháng (mep_payment/<month>/<keyid>/), cấu trúc phẳng cũ (mep_payment/<keyid>/),
+        và các bản copy mồ côi trong mep_payment/reports/.
+        """
+        if not self.is_available() or not keyid:
+            return 0
+
+        safe_key = str(keyid).replace('/', '_').replace('\\', '_').replace(':', '_').strip()
+        total_deleted = 0
+
+        # 1. Xóa theo cấu trúc mới có month
+        if month:
+            safe_month = str(month).replace('/', '_').replace('\\', '_').strip()
+            prefix_month = f"{MINIO_PREFIX}/{safe_month}/{safe_key}/"
+            total_deleted += self.remove_prefix(prefix_month)
+
+        # 2. Xóa theo cấu trúc phẳng cũ
+        prefix_flat = f"{MINIO_PREFIX}/{safe_key}/"
+        total_deleted += self.remove_prefix(prefix_flat)
+
+        # 3. Quét kiểm tra toàn bộ prefix mep_payment/ để dọn sạch mọi object sót lại
+        try:
+            all_objs = self.client.list_objects(self.bucket_name, prefix=f"{MINIO_PREFIX}/", recursive=True)
+            for obj in all_objs:
+                obj_name = obj.object_name
+                # Xóa object nằm trong folder của task
+                if f"/{safe_key}/" in obj_name:
+                    try:
+                        self.client.remove_object(self.bucket_name, obj_name)
+                        total_deleted += 1
+                    except Exception:
+                        pass
+                # Xóa file mồ côi trong mep_payment/reports/ có chứa mã WO
+                elif obj_name.startswith(f"{MINIO_PREFIX}/reports/") and safe_key in obj_name:
+                    try:
+                        self.client.remove_object(self.bucket_name, obj_name)
+                        total_deleted += 1
+                    except Exception:
+                        pass
+        except Exception as exc:
+            print(f"⚠️ [MinIO Cleanup Warning] Quét dọn MinIO cho {safe_key}: {exc}")
+
+        return total_deleted
+
+    def find_task_object(self, keyid: str, subfolder: str, filename: str, month: Optional[str] = None) -> Optional[str]:
+        """
+        Tìm kiếm object key trên MinIO một cách linh hoạt:
+        1. Kiểm tra mep_payment/<month>/<safe_key>/<subfolder>/<filename>
+        2. Kiểm tra mep_payment/<safe_key>/<subfolder>/<filename>
+        3. Quét tìm object kết thúc bằng /<safe_key>/<subfolder>/<filename>
+        """
+        if not self.is_available() or not keyid or not filename:
+            return None
+
+        # 1. Thử đường dẫn theo tháng
+        if month:
+            key_month = self.get_obj_key(keyid, subfolder, filename, month=month)
+            if self.object_exists(key_month):
+                return key_month
+
+        # 2. Thử đường dẫn phẳng cũ
+        key_flat = self.get_obj_key(keyid, subfolder, filename, month=None)
+        if self.object_exists(key_flat):
+            return key_flat
+
+        # 3. Quét tìm object khớp
+        safe_key = str(keyid).replace('/', '_').replace('\\', '_').replace(':', '_').strip()
+        sub = subfolder.strip('/') if subfolder else ''
+        target_suffix = f"/{safe_key}/{sub}/{filename}" if sub else f"/{safe_key}/{filename}"
+        try:
+            all_objs = self.client.list_objects(self.bucket_name, prefix=f"{MINIO_PREFIX}/", recursive=True)
+            for obj in all_objs:
+                if obj.object_name.endswith(target_suffix):
+                    return obj.object_name
+        except Exception:
+            pass
+
+        return None
+
+    def find_report_file(self, filename: str) -> Optional[str]:
+        """
+        Tìm file báo cáo (.xlsx hoặc .zip) trên MinIO theo tên file:
+        Hỗ trợ tìm trong mep_payment/<month>/<keyid>/reports/ hoặc mep_payment/reports/.
+        """
+        if not self.is_available() or not filename:
+            return None
+
+        # 1. Thử trong thư mục reports cũ
+        candidates = [
+            f"{MINIO_PREFIX}/reports/{filename}",
+            f"{MINIO_PREFIX}/reports/{filename.replace('.zip', '.xlsx')}" if filename.endswith('.zip') else f"{MINIO_PREFIX}/reports/{filename.replace('.xlsx', '.zip')}"
+        ]
+        for c in candidates:
+            if self.object_exists(c):
+                return c
+
+        # 2. Quét tìm trong toàn bộ MinIO
+        try:
+            target_name = Path(filename).name.lower()
+            alt_name = target_name.replace(".zip", ".xlsx") if target_name.endswith(".zip") else target_name.replace(".xlsx", ".zip")
+            all_objs = self.client.list_objects(self.bucket_name, prefix=f"{MINIO_PREFIX}/", recursive=True)
+            for obj in all_objs:
+                fname = Path(obj.object_name).name.lower()
+                if fname in (target_name, alt_name):
+                    return obj.object_name
+        except Exception:
+            pass
+
+        return None
 
     def object_exists(self, object_key: str) -> bool:
         """Kiểm tra xem object có tồn tại trên MinIO hay không."""

@@ -10,9 +10,10 @@ from fastapi.responses import FileResponse, StreamingResponse
 from pydantic import BaseModel
 import pandas as pd
 
+from typing import Optional
 import config
 from engine import run_mep_pipeline
-from sql import update_task_status, update_review_decision, batch_upsert_tasks, delete_tasks, check_keyid_exists
+from sql import update_task_status, update_review_decision, batch_upsert_tasks, delete_tasks, check_keyid_exists, get_task_payment_month
 from minio_storage import minio_storage, MINIO_PREFIX
 from detail_builder import safe_id
 
@@ -118,11 +119,14 @@ class StreamLogTee:
             self._buffer = ""
 
 
-def run_ai_task_background(keyid: str, session_dir: Path, excel_path: str):
+def run_ai_task_background(keyid: str, session_dir: Path, excel_path: str, payment_month: str = None):
     """
     Hàm này chạy hoàn toàn độc lập dưới nền (Background).
     Không làm đơ hay timeout giao diện người dùng trên OneAI.
     """
+    if not payment_month:
+        payment_month = get_task_payment_month(keyid) or time.strftime("%Y-%m")
+
     pipeline_log_path = session_dir / "pipeline.log"
     tee = StreamLogTee(sys.stdout, pipeline_log_path)
     old_stdout = sys.stdout
@@ -227,39 +231,41 @@ def run_ai_task_background(keyid: str, session_dir: Path, excel_path: str):
         except Exception as det_err:
             print(f"⚠️ [Detail Cache Warning] {det_err}")
 
-        # ĐỒNG BỘ TOÀN BỘ KẾT QUẢ LÊN MINIO STORAGE (NẾU MINIO ĐANG KẾT NỐI)
+        # ĐỒNG BỘ TOÀN BỘ KẾT QUẢ LÊN MINIO STORAGE THEO THÁNG (mep_payment/<month>/<keyid>/...)
         if minio_storage.is_available():
             try:
-                # 1. Upload ZIP & Excel Báo cáo
+                # 1. Upload ZIP & Excel Báo cáo vào đúng folder tháng của task (Không upload bản copy mồ côi nữa)
                 if zip_path.exists():
-                    minio_storage.upload_file(zip_path, minio_storage.get_obj_key(
-                        keyid, "reports", zip_name), "application/zip")
-                    minio_storage.upload_file(
-                        zip_path, f"{MINIO_PREFIX}/reports/{zip_name}", "application/zip")
+                    zip_obj_key = minio_storage.get_obj_key(
+                        keyid, "reports", zip_name, month=payment_month)
+                    minio_storage.upload_file(zip_path, zip_obj_key, "application/zip")
                 if Path(final_excel_path).exists():
-                    minio_storage.upload_file(final_excel_path, minio_storage.get_obj_key(
-                        keyid, "reports", file_name), "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")
+                    excel_obj_key = minio_storage.get_obj_key(
+                        keyid, "reports", file_name, month=payment_month)
                     minio_storage.upload_file(
-                        final_excel_path, f"{MINIO_PREFIX}/reports/{file_name}", "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")
+                        final_excel_path, excel_obj_key, "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")
 
-                # 2. Upload Toàn bộ ảnh bằng chứng / thumbnail đối soát
+                # 2. Upload Toàn bộ ảnh bằng chứng / thumbnail đối soát theo tháng
                 search_imgs = list(evidence_dir.glob(
                     "*.*")) + list(session_dir.glob("*.png")) + list(session_dir.glob("*.jpg"))
                 uploaded_count = 0
                 for img_p in search_imgs:
                     if img_p.is_file() and img_p.suffix.lower() in ('.png', '.jpg', '.jpeg'):
-                        if minio_storage.upload_file(img_p, minio_storage.get_obj_key(keyid, "images", img_p.name)):
+                        img_obj_key = minio_storage.get_obj_key(
+                            keyid, "images", img_p.name, month=payment_month)
+                        if minio_storage.upload_file(img_p, img_obj_key):
                             uploaded_count += 1
 
-                # 3. Upload cache chi tiết JSON lên MinIO
+                # 3. Upload cache chi tiết JSON lên MinIO theo tháng
                 if detail_data:
                     json_bytes = json.dumps(
                         detail_data, ensure_ascii=False, indent=2).encode('utf-8')
-                    minio_storage.upload_bytes(json_bytes, minio_storage.get_obj_key(
-                        keyid, "cache", "detail.json"), "application/json")
+                    detail_obj_key = minio_storage.get_obj_key(
+                        keyid, "cache", "detail.json", month=payment_month)
+                    minio_storage.upload_bytes(json_bytes, detail_obj_key, "application/json")
 
                 print(
-                    f"☁️ [MinIO Storage] Đã đồng bộ lên MinIO: Báo cáo={zip_name}, Ảnh={uploaded_count} files (KEYID={keyid})")
+                    f"☁️ [MinIO Storage] Đã đồng bộ lên MinIO ({payment_month}/{keyid}): Báo cáo={zip_name}, Ảnh={uploaded_count} files")
             except Exception as minio_sync_err:
                 print(
                     f"⚠️ [MinIO Sync Warning] Lỗi đồng bộ MinIO: {minio_sync_err}")
@@ -302,7 +308,8 @@ async def health_check():
 async def upload_excel_task(
     background_tasks: BackgroundTasks,
     file: UploadFile = File(...),
-    KEYID: str = Form(...)
+    KEYID: str = Form(...),
+    payment_month: Optional[str] = Form(None)
 ):
     """Tiếp nhận file Excel từ OneAI Portal và kích hoạt Background Task."""
     try:
@@ -319,6 +326,9 @@ async def upload_excel_task(
 
         safe_keyid = KEYID.replace('/', '_').replace('\\', '_')
         session_name = f"session_{safe_keyid}_{int(time.time())}"
+
+        # Xác định tháng thanh toán để tổ chức thư mục MinIO
+        actual_month = (payment_month or "").strip() or get_task_payment_month(KEYID) or time.strftime("%Y-%m")
 
         # 1. Thư mục Private để lưu file Excel upload (tuân thủ DLP máy công ty)
         private_session_dir = PRIVATE_EXCEL_DIR / session_name
@@ -340,18 +350,18 @@ async def upload_excel_task(
         project_session_dir = PROJECT_STORAGE_DIR / session_name
         project_session_dir.mkdir(parents=True, exist_ok=True)
 
-        # 3. Nếu MinIO đang hoạt động, sao lưu thêm 1 bản Excel input lên MinIO
+        # 3. Nếu MinIO đang hoạt động, sao lưu thêm 1 bản Excel input lên MinIO theo tháng
         if minio_storage.is_available():
             try:
                 minio_storage.upload_file(
-                    excel_path, minio_storage.get_obj_key(KEYID, "inputs", file.filename))
+                    excel_path, minio_storage.get_obj_key(KEYID, "inputs", file.filename, month=actual_month))
             except Exception:
                 pass
 
         update_task_status(keyid=KEYID, status="RUNNING",
                            reason="Đã nhận file, AI đang bóc tách ngầm...", progress=5)
         background_tasks.add_task(
-            run_ai_task_background, KEYID, project_session_dir, str(excel_path))
+            run_ai_task_background, KEYID, project_session_dir, str(excel_path), actual_month)
 
         return {"status": "accepted", "message": "Nạp file thành công, AI đang khởi chạy."}
     except Exception as e:
@@ -360,31 +370,53 @@ async def upload_excel_task(
         await file.close()
 
 
+@app.get("/mep_payment/files/{keyid}/{filename}")
+async def download_task_report_file(keyid: str, filename: str):
+    """Phục vụ tải file Báo cáo theo mã WO (Hỗ trợ cấu trúc mep_payment/<month>/<keyid>/reports/)."""
+    if minio_storage.is_available():
+        month = get_task_payment_month(keyid)
+        m_key = minio_storage.find_task_object(keyid, "reports", filename, month=month)
+        if not m_key:
+            alt_fname = filename.replace('.zip', '.xlsx') if filename.endswith('.zip') else filename.replace('.xlsx', '.zip')
+            m_key = minio_storage.find_task_object(keyid, "reports", alt_fname, month=month)
+        if m_key:
+            minio_resp = minio_storage.open_object(m_key)
+            if minio_resp:
+                actual_fname = Path(m_key).name
+                is_zip = actual_fname.lower().endswith(".zip")
+                media_type = "application/zip" if is_zip else "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+                return StreamingResponse(
+                    minio_storage.stream_object(minio_resp),
+                    media_type=media_type,
+                    headers={
+                        "Content-Disposition": f"attachment; filename={actual_fname}",
+                        "Access-Control-Expose-Headers": "Content-Disposition"
+                    }
+                )
+
+    return await download_report_file(filename)
+
+
 @app.get("/mep_payment/files/{filename}")
 async def download_report_file(filename: str):
     """Phục vụ tải file Báo cáo 2 Sheet về máy (Hỗ trợ cả .zip và .xlsx từ MinIO hoặc Local Disk)."""
-    # 1. Kiểm tra ưu tiên trong MinIO Storage
+    # 1. Kiểm tra ưu tiên trong MinIO Storage (Tìm kiếm thông minh trên MinIO)
     if minio_storage.is_available():
-        minio_candidates = [
-            f"{MINIO_PREFIX}/reports/{filename}",
-            f"{MINIO_PREFIX}/reports/{filename.replace('.zip', '.xlsx')}" if filename.endswith(
-                '.zip') else f"{MINIO_PREFIX}/reports/{filename.replace('.xlsx', '.zip')}"
-        ]
-        for m_key in minio_candidates:
-            if minio_storage.object_exists(m_key):
-                minio_resp = minio_storage.open_object(m_key)
-                if minio_resp:
-                    actual_fname = Path(m_key).name
-                    is_zip = actual_fname.lower().endswith(".zip")
-                    media_type = "application/zip" if is_zip else "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
-                    return StreamingResponse(
-                        minio_storage.stream_object(minio_resp),
-                        media_type=media_type,
-                        headers={
-                            "Content-Disposition": f"attachment; filename={actual_fname}",
-                            "Access-Control-Expose-Headers": "Content-Disposition"
-                        }
-                    )
+        m_key = minio_storage.find_report_file(filename)
+        if m_key:
+            minio_resp = minio_storage.open_object(m_key)
+            if minio_resp:
+                actual_fname = Path(m_key).name
+                is_zip = actual_fname.lower().endswith(".zip")
+                media_type = "application/zip" if is_zip else "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+                return StreamingResponse(
+                    minio_storage.stream_object(minio_resp),
+                    media_type=media_type,
+                    headers={
+                        "Content-Disposition": f"attachment; filename={actual_fname}",
+                        "Access-Control-Expose-Headers": "Content-Disposition"
+                    }
+                )
 
     # 2. Fallback sang Local Disk nếu MinIO không có hoặc offline
     file_path = FINAL_REPORT_DIR / filename
@@ -451,25 +483,61 @@ async def save_rows(req: SaveRowsRequest):
 
 @app.post("/mep_payment/delete_rows")
 async def delete_rows_endpoint(req: DeleteRowsRequest):
-    """Tiếp nhận danh sách KEYID cần xóa khỏi Database."""
+    """
+    Tiếp nhận danh sách KEYID cần xóa:
+    1. Dọn dẹp sạch sẽ 100% MinIO Storage (mep_payment/<month>/<keyid>/, mep_payment/<keyid>/, reports).
+    2. Dọn dẹp sạch sẽ toàn bộ file báo cáo Excel/ZIP và session trên đĩa cứng cục bộ.
+    3. Xóa bản ghi trong Database Oracle (Cascade Cleanup toàn diện).
+    """
     if not req.keyids:
         raise HTTPException(
             status_code=400, detail="Vui lòng chọn ít nhất 1 dòng để xóa.")
     try:
+        # 1. Thu thập tháng của từng task trước khi xóa khỏi DB
+        task_months = {}
+        for kid in req.keyids:
+            task_months[kid] = get_task_payment_month(kid)
+
+        # 2. Xóa bản ghi trong Database Oracle
         count = delete_tasks(req.keyids)
-        # Dọn dẹp dữ liệu MinIO tương ứng với từng KEYID bị xóa (Compensating Cleanup theo chuẩn visionGuard)
+
+        # 3. Dọn dẹp triệt để trên MinIO Storage
         if minio_storage.is_available():
             for kid in req.keyids:
                 try:
-                    safe_k = safe_id(kid)
-                    deleted_minio_count = minio_storage.remove_prefix(
-                        f"{MINIO_PREFIX}/{safe_k}/")
+                    m = task_months.get(kid)
+                    deleted_minio_count = minio_storage.remove_task_objects(kid, month=m)
                     if deleted_minio_count > 0:
                         print(
-                            f"🗑️ [MinIO Cleanup] Đã xóa {deleted_minio_count} objects trên MinIO cho KEYID={kid}")
+                            f"🗑️ [MinIO Cleanup] Đã xóa {deleted_minio_count} objects trên MinIO cho KEYID={kid} (Tháng {m or 'ALL'})")
                 except Exception as m_del_err:
                     print(f"⚠️ [MinIO Cleanup Warning] {m_del_err}")
-        return {"status": "ok", "message": f"Đã xóa thành công {count} bản ghi khỏi Database."}
+
+        # 4. Dọn dẹp triệt để trên đĩa cứng cục bộ (Local Disk)
+        for kid in req.keyids:
+            safe_k = safe_id(kid)
+            # 4.1 Xóa file Excel / ZIP / JSON trong FINAL_REPORT_DIR
+            if FINAL_REPORT_DIR.exists():
+                for f in list(FINAL_REPORT_DIR.glob(f"*{safe_k}*")):
+                    try:
+                        if f.is_file():
+                            f.unlink(missing_ok=True)
+                            print(f"🗑️ [Disk Cleanup] Đã xóa file báo cáo local: {f.name}")
+                    except Exception:
+                        pass
+
+            # 4.2 Xóa thư mục session trong PROJECT_STORAGE_DIR và PRIVATE_EXCEL_DIR
+            for root in [PROJECT_STORAGE_DIR, PRIVATE_EXCEL_DIR]:
+                if root.exists():
+                    for s_dir in list(root.glob(f"*session_{safe_k}*")):
+                        try:
+                            if s_dir.is_dir():
+                                shutil.rmtree(s_dir, ignore_errors=True)
+                                print(f"🗑️ [Disk Cleanup] Đã xóa thư mục session: {s_dir.name}")
+                        except Exception:
+                            pass
+
+        return {"status": "ok", "message": f"Đã xóa thành công {count} bản ghi và toàn bộ file báo cáo liên quan."}
     except Exception as e:
         raise HTTPException(
             status_code=500, detail=f"Lỗi khi xóa trong Database: {str(e)}")
@@ -492,7 +560,7 @@ async def submit_review(req: ReviewRequest):
 async def get_task_detail(keyid: str, status: str = "COMPLETED", error_count: int = 0, reason: str = ""):
     """
     Trả về chi tiết kết quả đối soát của task (danh sách lỗi, nhóm theo bản vẽ, ảnh bằng chứng, log).
-    Hỗ trợ đọc từ MinIO cache JSON, quét file Excel cũ hoặc tạo fallback an toàn.
+    Hỗ trợ đọc từ MinIO cache JSON theo tháng, quét file Excel cũ hoặc tạo fallback an toàn.
     """
     try:
         import json
@@ -500,14 +568,15 @@ async def get_task_detail(keyid: str, status: str = "COMPLETED", error_count: in
 
         # 1. Thử đọc nhanh từ MinIO cache JSON nếu có (đọc trực tiếp, không rebuild)
         if minio_storage.is_available():
-            detail_key = minio_storage.get_obj_key(
-                keyid, "cache", "detail.json")
-            data_bytes = minio_storage.download_bytes(detail_key)
-            if data_bytes:
-                try:
-                    return json.loads(data_bytes.decode('utf-8'))
-                except Exception as e:
-                    print(f"⚠️ [MinIO Cache] Lỗi đọc JSON cache cho KEYID={keyid}: {e}")
+            month = get_task_payment_month(keyid)
+            detail_key = minio_storage.find_task_object(keyid, "cache", "detail.json", month=month)
+            if detail_key:
+                data_bytes = minio_storage.download_bytes(detail_key)
+                if data_bytes:
+                    try:
+                        return json.loads(data_bytes.decode('utf-8'))
+                    except Exception as e:
+                        print(f"⚠️ [MinIO Cache] Lỗi đọc JSON cache cho KEYID={keyid}: {e}")
 
         # 2. Quét từ đĩa cục bộ / parse từ file Excel
         fallback_info = {
@@ -534,19 +603,21 @@ async def get_task_image(keyid: str, filename: str):
         ext = Path(filename).suffix.lower()
         media_type = "image/png" if ext == ".png" else "image/jpeg"
 
-        # 1. Kiểm tra ưu tiên trong MinIO Storage
+        # 1. Kiểm tra ưu tiên trong MinIO Storage (Hỗ trợ cấu trúc theo tháng và phẳng cũ)
         if minio_storage.is_available():
-            img_key = minio_storage.get_obj_key(keyid, "images", filename)
-            minio_resp = minio_storage.open_object(img_key)
-            if minio_resp:
-                return StreamingResponse(
-                    minio_storage.stream_object(minio_resp),
-                    media_type=media_type,
-                    headers={
-                        "Cache-Control": "public, max-age=86400",
-                        "Content-Disposition": f"inline; filename={filename}"
-                    }
-                )
+            month = get_task_payment_month(keyid)
+            img_key = minio_storage.find_task_object(keyid, "images", filename, month=month)
+            if img_key:
+                minio_resp = minio_storage.open_object(img_key)
+                if minio_resp:
+                    return StreamingResponse(
+                        minio_storage.stream_object(minio_resp),
+                        media_type=media_type,
+                        headers={
+                            "Cache-Control": "public, max-age=86400",
+                            "Content-Disposition": f"inline; filename={filename}"
+                        }
+                    )
 
         # 2. Quét ưu tiên trong PROJECT_STORAGE_DIR (nơi lưu evidence_images không bị DLP chặn)
         search_roots = [PROJECT_STORAGE_DIR, PRIVATE_EXCEL_DIR]
@@ -613,8 +684,9 @@ async def rerun_task_endpoint(keyid: str, background_tasks: BackgroundTasks):
             reason="Đang chạy lại AI đối soát...",
             progress=5
         )
+        task_month = get_task_payment_month(keyid) or time.strftime("%Y-%m")
         background_tasks.add_task(
-            run_ai_task_background, keyid, project_session_dir, str(excel_path))
+            run_ai_task_background, keyid, project_session_dir, str(excel_path), task_month)
 
         return {"status": "ok", "message": f"Đã bắt đầu chạy lại tác vụ AI cho [{keyid}]."}
     except HTTPException:

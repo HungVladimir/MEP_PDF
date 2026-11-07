@@ -2,6 +2,7 @@
 import os
 import sys
 from pathlib import Path
+from typing import Optional
 from dotenv import load_dotenv, find_dotenv
 import oracledb
 
@@ -69,6 +70,29 @@ def check_keyid_exists(keyid: str) -> bool:
     except Exception as e:
         print(f"[Oracle DB Warning] check_keyid_exists: {e}")
         return False
+
+
+def get_task_payment_month(keyid: str) -> Optional[str]:
+    """Lấy PAYMENT_MONTH (Tháng thanh toán) từ Oracle DB cho task KEYID."""
+    if not keyid or not str(keyid).strip():
+        return None
+    try:
+        sql = "SELECT PAYMENT_MONTH FROM LOCAL_AI.MEP_PAYMENT_ANALYSIS WHERE KEYID = :KEYID"
+        cur = get_cur()
+        cursor = cur.cursor() if hasattr(cur, 'cursor') else cur
+        cursor.execute(sql, params={"KEYID": str(keyid).strip()})
+        res = cursor.fetchall() if hasattr(cursor, 'fetchall') else None
+        if hasattr(cursor, 'close') and cursor != cur:
+            try:
+                cursor.close()
+            except Exception:
+                pass
+        if res and res[0] and res[0][0]:
+            return str(res[0][0]).strip()
+        return None
+    except Exception as e:
+        print(f"[Oracle DB Warning] get_task_payment_month: {e}")
+        return None
 
 
 def insert_task(cur, r: dict):

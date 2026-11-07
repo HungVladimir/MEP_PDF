@@ -1075,6 +1075,9 @@ const handleUploadExcel = async (file, row) => {
   const formData = new FormData()
   formData.append("file", file.raw)
   formData.append("KEYID", row.KEYID)
+  if (row.PAYMENT_MONTH) {
+    formData.append("payment_month", row.PAYMENT_MONTH)
+  }
 
   row.STATUS = 'RUNNING'
   row.PROGRESS = 5
