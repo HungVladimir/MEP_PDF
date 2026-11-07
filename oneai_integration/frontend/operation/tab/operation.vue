@@ -259,10 +259,12 @@
 
               <!-- Trạng thái duyệt / Nút duyệt -->
               <div>
-                <el-tag v-if="row.REVIEW_DECISION === 'APPROVED'" type="success" size="mini">Đã
-                  Duyệt</el-tag>
-                <el-tag v-else-if="row.REVIEW_DECISION === 'REJECTED'" type="danger" size="mini">Từ
-                  Chối</el-tag>
+                <el-tag v-if="row.REVIEW_DECISION === 'APPROVED'" type="success" size="mini" :title="row.REVIEW_BY ? `Duyệt bởi: ${row.REVIEW_BY}` : ''">
+                  Đã Duyệt
+                </el-tag>
+                <el-tag v-else-if="row.REVIEW_DECISION === 'REJECTED'" type="danger" size="mini" :title="row.REVIEW_BY ? `Từ chối bởi: ${row.REVIEW_BY}` : ''">
+                  Từ Chối
+                </el-tag>
                 <div v-else style="display: inline-flex; gap: 4px;">
                   <el-button type="success" size="mini" @click="handleReview(row, 'APPROVED')">Duyệt</el-button>
                   <el-button type="danger" size="mini" @click="handleReview(row, 'REJECTED')">Hủy</el-button>
@@ -326,10 +328,12 @@
             <el-tag v-else-if="currentTask?.STATUS === 'CANCEL'" type="danger" effect="dark">CANCEL</el-tag>
             <el-tag v-else type="info" effect="dark">{{ currentTask?.STATUS }}</el-tag>
 
-            <el-tag v-if="currentTask?.REVIEW_DECISION === 'APPROVED'" type="success" effect="plain" class="ms-1">ĐÃ
-              DUYỆT</el-tag>
-            <el-tag v-else-if="currentTask?.REVIEW_DECISION === 'REJECTED'" type="danger" effect="plain" class="ms-1">TỪ
-              CHỐI</el-tag>
+            <el-tag v-if="currentTask?.REVIEW_DECISION === 'APPROVED'" type="success" effect="plain" class="ms-1" :title="currentTask?.REVIEW_BY ? `Duyệt bởi: ${currentTask.REVIEW_BY}` : ''">
+              ĐÃ DUYỆT {{ currentTask?.REVIEW_BY ? `(${currentTask.REVIEW_BY})` : '' }}
+            </el-tag>
+            <el-tag v-else-if="currentTask?.REVIEW_DECISION === 'REJECTED'" type="danger" effect="plain" class="ms-1" :title="currentTask?.REVIEW_BY ? `Từ chối bởi: ${currentTask.REVIEW_BY}` : ''">
+              TỪ CHỐI {{ currentTask?.REVIEW_BY ? `(${currentTask.REVIEW_BY})` : '' }}
+            </el-tag>
             <el-tag v-else type="warning" effect="plain" class="ms-1">CHỜ DUYỆT</el-tag>
           </div>
         </div>
@@ -492,7 +496,12 @@
 
         <!-- KHỐI PHÊ DUYỆT & THAO TÁC HỒ SƠ -->
         <div class="detail-review-card">
-          <h4>✍️ Phê Duyệt & Thao Tác Hồ Sơ</h4>
+          <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
+            <h4 style="margin: 0;">✍️ Phê Duyệt & Thao Tác Hồ Sơ</h4>
+            <span v-if="loginUser" style="font-size: 12px; color: #67C23A; background: rgba(103, 194, 58, 0.15); padding: 2px 8px; border-radius: 4px; border: 1px solid rgba(103, 194, 58, 0.3);">
+              <i class="bi bi-person-check-fill me-1"></i> Người duyệt: <b>{{ loginUser }}</b>
+            </span>
+          </div>
           <div class="review-inputs-row">
             <div style="flex: 1;">
               <el-input v-model="detailReviewNote"
@@ -538,7 +547,7 @@
 </template>
 
 <script setup>
-import { ref, computed, onMounted, onUnmounted, watch } from 'vue'
+import { ref, computed, onMounted, onUnmounted, watch, getCurrentInstance } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import axios from 'axios'
 import { get_total_row, get_data_page, save_mep_rows, delete_mep_rows, get_kpi_summary } from '../js/mepPayment'
@@ -547,6 +556,44 @@ import { get_total_row, get_data_page, save_mep_rows, delete_mep_rows, get_kpi_s
 const FASTAPI_BASE_URL = 'http://127.0.0.1:8000'
 const buttonSize = ref('default')
 const MAX_UPLOAD_SIZE_MB = 50 // Giới hạn file Excel upload tối đa 50MB
+
+// ====================================================================
+// THÔNG TIN TÀI KHOẢN ĐĂNG NHẬP ONEAI (THEO CHUẨN authStore / knoxId)
+// ====================================================================
+const _userInfo = ref(null)
+
+const getUserInfo = () => {
+  try {
+    // 1. Lấy từ Vuex Store của OneAI qua component instance ($store.getters['authStore/userInfo'])
+    const vm = getCurrentInstance()
+    const appStore = vm?.appContext?.config?.globalProperties?.$store || vm?.proxy?.$store
+    if (appStore?.getters && appStore.getters['authStore/userInfo']) {
+      return appStore.getters['authStore/userInfo']
+    }
+  } catch (e) {}
+
+  try {
+    // 2. Lấy từ biến window.store toàn cục nếu nền tảng OneAI đưa ra window
+    if (typeof window !== 'undefined' && window.store?.getters && window.store.getters['authStore/userInfo']) {
+      return window.store.getters['authStore/userInfo']
+    }
+  } catch (e) {}
+
+  try {
+    // 3. Fallback: Lấy từ LocalStorage session của OneAI
+    const cached = localStorage.getItem('userInfo') || localStorage.getItem('user')
+    if (cached) {
+      return JSON.parse(cached)
+    }
+  } catch (e) {}
+
+  return null
+}
+
+// Knox ID / Tên tài khoản đang đăng nhập OneAI
+const loginUser = computed(() => {
+  return _userInfo.value?.knoxId || _userInfo.value?.userName || _userInfo.value?.userId || ''
+})
 
 // Bộ lọc
 const selectedStatus = ref('')
@@ -937,9 +984,8 @@ const previewImageList = computed(() => {
 
 const submitDetailReview = async (decision) => {
   if (!currentTask.value) return
-  await handleReview(currentTask.value, decision)
+  await handleReview(currentTask.value, decision, detailReviewNote.value)
   currentTask.value.REVIEW_NOTE = detailReviewNote.value
-  // ElMessage.success(`Đã lưu quyết định: ${decision}`)
 }
 
 // 4. CHẠY LẠI AI (RERUN AI TASK)
@@ -988,7 +1034,7 @@ const handleInsert = () => {
     KEYID: '',
     TASK_NAME: '',
     PAYMENT_MONTH: selectedMonth.value || new Date().toISOString().slice(0, 7),
-    PIC: '',
+    PIC: loginUser.value || '',
     GROUP_NAME: 'Group A',
     PART_NAME: 'Part 1',
     STATUS: 'WAITING',
@@ -1228,16 +1274,21 @@ const handleUploadExcel = async (file, row) => {
   }
 }
 
-// 12. DUYỆT / TỪ CHỐI (REVIEW WORKFLOW)
-const handleReview = async (row, decision) => {
+// 12. DUYỆT / TỪ CHỐI (REVIEW WORKFLOW - LƯU CHUẨN REVIEW_BY = KNOX_ID)
+const handleReview = async (row, decision, note = '') => {
   try {
+    const reviewerName = loginUser.value || row.PIC || 'Engineer'
+    const reviewNote = note || row.REVIEW_NOTE || ''
     await axios.post(`${FASTAPI_BASE_URL}/mep_payment/review`, {
       keyid: row.KEYID,
       decision: decision,
-      reviewer: 'Engineer'
+      note: reviewNote,
+      reviewer: reviewerName
     })
     row.REVIEW_DECISION = decision
-    ElMessage.success(`Đã lưu trạng thái: ${decision}`)
+    row.REVIEW_BY = reviewerName
+    if (reviewNote) row.REVIEW_NOTE = reviewNote
+    ElMessage.success(`Đã lưu quyết định: ${decision} (Người duyệt: ${reviewerName})`)
   } catch (err) {
     ElMessage.error("Lỗi lưu quyết định duyệt: " + err.message)
   }
@@ -1245,6 +1296,7 @@ const handleReview = async (row, decision) => {
 
 // Vòng đời
 onMounted(() => {
+  _userInfo.value = getUserInfo()
   handleReload()
 })
 
