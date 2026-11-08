@@ -39,23 +39,23 @@
       </div>
     </div>
 
-    <!-- 2. THANH TÌM KIẾM & BỘ LỌC (TOP FILTER) -->
+    <!-- 2. THANH TÌM KIẾM & BỘ LỌC (TOP FILTER FLUID RESPONSIVE) -->
     <div class="toolbar">
-      <el-select v-model="selectedStatus" placeholder="Chọn Trạng Thái" clearable style="width: 200px">
+      <el-select v-model="selectedStatus" placeholder="Chọn Trạng Thái" clearable class="toolbar-select">
         <el-option v-for="item in statusOptions" :key="item.value" :label="item.label" :value="item.value" />
       </el-select>
 
       <el-date-picker v-model="selectedMonth" type="month" placeholder="Chọn Tháng Thanh Toán" value-format="YYYY-MM"
-        style="width: 190px" />
+        class="toolbar-date" />
 
-      <el-input v-model="searchKeyword" placeholder="Nhập số WO hoặc tên công việc..." clearable style="width: 270px"
+      <el-input v-model="searchKeyword" placeholder="Nhập số WO hoặc tên công việc..." clearable class="toolbar-search"
         @keyup.enter="handleReload" />
     </div>
 
     <!-- 3. THANH CÔNG CỤ QUẢN TRỊ BẢNG (ACTION BAR THEO THỨ TỰ & MÀU SẮC UX CHUẨN) -->
     <div class="table-action-bar">
       <div class="total-count">
-        Total: <span class="count-number">{{ total }} rows</span>
+        <i class="bi bi-layers text-primary me-1"></i> Total: <span class="count-number">{{ total }} rows</span>
       </div>
 
       <div class="action-buttons">
@@ -90,22 +90,22 @@
       </div>
     </div>
 
-    <!-- 4. BẢNG DỮ LIỆU ĐỐI SOÁT (TABLE GRID HỖ TRỢ INLINE EDIT) -->
+    <!-- 4. BẢNG DỮ LIỆU ĐỐI SOÁT (TABLE GRID HỖ TRỢ INLINE EDIT & STICKY COLUMNS) -->
     <div class="table-container">
       <el-table ref="tableRef" :data="tableData" border height="660" size="small" style="width: 100%"
         show-overflow-tooltip empty-text="Không có dữ liệu đối soát" @selection-change="handleSelectionChange">
-        <!-- CỘT CHECKBOX CHỌN DÒNG -->
-        <el-table-column type="selection" width="45" align="center" />
+        <!-- CỘT CHECKBOX CHỌN DÒNG (STICKY LEFT) -->
+        <el-table-column type="selection" width="45" align="center" fixed="left" />
 
-        <!-- CỘT STT -->
-        <el-table-column prop="STT" label="STT" width="55" align="center" />
+        <!-- CỘT STT (STICKY LEFT) -->
+        <el-table-column prop="STT" label="STT" width="55" align="center" fixed="left" />
 
-        <!-- CỘT: SỐ CÔNG VIỆC (SỐ WO) - HIỂN THỊ DẠNG CHỮ BÌNH THƯỜNG -->
-        <el-table-column prop="KEYID" label="SỐ CÔNG VIỆC (WO)" width="165" sortable align="center">
+        <!-- CỘT: SỐ CÔNG VIỆC (SỐ WO) - STICKY LEFT GIÚP KỸ SƯ LUÔN THEO DÕI ĐƯỢC MÃ WO KHI CUỘN NGANG -->
+        <el-table-column prop="KEYID" label="SỐ CÔNG VIỆC (WO)" width="165" sortable align="center" fixed="left">
           <template #default="{ row }">
             <el-input v-if="row.isNew" v-model="row.KEYID" placeholder="Nhập số WO..." size="mini"
               class="inline-input" />
-            <span v-else class="font-bold font-mono">{{ row.KEYID }}</span>
+            <span v-else class="font-bold font-mono" style="color: #38BDF8;">{{ row.KEYID }}</span>
           </template>
         </el-table-column>
 
@@ -220,8 +220,8 @@
           </template>
         </el-table-column>
 
-        <!-- CỘT: CHI TIẾT BÁO CÁO & DUYỆT (GỌN GÀNG, THOÁNG ĐÃNG) -->
-        <el-table-column label="CHI TIẾT BÁO CÁO" width="170" align="center">
+        <!-- CỘT: CHI TIẾT BÁO CÁO & DUYỆT (STICKY RIGHT GIÚP THAO TÁC DUYỆT / TẢI BÁO CÁO TỨC THÌ) -->
+        <el-table-column label="CHI TIẾT BÁO CÁO" width="180" align="center" fixed="right">
           <template #default="{ row }">
             <div v-if="row.STATUS === 'COMPLETED'">
 
@@ -283,12 +283,12 @@
         <!-- HEADER SUMMARY CARD -->
         <div class="detail-header-card">
           <div class="dh-title">
-            <h3>{{ currentTask?.TASK_NAME || 'Chưa đặt tên công việc' }}</h3>
+            <h3><i class="bi bi-file-earmark-spreadsheet text-primary me-2"></i>{{ currentTask?.TASK_NAME || 'Chưa đặt tên công việc' }}</h3>
             <div class="dh-meta">
-              <span><b>Mã WO:</b> {{ currentTask?.KEYID }}</span>
-              <span><b>Người phụ trách:</b> {{ currentTask?.PIC || '—' }}</span>
+              <span><b>Mã WO:</b> <span class="font-mono text-cyan" style="color: #38BDF8; font-weight: 700; background: rgba(56, 189, 248, 0.12); padding: 2px 8px; border-radius: 4px; border: 1px solid rgba(56, 189, 248, 0.25);">{{ currentTask?.KEYID }}</span></span>
+              <span><b>PIC:</b> {{ currentTask?.PIC || '—' }}</span>
               <span><b>Phần việc:</b> {{ currentTask?.PART_NAME }} / {{ currentTask?.GROUP_NAME }}</span>
-              <span><b>Tháng:</b> {{ currentTask?.PAYMENT_MONTH }}</span>
+              <span><b>Tháng TT:</b> {{ currentTask?.PAYMENT_MONTH }}</span>
               <span><b>Công nghệ:</b> {{ currentDetail.mode }}</span>
             </div>
           </div>
@@ -378,9 +378,16 @@
                   <span v-else class="font-bold">{{ row.ai_qty }}</span>
                 </template>
               </el-table-column>
-              <el-table-column prop="diff" label="Chênh lệch" width="140" align="center">
-                <template #default="{ row }"><span class="text-danger font-bold">{{ row.diff
-                    }}</span></template>
+              <el-table-column prop="diff" label="Chênh lệch" width="145" align="center">
+                <template #default="{ row }">
+                  <el-tag v-if="String(row.diff).includes('Thiếu') || String(row.diff).includes('Lệch')" type="danger" size="mini" effect="dark" style="font-weight: 700; border-radius: 4px;">
+                    <i class="bi bi-arrow-down-right me-1"></i>{{ row.diff }}
+                  </el-tag>
+                  <el-tag v-else-if="String(row.diff).includes('Thừa')" type="warning" size="mini" effect="dark" style="font-weight: 700; border-radius: 4px;">
+                    <i class="bi bi-arrow-up-right me-1"></i>{{ row.diff }}
+                  </el-tag>
+                  <span v-else class="text-danger font-bold">{{ row.diff }}</span>
+                </template>
               </el-table-column>
               <el-table-column prop="msg" label="Chi tiết đối chiếu" min-width="220" show-overflow-tooltip />
             </el-table>
