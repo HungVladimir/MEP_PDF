@@ -9,3 +9,13 @@ final_reports/
 __pycache__/
 *.pyc
 *.webp
+
+# Thư mục dữ liệu & tài liệu tạm
+Filequest/
+filequest/
+
+# Thư mục cấu hình / cache của Agent và Gemini
+.agents/
+.gents/
+.gemini/
+

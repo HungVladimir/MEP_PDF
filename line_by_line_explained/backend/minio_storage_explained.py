@@ -476,3 +476,4 @@ class MinioStorageManager:
 
 # Dòng 436-437: Khởi tạo Singleton instance dùng chung cho toàn bộ backend
 minio_storage = MinioStorageManager()
+
