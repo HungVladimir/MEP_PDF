@@ -122,21 +122,11 @@
         <!-- CỘT: THÁNG THANH TOÁN -->
         <el-table-column prop="PAYMENT_MONTH" label="THÁNG TT" width="115" align="center" sortable>
           <template #default="{ row }">
-            <el-input 
-              v-if="row.isNew || row.isEditing" 
-              v-model="row.PAYMENT_MONTH" 
-              placeholder="YYYY-MM" 
-              size="mini"
-              :disabled="row.STATUS === 'RUNNING'"
-              class="inline-input" 
-            />
-            <span 
-              v-else 
-              class="cell-text" 
-              :class="{ 'cursor-not-allowed': row.STATUS === 'RUNNING' }"
-              @dblclick="row.STATUS !== 'RUNNING' && (row.isEditing = true)" 
-              :title="row.STATUS === 'RUNNING' ? 'Không thể đổi tháng khi AI đang chạy' : 'Bấm đúp chuột để chỉnh sửa'"
-            >
+            <el-input v-if="row.isNew || row.isEditing" v-model="row.PAYMENT_MONTH" placeholder="YYYY-MM" size="mini"
+              :disabled="row.STATUS === 'RUNNING'" class="inline-input" />
+            <span v-else class="cell-text" :class="{ 'cursor-not-allowed': row.STATUS === 'RUNNING' }"
+              @dblclick="row.STATUS !== 'RUNNING' && (row.isEditing = true)"
+              :title="row.STATUS === 'RUNNING' ? 'Không thể đổi tháng khi AI đang chạy' : 'Bấm đúp chuột để chỉnh sửa'">
               {{ row.PAYMENT_MONTH || '-' }}
             </span>
           </template>
@@ -155,21 +145,9 @@
         <!-- CỘT: GROUP (CHỌN GROUP ĐỂ LỌC PART TƯƠNG ỨNG) -->
         <el-table-column prop="GROUP_NAME" label="GROUP" width="160" align="center">
           <template #default="{ row }">
-            <el-select
-              v-if="row.isNew || row.isEditing"
-              v-model="row.GROUP_NAME"
-              placeholder="Chọn Group..."
-              size="mini"
-              filterable
-              clearable
-              @change="onGroupChange(row)"
-            >
-              <el-option
-                v-for="g in groupOptions"
-                :key="g.value"
-                :label="g.label"
-                :value="g.value"
-              />
+            <el-select v-if="row.isNew || row.isEditing" v-model="row.GROUP_NAME" placeholder="Chọn Group..."
+              size="mini" filterable clearable @change="onGroupChange(row)">
+              <el-option v-for="g in groupOptions" :key="g.value" :label="g.label" :value="g.value" />
             </el-select>
             <span v-else class="cell-text" @dblclick="row.isEditing = true" title="Bấm đúp chuột để chỉnh sửa">
               {{ row.GROUP_NAME || '-' }}
@@ -180,20 +158,10 @@
         <!-- CỘT: PART (PHỤ THUỘC VÀO GROUP ĐÃ CHỌN) -->
         <el-table-column prop="PART_NAME" label="PART" width="170" align="center">
           <template #default="{ row }">
-            <el-select
-              v-if="row.isNew || row.isEditing"
-              v-model="row.PART_NAME"
-              :placeholder="row.GROUP_NAME ? 'Chọn Part...' : 'Chọn Group trước'"
-              size="mini"
-              filterable
-              clearable
-            >
-              <el-option
-                v-for="p in getPartsByGroup(row.GROUP_NAME)"
-                :key="p.value"
-                :label="p.label"
-                :value="p.value"
-              />
+            <el-select v-if="row.isNew || row.isEditing" v-model="row.PART_NAME"
+              :placeholder="row.GROUP_NAME ? 'Chọn Part...' : 'Chọn Group trước'" size="mini" filterable clearable>
+              <el-option v-for="p in getPartsByGroup(row.GROUP_NAME)" :key="p.value" :label="p.label"
+                :value="p.value" />
             </el-select>
             <span v-else class="cell-text" @dblclick="row.isEditing = true" title="Bấm đúp chuột để chỉnh sửa">
               {{ row.PART_NAME || '-' }}
@@ -259,10 +227,12 @@
 
               <!-- Trạng thái duyệt / Nút duyệt -->
               <div>
-                <el-tag v-if="row.REVIEW_DECISION === 'APPROVED'" type="success" size="mini" :title="row.REVIEW_BY ? `Duyệt bởi: ${row.REVIEW_BY}` : ''">
+                <el-tag v-if="row.REVIEW_DECISION === 'APPROVED'" type="success" size="mini"
+                  :title="row.REVIEW_BY ? `Duyệt bởi: ${row.REVIEW_BY}` : ''">
                   Đã Duyệt
                 </el-tag>
-                <el-tag v-else-if="row.REVIEW_DECISION === 'REJECTED'" type="danger" size="mini" :title="row.REVIEW_BY ? `Từ chối bởi: ${row.REVIEW_BY}` : ''">
+                <el-tag v-else-if="row.REVIEW_DECISION === 'REJECTED'" type="danger" size="mini"
+                  :title="row.REVIEW_BY ? `Từ chối bởi: ${row.REVIEW_BY}` : ''">
                   Từ Chối
                 </el-tag>
                 <div v-else style="display: inline-flex; gap: 4px;">
@@ -328,10 +298,12 @@
             <el-tag v-else-if="currentTask?.STATUS === 'CANCEL'" type="danger" effect="dark">CANCEL</el-tag>
             <el-tag v-else type="info" effect="dark">{{ currentTask?.STATUS }}</el-tag>
 
-            <el-tag v-if="currentTask?.REVIEW_DECISION === 'APPROVED'" type="success" effect="plain" class="ms-1" :title="currentTask?.REVIEW_BY ? `Duyệt bởi: ${currentTask.REVIEW_BY}` : ''">
+            <el-tag v-if="currentTask?.REVIEW_DECISION === 'APPROVED'" type="success" effect="plain" class="ms-1"
+              :title="currentTask?.REVIEW_BY ? `Duyệt bởi: ${currentTask.REVIEW_BY}` : ''">
               ĐÃ DUYỆT {{ currentTask?.REVIEW_BY ? `(${currentTask.REVIEW_BY})` : '' }}
             </el-tag>
-            <el-tag v-else-if="currentTask?.REVIEW_DECISION === 'REJECTED'" type="danger" effect="plain" class="ms-1" :title="currentTask?.REVIEW_BY ? `Từ chối bởi: ${currentTask.REVIEW_BY}` : ''">
+            <el-tag v-else-if="currentTask?.REVIEW_DECISION === 'REJECTED'" type="danger" effect="plain" class="ms-1"
+              :title="currentTask?.REVIEW_BY ? `Từ chối bởi: ${currentTask.REVIEW_BY}` : ''">
               TỪ CHỐI {{ currentTask?.REVIEW_BY ? `(${currentTask.REVIEW_BY})` : '' }}
             </el-tag>
             <el-tag v-else type="warning" effect="plain" class="ms-1">CHỜ DUYỆT</el-tag>
@@ -408,7 +380,7 @@
               </el-table-column>
               <el-table-column prop="diff" label="Chênh lệch" width="140" align="center">
                 <template #default="{ row }"><span class="text-danger font-bold">{{ row.diff
-                }}</span></template>
+                    }}</span></template>
               </el-table-column>
               <el-table-column prop="msg" label="Chi tiết đối chiếu" min-width="220" show-overflow-tooltip />
             </el-table>
@@ -446,7 +418,8 @@
                   <el-table-column prop="unit" label="ĐVT" width="65" align="center" />
                   <el-table-column prop="vendor_qty" label="SL Dự toán" width="100" align="center" />
                   <el-table-column prop="qty" label="SL Bản vẽ này" width="120" align="center">
-                    <template #default="{ row }"><b class="text-primary">{{ row.qty }}</b></template>
+                    <template #default="{ row }"><b class="text-primary">{{ row.qty
+                        }}</b></template>
                   </el-table-column>
                   <el-table-column prop="why" label="Kết quả đối chiếu" width="180" align="center">
                     <template #default="{ row }">
@@ -475,7 +448,8 @@
             <div v-else class="images-strip">
               <div v-for="(img, idx) in currentDetail.images" :key="idx" class="img-thumb-box">
                 <el-image :src="getImgUrl(img.url)" :preview-src-list="previewImageList" :initial-index="idx"
-                  :preview-teleported="true" :hide-on-click-modal="true" fit="contain" loading="lazy" class="thumb-img" />
+                  :preview-teleported="true" :hide-on-click-modal="true" fit="contain" loading="lazy"
+                  class="thumb-img" />
                 <div class="thumb-title">{{ img.title || img.name }}</div>
               </div>
             </div>
@@ -496,43 +470,93 @@
 
         <!-- KHỐI PHÊ DUYỆT & THAO TÁC HỒ SƠ -->
         <div class="detail-review-card">
-          <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
-            <h4 style="margin: 0;">✍️ Phê Duyệt & Thao Tác Hồ Sơ</h4>
-            <span v-if="loginUser" style="font-size: 12px; color: #67C23A; background: rgba(103, 194, 58, 0.15); padding: 2px 8px; border-radius: 4px; border: 1px solid rgba(103, 194, 58, 0.3);">
-              <i class="bi bi-person-check-fill me-1"></i> Người duyệt: <b>{{ loginUser }}</b>
-            </span>
-          </div>
-          <div class="review-inputs-row">
-            <div style="flex: 1;">
-              <el-input v-model="detailReviewNote"
-                placeholder="Nhập ghi chú duyệt (VD: Lỗi số 2 đã đối soát hiện trường, nghiệm thu đạt...)" />
+          <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px;">
+            <h4 style="margin: 0; font-size: 14px; font-weight: 600; color: #FFF;">
+              ✍️ Phê Duyệt & Thao Tác Hồ Sơ
+            </h4>
+            <div v-if="currentTask?.REVIEW_DECISION" style="font-size: 12px;">
+              <span v-if="currentTask.REVIEW_DECISION === 'APPROVED'" style="color: #67C23A; background: rgba(103, 194, 58, 0.1); padding: 3px 8px; border-radius: 4px; border: 1px solid rgba(103, 194, 58, 0.3);">
+                <i class="bi bi-check-circle-fill me-1"></i> Đã duyệt bởi: <b>{{ currentTask.REVIEW_BY }}</b>
+                <span v-if="currentTask.REVIEW_NOTE" style="color: #CFD3DC; margin-left: 6px;">— "{{ currentTask.REVIEW_NOTE }}"</span>
+              </span>
+              <span v-else-if="currentTask.REVIEW_DECISION === 'REJECTED'" style="color: #F56C6C; background: rgba(245, 108, 108, 0.1); padding: 3px 8px; border-radius: 4px; border: 1px solid rgba(245, 108, 108, 0.3);">
+                <i class="bi bi-x-circle-fill me-1"></i> Bị từ chối bởi: <b>{{ currentTask.REVIEW_BY }}</b>
+                <span v-if="currentTask.REVIEW_NOTE" style="color: #CFD3DC; margin-left: 6px;">— "{{ currentTask.REVIEW_NOTE }}"</span>
+              </span>
             </div>
-            <el-button type="success" :size="buttonSize" @click="submitDetailReview('APPROVED')">
-              <i class="bi bi-check-lg me-1"></i> Duyệt (Approve)
-            </el-button>
-            <el-button type="danger" :size="buttonSize" @click="submitDetailReview('REJECTED')">
-              <i class="bi bi-x-lg me-1"></i> Từ Chối (Reject)
-            </el-button>
           </div>
-          <div class="review-bottom-actions">
-            <!-- Nút Upload File Excel trực tiếp trong Modal Dialog -->
-            <el-upload :show-file-list="false" :auto-upload="false" accept=".xlsx,.xlsm"
-              :on-change="(file) => handleUploadExcel(file, currentTask)"
-              :disabled="currentTask?.STATUS === 'RUNNING'" style="display: inline-block;">
-              <el-button :size="buttonSize" class="btn-upload-file" :loading="currentTask?.STATUS === 'RUNNING'">
-                <i v-if="currentTask?.STATUS !== 'RUNNING'" class="bi bi-cloud-arrow-up me-1"></i>
-                {{ currentTask?.STATUS === 'RUNNING' ? 'Đang chạy...' : 'Upload File Excel' }}
+
+          <!-- GRID 2 CỘT: CỘT TRÁI NGƯỜI DUYỆT (TÊN + KNOX ID), CỘT PHẢI GHI CHÚ -->
+          <div class="review-grid-inputs">
+            <div class="review-col-user">
+              <label class="review-field-label">👤 Người phê duyệt:</label>
+              <el-input :model-value="loginUserDisplay || 'Kỹ sư MEP'" readonly class="readonly-input">
+                <template #prefix>
+                  <i class="bi bi-person-badge text-success"></i>
+                </template>
+              </el-input>
+            </div>
+            <div class="review-col-note">
+              <label class="review-field-label">📝 Ghi chú phê duyệt / giải trình:</label>
+              <el-input 
+                v-model="detailReviewNote"
+                placeholder="Nhập ghi chú duyệt (VD: Lỗi số 2 đã đối soát hiện trường, nghiệm thu đạt...)" 
+                clearable 
+              />
+            </div>
+          </div>
+
+          <!-- 1 HÀNG NÚT BẤM DUY NHẤT: BÊN TRÁI PHÊ DUYỆT, BÊN PHẢI THAO TÁC FILE -->
+          <div class="review-actions-bar">
+            <!-- Cụm hành động chính (Duyệt / Từ chối) -->
+            <div class="review-main-btns">
+              <el-button type="success" :size="buttonSize" @click="submitDetailReview('APPROVED')">
+                <i class="bi bi-check-lg me-1"></i> Duyệt (Approve)
               </el-button>
-            </el-upload>
-            <el-button v-if="currentTask?.RESULT_LINK" :size="buttonSize" type="primary" plain
-              @click="handleDownloadFile(currentTask)">
-              <i class="bi bi-cloud-arrow-down me-1"></i> Tải Báo Cáo (.zip)
-            </el-button>
-            <el-button :size="buttonSize" class="btn-rerun" :loading="isRerunning || currentTask?.STATUS === 'RUNNING'" @click="handleRerun(currentTask)">
-              <i class="bi bi-arrow-clockwise me-1"></i> Chạy Lại AI (Rerun)
-            </el-button>
+              <el-button type="danger" :size="buttonSize" @click="submitDetailReview('REJECTED')">
+                <i class="bi bi-x-lg me-1"></i> Từ Chối (Reject)
+              </el-button>
+            </div>
+
             <div class="spacer"></div>
-            <el-button :size="buttonSize" @click="handleCloseDetailDialog">Đóng</el-button>
+
+            <!-- Cụm thao tác file & đóng -->
+            <div class="review-sub-btns">
+              <el-upload 
+                :show-file-list="false" 
+                :auto-upload="false" 
+                accept=".xlsx,.xlsm"
+                :on-change="(file) => handleUploadExcel(file, currentTask)" 
+                :disabled="currentTask?.STATUS === 'RUNNING'"
+                style="display: inline-block;"
+              >
+                <el-button :size="buttonSize" class="btn-upload-file" :loading="currentTask?.STATUS === 'RUNNING'">
+                  <i v-if="currentTask?.STATUS !== 'RUNNING'" class="bi bi-cloud-arrow-up me-1"></i>
+                  {{ currentTask?.STATUS === 'RUNNING' ? 'Đang chạy...' : 'Upload File Excel' }}
+                </el-button>
+              </el-upload>
+
+              <el-button 
+                v-if="currentTask?.RESULT_LINK" 
+                :size="buttonSize" 
+                type="primary" 
+                plain
+                @click="handleDownloadFile(currentTask)"
+              >
+                <i class="bi bi-cloud-arrow-down me-1"></i> Tải Báo Cáo (.zip)
+              </el-button>
+
+              <el-button 
+                :size="buttonSize" 
+                class="btn-rerun" 
+                :loading="isRerunning || currentTask?.STATUS === 'RUNNING'"
+                @click="handleRerun(currentTask)"
+              >
+                <i class="bi bi-arrow-clockwise me-1"></i> Chạy Lại AI
+              </el-button>
+
+              <el-button :size="buttonSize" @click="handleCloseDetailDialog">Đóng</el-button>
+            </div>
           </div>
         </div>
       </div>
@@ -570,14 +594,14 @@ const getUserInfo = () => {
     if (appStore?.getters && appStore.getters['authStore/userInfo']) {
       return appStore.getters['authStore/userInfo']
     }
-  } catch (e) {}
+  } catch (e) { }
 
   try {
     // 2. Lấy từ biến window.store toàn cục nếu nền tảng OneAI đưa ra window
     if (typeof window !== 'undefined' && window.store?.getters && window.store.getters['authStore/userInfo']) {
       return window.store.getters['authStore/userInfo']
     }
-  } catch (e) {}
+  } catch (e) { }
 
   try {
     // 3. Fallback: Lấy từ LocalStorage session của OneAI
@@ -585,15 +609,34 @@ const getUserInfo = () => {
     if (cached) {
       return JSON.parse(cached)
     }
-  } catch (e) {}
+  } catch (e) { }
 
   return null
 }
 
-// Knox ID / Tên tài khoản đang đăng nhập OneAI
-const loginUser = computed(() => {
-  return _userInfo.value?.knoxId || _userInfo.value?.userName || _userInfo.value?.userId || ''
+// Knox ID & Tên người dùng OneAI (Tách bạch giữa hiển thị UI và lưu Database)
+// 1. Tên hiển thị thân thiện trên UI (Ví dụ: "Nguyễn Văn Hùng")
+const loginUserName = computed(() => {
+  return _userInfo.value?.name || _userInfo.value?.knoxId || ''
 })
+
+// 2. Mã Knox ID dùng để lưu vào cột REVIEW_BY trong Database (Ví dụ: "vhung99.nguyen")
+const loginKnoxId = computed(() => {
+  return _userInfo.value?.knoxId || _userInfo.value?.userId || _userInfo.value?.userName || _userInfo.value?.name || ''
+})
+
+// 3. Chuỗi hiển thị đầy đủ kết hợp cả Tên và Knox ID (Ví dụ: "Nguyễn Văn Hùng (vhung99.nguyen)")
+const loginUserDisplay = computed(() => {
+  const name = _userInfo.value?.name
+  const knox = _userInfo.value?.knoxId
+  if (name && knox && name !== knox) {
+    return `${name} (${knox})`
+  }
+  return name || knox || ''
+})
+
+// Giữ lại loginUser tương thích cho các nhãn UI
+const loginUser = loginUserName
 
 // Bộ lọc
 const selectedStatus = ref('')
@@ -610,51 +653,57 @@ const activeKpiFilter = ref('ALL')
 
 // DANH MỤC PHÂN CẤP CỦA GROUP VÀ PART (CASCADING DROPDOWN)
 const groupOptions = [
-  { label: 'Group A (Khối Cơ Điện)', value: 'Group A' },
-  { label: 'Group B (Khối Cấp Thoát Nước & PCCC)', value: 'Group B' },
-  { label: 'Group C (Khối Điều Hòa Thông Gió)', value: 'Group C' }
+  { label: 'MES', value: 'MES Group' },
+  { label: 'Infra', value: 'Infra Group' },
+  { label: 'ESH', value: 'ESH Group' }
 ]
 
 const partMapping = {
-  'Group A': [
-    { label: 'Part 1: Cáp điện trung thế', value: 'Part 1' },
-    { label: 'Part 2: Cáp điện hạ thế', value: 'Part 2' },
-    { label: 'Part 3: Trạm biến áp & Tủ điện', value: 'Part 3' },
-    { label: 'Part 4: Thang máng cáp', value: 'Part 4' }
+  'MES Group': [
+    { label: 'MOS', value: 'MOS' },
+    { label: 'IT Governance', value: 'IT Governance' },
+    { label: 'Data Analysis', value: 'Data Analysis' },
+    { label: 'AI Transformation', value: 'AI Transformation' }
   ],
-  'Group B': [
-    { label: 'Part 5: Ống cấp nước PPR', value: 'Part 5' },
-    { label: 'Part 6: Ống thoát uPVC/HDPE', value: 'Part 6' },
-    { label: 'Part 7: Đầu phun Sprinkler PCCC', value: 'Part 7' },
-    { label: 'Part 8: Bơm cứu hỏa & Van PCCC', value: 'Part 8' }
+  'Infra Group': [
+    { label: 'Clean Room Technology', value: 'Clean Room Technology' },
+    { label: 'Infra Operation', value: 'Infra Operation' },
+    { label: 'Infra Technology', value: 'Infra Technology' },
+    { label: 'IRP', value: 'IRP' },
+    { label: 'Construction', value: 'Construction' }
   ],
-  'Group C': [
-    { label: 'Part 9: Ống gió & Miệng gió', value: 'Part 9' },
-    { label: 'Part 10: Máy lạnh VRV / Chiller', value: 'Part 10' },
-    { label: 'Part 11: Ống đồng & Bảo ôn', value: 'Part 11' }
+  'ESH Group': [
+    { label: 'Safety', value: 'Safety' },
+    { label: 'Disaster Prevention', value: 'Disaster Prevention' },
+    { label: 'Enviroment', value: 'Enviroment' },
+    { label: 'Health', value: 'Health' }
   ]
 }
 
 const defaultParts = [
-  { label: 'MEP (Mặc định)', value: 'MEP' },
-  { label: 'Part 1: Cáp điện trung thế', value: 'Part 1' },
-  { label: 'Part 2: Cáp điện hạ thế', value: 'Part 2' },
-  { label: 'Part 3: Trạm biến áp & Tủ điện', value: 'Part 3' },
-  { label: 'Part 4: Thang máng cáp', value: 'Part 4' },
-  { label: 'Part 5: Ống cấp nước PPR', value: 'Part 5' },
-  { label: 'Part 6: Ống thoát uPVC/HDPE', value: 'Part 6' },
-  { label: 'Part 7: Đầu phun Sprinkler PCCC', value: 'Part 7' },
-  { label: 'Part 8: Bơm cứu hỏa & Van PCCC', value: 'Part 8' },
-  { label: 'Part 9: Ống gió & Miệng gió', value: 'Part 9' },
-  { label: 'Part 10: Máy lạnh VRV / Chiller', value: 'Part 10' },
-  { label: 'Part 11: Ống đồng & Bảo ôn', value: 'Part 11' }
+  { label: 'MOS', value: 'MOS' },
+  { label: 'IT Governance', value: 'IT Governance' },
+  { label: 'Data Analysis', value: 'Data Analysis' },
+  { label: 'AI Transformation', value: 'AI Transformation' },
+  { label: 'Clean Room Technology', value: 'Clean Room Technology' },
+  { label: 'Infra Operation', value: 'Infra Operation' },
+  { label: 'Infra Technology', value: 'Infra Technology' },
+  { label: 'IRP', value: 'IRP' },
+  { label: 'Construction', value: 'Construction' },
+  { label: 'Safety', value: 'Safety' },
+  { label: 'Disaster Prevention', value: 'Disaster Prevention' },
+  { label: 'Enviroment', value: 'Enviroment' },
+  { label: 'Health', value: 'Health' }
 ]
 
 const getPartsByGroup = (groupName) => {
-  if (!groupName || !partMapping[groupName]) {
-    return defaultParts
-  }
-  return partMapping[groupName]
+  if (!groupName) return defaultParts
+  const key = String(groupName).trim()
+  if (partMapping[key]) return partMapping[key]
+  if (partMapping[`${key} Group`]) return partMapping[`${key} Group`]
+  const withoutGroup = key.replace(/ Group$/i, '')
+  if (partMapping[withoutGroup]) return partMapping[withoutGroup]
+  return defaultParts
 }
 
 const onGroupChange = (row) => {
@@ -1035,8 +1084,8 @@ const handleInsert = () => {
     TASK_NAME: '',
     PAYMENT_MONTH: selectedMonth.value || new Date().toISOString().slice(0, 7),
     PIC: loginUser.value || '',
-    GROUP_NAME: 'Group A',
-    PART_NAME: 'Part 1',
+    GROUP_NAME: 'Mes',
+    PART_NAME: 'AI Transformation',
     STATUS: 'WAITING',
     ERROR_COUNT: 0,
     isNew: true,
@@ -1274,21 +1323,23 @@ const handleUploadExcel = async (file, row) => {
   }
 }
 
-// 12. DUYỆT / TỪ CHỐI (REVIEW WORKFLOW - LƯU CHUẨN REVIEW_BY = KNOX_ID)
+// 12. DUYỆT / TỪ CHỐI (REVIEW WORKFLOW - LƯU CỘT REVIEW_BY BẰNG KNOX_ID)
 const handleReview = async (row, decision, note = '') => {
   try {
-    const reviewerName = loginUser.value || row.PIC || 'Engineer'
+    // Lưu vào Database bằng Knox ID (ví dụ: vhung99.nguyen), nếu chưa có Knox ID thì fallback sang PIC / Engineer
+    const reviewerKnoxId = loginKnoxId.value || row.PIC || 'Engineer'
     const reviewNote = note || row.REVIEW_NOTE || ''
     await axios.post(`${FASTAPI_BASE_URL}/mep_payment/review`, {
       keyid: row.KEYID,
       decision: decision,
       note: reviewNote,
-      reviewer: reviewerName
+      reviewer: reviewerKnoxId
     })
     row.REVIEW_DECISION = decision
-    row.REVIEW_BY = reviewerName
+    row.REVIEW_BY = reviewerKnoxId
     if (reviewNote) row.REVIEW_NOTE = reviewNote
-    ElMessage.success(`Đã lưu quyết định: ${decision} (Người duyệt: ${reviewerName})`)
+    const displayName = loginUserName.value ? `${loginUserName.value} (${reviewerKnoxId})` : reviewerKnoxId
+    ElMessage.success(`Đã lưu quyết định: ${decision} (Người duyệt: ${displayName})`)
   } catch (err) {
     ElMessage.error("Lỗi lưu quyết định duyệt: " + err.message)
   }
