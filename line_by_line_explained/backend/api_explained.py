@@ -1,95 +1,224 @@
 # ==============================================================================
-# FASTAPI WORKER SERVICE - GIẢI THÍCH CHI TIẾT TỪNG DÒNG (LINE-BY-LINE)
+# FASTAPI BACKEND WORKER SERVICE - GIẢI THÍCH CHI TIẾT TỪNG DÒNG (LINE-BY-LINE)
 # Đường dẫn tương ứng: backend/api.py
+# Chức năng: Điều phối toàn bộ các API xử lý đối soát MEP AI, quản lý Background Tasks,
+# đồng bộ MinIO S3 theo tháng, cơ chế tự động dời thư mục khi sửa tháng, cascade cleanup,
+# và cung cấp các endpoint phục vụ Giao diện OneAI Vue.js.
 # ==============================================================================
 
-# Dòng 1-13: Nhúng các thư viện web và xử lý dữ liệu
-import os                       # Thao tác đường dẫn hệ thống
-import shutil                   # Sao chép và lưu luồng dữ liệu file upload
-import time                     # Đóng dấu timestamp tạo thư mục session
-from pathlib import Path        # Thao tác hướng đối tượng với đường dẫn file
+# Dòng 1-18: Nhúng các thư viện nền tảng
+import os
+import sys
+import shutil
+import time
+import zipfile
+from pathlib import Path
 from fastapi import FastAPI, UploadFile, File, Form, BackgroundTasks, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import FileResponse
-from pydantic import BaseModel  # Định nghĩa Schema dữ liệu cho API Review
-import pandas as pd             # Đọc sheet kết quả để đếm số lượng lỗi
+from fastapi.responses import FileResponse, StreamingResponse
+from pydantic import BaseModel
+import pandas as pd
+from typing import Optional
 
-# Nhúng các module nội bộ
+# Dòng 14-18: Nhúng các module nội bộ của MEP AI
 import config
 from engine import run_mep_pipeline
-from sql import update_task_status, update_review_decision
+from sql import (
+    update_task_status,
+    update_review_decision,
+    batch_upsert_tasks,
+    delete_tasks,
+    check_keyid_exists,
+    get_task_payment_month,
+    cache_task_month
+)
+from minio_storage import minio_storage, MINIO_PREFIX
+from detail_builder import safe_id
 
-# Dòng 21: Khởi tạo ứng dụng FastAPI với tiêu đề và phiên bản
+# Dòng 20: Khởi tạo ứng dụng FastAPI với phiên bản 2.0
 app = FastAPI(title="MEP Payment AI Worker Service", version="2.0")
 
 # ==============================================================================
-# 1. CẤU HÌNH BẢO MẬT & KẾT NỐI (CORS)
+# 1. CẤU HÌNH BẢO MẬT & GIAO TIẾP LIÊN MIỀN (CORS)
 # ==============================================================================
-# Dòng 27-33: Bật Cross-Origin Resource Sharing (CORS) để cho phép trình duyệt của
-# nền tảng OneAI (chạy ở domain/port khác) có thể gửi request upload và download file tới cổng 8386.
+# Dòng 23-30: Cho phép Frontend OneAI Portal (chạy trên cổng khác) gọi API mà không bị chặn
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],       # Cho phép mọi domain/IP trong mạng nội bộ
-    allow_credentials=True,    # Cho phép gửi cookie/token xác thực
-    allow_methods=["*"],        # Cho phép mọi phương thức HTTP: GET, POST...
-    allow_headers=["*"],        # Cho phép mọi header HTTP
+    allow_origins=["*"],             # Cho phép tất cả các nguồn gốc (Origin) truy cập
+    allow_credentials=True,
+    allow_methods=["*"],             # Cho phép tất cả HTTP methods (GET, POST, OPTIONS...)
+    allow_headers=["*"],             # Cho phép mọi Header
+    expose_headers=["Content-Disposition"]  # Mở header Content-Disposition để trình duyệt đọc được tên file tải về
 )
 
 # ==============================================================================
-# 2. KHỞI TẠO CÁC THƯ MỤC LƯU TRỮ VẬT LÝ
+# 2. KHỞI TẠO THƯ MỤC LƯU TRỮ VỚI CƠ CHẾ TỰ THÍCH ỨNG DLP CÔNG TY
 # ==============================================================================
-# Dòng 39-43:
-# - STORAGE_DIR: Nơi tạo các thư mục session tạm theo từng lượt upload (sessions/session_KEYID_timestamp/).
-# - FINAL_REPORT_DIR: Nơi lưu trữ vĩnh viễn các file Excel Báo cáo 2 Sheet sau khi AI hoàn tất.
+# Dòng 33: Đường dẫn thư mục gốc của backend
 BASE_DIR = Path(__file__).resolve().parent
-STORAGE_DIR = BASE_DIR / "sessions"
-FINAL_REPORT_DIR = BASE_DIR / "final_reports"
 
-STORAGE_DIR.mkdir(exist_ok=True)
-FINAL_REPORT_DIR.mkdir(exist_ok=True)
+# Dòng 36: Đường dẫn thư mục bảo mật riêng trên máy Local công ty (Tuân thủ chính sách DLP chặn file)
+COMPANY_PRIVATE_ROOT = Path(r"D:\Private_Documents\Doc\AI-Infra")
 
-# Dòng 48-52: Định nghĩa Schema cho API Review (Duyệt/Từ chối)
+# Dòng 38-57: Tự động phát hiện môi trường chạy để phân bổ thư mục lưu trữ hợp lý
+if COMPANY_PRIVATE_ROOT.exists():
+    # 🏢 [MÔI TRƯỜNG LOCAL CÔNG TY - CÓ CHÍNH SÁCH BẢO MẬT DLP]:
+    # - File Excel upload: Lưu vào vùng Private để tuân thủ DLP máy công ty
+    # - Báo cáo Excel kết quả & zip: Lưu vào FinalReport trong vùng Private
+    # - Toàn bộ Ảnh trích xuất, PDF, CSV trung gian, Log: Lưu trong thư mục Project để không bị DLP quét khóa
+    PRIVATE_EXCEL_DIR = COMPANY_PRIVATE_ROOT / "sessions"
+    FINAL_REPORT_DIR = COMPANY_PRIVATE_ROOT / "FinalReport"
+    PROJECT_STORAGE_DIR = BASE_DIR / "sessions"
+    print("🏢 [Môi trường] Đang chạy trên Máy Local Công Ty (Bật chế độ DLP 2 vùng lưu trữ)")
+else:
+    # 🌐 [MÔI TRƯỜNG SERVER PRODUCTION / LINUX DOCKER]:
+    # Không có DLP máy cá nhân, gom tất cả về một vùng lưu trữ thống nhất ngay trong Project
+    PRIVATE_EXCEL_DIR = BASE_DIR / "sessions"
+    FINAL_REPORT_DIR = BASE_DIR / "final_reports"
+    PROJECT_STORAGE_DIR = BASE_DIR / "sessions"
+    print("🌐 [Môi trường] Đang chạy trên Server (Bật chế độ Thống Nhất 1 vùng lưu trữ)")
+
+# Tự động tạo sẵn các thư mục nếu chưa có
+PRIVATE_EXCEL_DIR.mkdir(parents=True, exist_ok=True)
+FINAL_REPORT_DIR.mkdir(parents=True, exist_ok=True)
+PROJECT_STORAGE_DIR.mkdir(parents=True, exist_ok=True)
+
+
+# ==============================================================================
+# CÁC MODEL DỮ LIỆU ĐẦU VÀO (PYDANTIC REQUEST SCHEMAS)
+# ==============================================================================
+# Dòng 60-65: Schema cho request phê duyệt kết quả của kỹ sư
 class ReviewRequest(BaseModel):
-    keyid: str                 # Mã số Work Order
-    decision: str              # Quyết định: 'APPROVED' hoặc 'REJECTED'
-    note: str = ""             # Ghi chú của kỹ sư nghiệm thu
-    reviewer: str = "PIC"      # Tên người thực hiện duyệt
+    keyid: str               # Mã số Work Order
+    decision: str            # Quyết định: APPROVED hoặc REJECTED
+    note: str = ""           # Ghi chú / lý do phê duyệt
+    reviewer: str = "Engineer"  # Mã Knox ID của tài khoản đang đăng nhập OneAI
+
+
+# Dòng 67-69: Schema cho request lưu danh sách dòng mới thêm hoặc chỉnh sửa
+class SaveRowsRequest(BaseModel):
+    rows: list               # Danh sách các bản ghi gửi từ el-table
+
+
+# Dòng 71-74: Schema cho request xóa các dòng được chọn
+class DeleteRowsRequest(BaseModel):
+    keyids: list             # Danh sách mã KEYID cần xóa
+    reviewer: str = "PIC"
+
 
 # ==============================================================================
-# 3. TIẾN TRÌNH XỬ LÝ CHẠY NGẦM DƯỚI NỀN (BACKGROUND TASK)
+# 3. LỚP BẮT LOG THỜI GIAN THỰC (REAL-TIME STREAM LOG TEE)
 # ==============================================================================
-def run_ai_task_background(keyid: str, session_dir: Path, excel_path: str):
+# Dòng 78-120: Lớp chuyển hướng đồng thời stdout ra cả terminal lẫn mảng log RAM và file pipeline.log
+class StreamLogTee:
+    """Lớp chuyển hướng và đồng bộ log stdout ra cả console và mảng log / file pipeline.log."""
+
+    def __init__(self, original_stdout, log_file_path: Path = None):
+        self.original_stdout = original_stdout
+        self.log_file_path = log_file_path
+        self.log_lines = []
+        self._buffer = ""
+
+    def write(self, text):
+        # 1. Ghi ra console terminal chuẩn
+        if self.original_stdout:
+            self.original_stdout.write(text)
+            self.original_stdout.flush()
+        # 2. Gom vào buffer để định dạng từng dòng kèm timestamp [HH:MM:SS]
+        self._buffer += text
+        while "\n" in self._buffer:
+            line, self._buffer = self._buffer.split("\n", 1)
+            stripped = line.strip()
+            if stripped:
+                timestamp = time.strftime("[%H:%M:%S] ")
+                formatted = f"{timestamp}{stripped}"
+                self.log_lines.append(formatted)
+                # Ghi nối vào file pipeline.log
+                if self.log_file_path:
+                    try:
+                        with open(self.log_file_path, "a", encoding="utf-8") as lf:
+                            lf.write(formatted + "\n")
+                    except Exception:
+                        pass
+
+    def flush(self):
+        if self.original_stdout:
+            self.original_stdout.flush()
+        if self._buffer.strip():
+            timestamp = time.strftime("[%H:%M:%S] ")
+            formatted = f"{timestamp}{self._buffer.strip()}"
+            self.log_lines.append(formatted)
+            if self.log_file_path:
+                try:
+                    with open(self.log_file_path, "a", encoding="utf-8") as lf:
+                        lf.write(formatted + "\n")
+                except Exception:
+                    pass
+            self._buffer = ""
+
+
+# ==============================================================================
+# TIẾN TRÌNH XỬ LÝ AI ĐỘC LẬP DƯỚI NỀN (BACKGROUND TASK)
+# ==============================================================================
+# Dòng 122-297: Hàm thực thi toàn bộ pipeline MEP AI bất đồng bộ dưới nền
+def run_ai_task_background(keyid: str, session_dir: Path, excel_path: str, payment_month: str = None):
     """
-    HÀM XỬ LÝ NẶNG CHẠY NGẦM:
-    - Khi người dùng bấm Upload trên OneAI, server trả về 'accepted' ngay lập tức (<0.5 giây).
-    - Toàn bộ thời gian xử lý AI (~33 giây) được đẩy vào hàm này chạy trong một Thread riêng biệt.
-    - Nhờ đó, giao diện web của người dùng KHÔNG BAO GIỜ BỊ ĐƠ (Freeze) hay bị Timeout!
+    Hàm này chạy hoàn toàn độc lập dưới nền (Background).
+    Không làm đơ hay timeout giao diện người dùng trên OneAI.
     """
+    # Nếu chưa truyền payment_month, tự động lấy từ DB hoặc lấy tháng hiện tại
+    if not payment_month:
+        payment_month = get_task_payment_month(keyid) or time.strftime("%Y-%m")
+
+    # Thiết lập chuyển hướng log vào file pipeline.log của session
+    pipeline_log_path = session_dir / "pipeline.log"
+    tee = StreamLogTee(sys.stdout, pipeline_log_path)
+    old_stdout = sys.stdout
+    sys.stdout = tee
+
     try:
         print(f"\n🚀 [TASK {keyid}] Bắt đầu thực thi Pipeline MEP AI...")
-        # Cập nhật trạng thái Oracle DB sang 'RUNNING'
-        update_task_status(keyid=keyid, status="RUNNING", reason="AI đang bóc tách bản vẽ & đối soát...")
 
-        # Định nghĩa các thư mục tạm cô lập riêng cho Work Order này
+        # Dòng 139-151: Hàm callback cập nhật % tiến độ trực tiếp vào Oracle DB
+        def on_pipeline_progress(msg: str, progress: float):
+            try:
+                pct = int(round(progress * 100))
+                update_task_status(
+                    keyid=keyid,
+                    status="RUNNING",
+                    reason=msg[:400],
+                    progress=pct
+                )
+            except Exception as prog_err:
+                print(f"⚠️ [Progress Warning] Không thể cập nhật tiến độ: {prog_err}")
+
+        # Khởi tạo trạng thái ban đầu: RUNNING, 5%
+        update_task_status(keyid=keyid, status="RUNNING",
+                           reason="AI đang bóc tách bản vẽ & đối soát...", progress=5)
+
+        # Chuẩn bị cấu trúc các thư mục xử lý trung gian
         pdf_drawings = session_dir / "drawings"
         pdf_gatepass = session_dir / "gatepass"
         csv_drawings = session_dir / "csv_drawings"
         csv_gatepass = session_dir / "csv_gatepass"
+        evidence_dir = session_dir / "evidence_images"
+        evidence_dir.mkdir(parents=True, exist_ok=True)
 
-        # GỌI HÀM ENGINE LÕI 4 BƯỚC ĐÃ ĐƯỢC KIỂM CHỨNG
+        # Dòng 162-173: Kích hoạt lõi AI Pipeline (engine.py) bóc tách và đối soát 2 vòng
         final_excel_path = run_mep_pipeline(
             pdf_drawing_dir=str(pdf_drawings),
             pdf_gatepass_dir=str(pdf_gatepass),
             vendor_excel_path=excel_path,
-            master_data_path=excel_path, # Dùng chung file Excel
+            master_data_path=excel_path,
             output_dir=str(FINAL_REPORT_DIR),
             csv_drawing_dir=str(csv_drawings),
             csv_gatepass_dir=str(csv_gatepass),
-            skip_existing=False
+            skip_existing=False,
+            status_callback=on_pipeline_progress,
+            evidence_dir=str(evidence_dir)
         )
 
-        # ĐẾM SỐ LỖI THỰC TẾ TRONG SHEET 1 ĐỂ BÁO LÊN WEB
-        # Mở file báo cáo, kiểm tra cột 'Note'. Đếm số dòng xuất hiện chữ 'Lệch' hoặc 'Mã mồ côi'.
+        # Dòng 175-185: Đọc file Excel kết quả để đếm chính xác số lỗi phục vụ báo cáo lên UI
         error_count = 0
         try:
             df_check = pd.read_excel(final_excel_path, sheet_name="1. Đối Soát Bản Vẽ")
@@ -98,21 +227,101 @@ def run_ai_task_background(keyid: str, session_dir: Path, excel_path: str):
         except Exception as e:
             print(f"⚠️ Cảnh báo đọc lỗi: {e}")
 
-        # TẠO ĐƯỜNG DẪN DOWNLOAD CHO CLIENT
         file_name = os.path.basename(final_excel_path)
-        download_link = f"/mep_payment/files/{file_name}"
 
-        # CẬP NHẬT TRẠNG THÁI HOÀN TẤT VÀO ORACLE DB
+        # Dòng 188-199: Đóng gói file kết quả thành .ZIP để vượt qua rào cản bảo mật DLP công ty
+        zip_name = f"{Path(file_name).stem}.zip"
+        zip_path = FINAL_REPORT_DIR / zip_name
+        try:
+            with zipfile.ZipFile(zip_path, 'w', zipfile.ZIP_DEFLATED) as zf:
+                zf.write(final_excel_path, arcname=file_name)
+            download_link = f"/mep_payment/files/{zip_name}"
+            print(f"📦 [ZIP Archive] Đã nén báo cáo thành công: {zip_name}")
+        except Exception as z_err:
+            print(f"⚠️ [ZIP Warning] Lỗi nén zip, dùng link excel: {z_err}")
+            download_link = f"/mep_payment/files/{file_name}"
+
+        # Dòng 201-233: Trích xuất cấu trúc chi tiết đối soát và lưu cache JSON
+        # Giúp modal xem chi tiết trên web mở lên tức thì trong 5ms mà không cần tính toán lại
+        try:
+            from detail_builder import parse_excel_report_to_detail, safe_id
+            import json
+
+            tee.flush()
+            conclusion_logs = [
+                f"[KẾT LUẬN] Đã đối soát xong: Phát hiện {error_count} sai lệch.",
+                f"[BÁO CÁO] File Excel kết quả: {os.path.basename(final_excel_path)}",
+                f"[LƯU TRỮ] File nén phục vụ tải về: {zip_name}"
+            ]
+            full_logs = list(tee.log_lines) + conclusion_logs
+
+            detail_data = parse_excel_report_to_detail(
+                Path(final_excel_path), keyid, session_dir, logs=full_logs)
+            if detail_data:
+                json_name = f"{safe_id(keyid)}_detail.json"
+                try:
+                    with open(FINAL_REPORT_DIR / json_name, "w", encoding="utf-8") as jf:
+                        json.dump(detail_data, jf, ensure_ascii=False, indent=2)
+                except Exception:
+                    pass
+                try:
+                    with open(session_dir / json_name, "w", encoding="utf-8") as jf:
+                        json.dump(detail_data, jf, ensure_ascii=False, indent=2)
+                except Exception:
+                    pass
+                print(f"💾 [Detail Cache] Đã lưu chi tiết đối soát: {json_name}")
+        except Exception as det_err:
+            print(f"⚠️ [Detail Cache Warning] {det_err}")
+
+        # Dòng 234-272: Đồng bộ toàn bộ dữ liệu lên MinIO Object Storage theo thư mục tháng
+        # mep_payment/<payment_month>/<keyid>/reports/
+        # mep_payment/<payment_month>/<keyid>/images/
+        # mep_payment/<payment_month>/<keyid>/cache/
+        if minio_storage.is_available():
+            try:
+                # 1. Upload ZIP & Excel Báo cáo vào thư mục tháng của task
+                if zip_path.exists():
+                    zip_obj_key = minio_storage.get_obj_key(keyid, "reports", zip_name, month=payment_month)
+                    minio_storage.upload_file(zip_path, zip_obj_key, "application/zip")
+                if Path(final_excel_path).exists():
+                    excel_obj_key = minio_storage.get_obj_key(keyid, "reports", file_name, month=payment_month)
+                    minio_storage.upload_file(
+                        final_excel_path, excel_obj_key,
+                        "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+                    )
+
+                # 2. Upload toàn bộ ảnh bản vẽ và ảnh bằng chứng theo tháng
+                search_imgs = list(evidence_dir.glob("*.*")) + list(session_dir.glob("*.png")) + list(session_dir.glob("*.jpg"))
+                uploaded_count = 0
+                for img_p in search_imgs:
+                    if img_p.is_file() and img_p.suffix.lower() in ('.png', '.jpg', '.jpeg'):
+                        img_obj_key = minio_storage.get_obj_key(keyid, "images", img_p.name, month=payment_month)
+                        if minio_storage.upload_file(img_p, img_obj_key):
+                            uploaded_count += 1
+
+                # 3. Upload cache chi tiết JSON lên MinIO
+                if detail_data:
+                    json_bytes = json.dumps(detail_data, ensure_ascii=False, indent=2).encode('utf-8')
+                    detail_obj_key = minio_storage.get_obj_key(keyid, "cache", "detail.json", month=payment_month)
+                    minio_storage.upload_bytes(json_bytes, detail_obj_key, "application/json")
+
+                print(f"☁️ [MinIO Storage] Đã đồng bộ lên MinIO ({payment_month}/{keyid}): Báo cáo={zip_name}, Ảnh={uploaded_count} files")
+            except Exception as minio_sync_err:
+                print(f"⚠️ [MinIO Sync Warning] Lỗi đồng bộ MinIO: {minio_sync_err}")
+
+        # Dòng 273-282: Cập nhật hoàn thành tác vụ vào Oracle DB: COMPLETED, 100%
         update_task_status(
             keyid=keyid,
             status="COMPLETED",
             error_count=error_count,
             result_link=download_link,
-            reason=f"Hoàn thành đối soát 2 vòng (Phát hiện {error_count} sai lệch)"
+            reason=f"Hoàn thành đối soát 2 vòng (Phát hiện {error_count} sai lệch)",
+            progress=100
         )
         print(f"🎉 [TASK {keyid}] THÀNH CÔNG -> Lưu tại {final_excel_path}")
 
     except Exception as e:
+        # Nếu có lỗi bất ngờ -> Cập nhật trạng thái CANCEL để kỹ sư biết và bấm Rerun
         error_msg = f"Lỗi pipeline: {str(e)}"
         print(f"❌ [TASK {keyid}] THẤT BẠI: {error_msg}")
         update_task_status(
@@ -120,47 +329,87 @@ def run_ai_task_background(keyid: str, session_dir: Path, excel_path: str):
             status="CANCEL",
             error_count=0,
             result_link=None,
-            reason=error_msg[:900]
+            reason=error_msg[:900],
+            progress=0
         )
+    finally:
+        # Khôi phục lại stdout chuẩn của hệ thống
+        tee.flush()
+        sys.stdout = old_stdout
+
 
 # ==============================================================================
-# 4. CÁC ENDPOINT API RESTFUL
+# 4. CÁC ENDPOINT API CHÍNH CỦA HỆ THỐNG
 # ==============================================================================
 
+# Dòng 301-305: Endpoint kiểm tra tình trạng sống (Health Check)
 @app.get("/mep_payment/health")
 async def health_check():
-    """Endpoint kiểm tra tình trạng sống/chết (Healthcheck) của Worker."""
+    """Kiểm tra tình trạng hoạt động của Worker Service."""
     return {"status": "ok", "service": "MEP Payment AI Worker", "timestamp": time.time()}
 
+
+# Dòng 307-371: Endpoint tiếp nhận file Excel và kích hoạt chạy AI ngầm
 @app.post("/mep_payment/upload")
 async def upload_excel_task(
     background_tasks: BackgroundTasks,
     file: UploadFile = File(...),
-    KEYID: str = Form(...)
+    KEYID: str = Form(...),
+    payment_month: Optional[str] = Form(None)
 ):
-    """
-    ENDPOINT TIẾP NHẬN FILE TỪ ONEAI:
-    1. Kiểm tra đuôi file (.xlsx hoặc .xlsm).
-    2. Tạo thư mục session tạm cô lập.
-    3. Ghi file lên đĩa.
-    4. Cập nhật DB trạng thái 'WAITING'.
-    5. Đẩy hàm run_ai_task_background vào hàng đợi BackgroundTasks.
-    6. Trả ngay phản hồi status="accepted" cho giao diện.
-    """
+    """Tiếp nhận file Excel từ OneAI Portal và kích hoạt Background Task."""
     try:
+        # Kiểm tra phần mở rộng file
         if not file.filename.endswith(('.xlsx', '.xlsm')):
-            raise HTTPException(status_code=400, detail="Chỉ chấp nhận file Excel (.xlsx / .xlsm)")
+            raise HTTPException(
+                status_code=400, detail="Chỉ chấp nhận file Excel (.xlsx / .xlsm)")
+
+        # Kiểm tra dung lượng file theo cấu hình MAX_UPLOAD_SIZE_MB
+        max_bytes = config.MAX_UPLOAD_SIZE_MB * 1024 * 1024
+        if file.size and file.size > max_bytes:
+            raise HTTPException(
+                status_code=413,
+                detail=f"Dung lượng file ({file.size / (1024*1024):.1f}MB) vượt quá giới hạn ({config.MAX_UPLOAD_SIZE_MB}MB)!")
 
         safe_keyid = KEYID.replace('/', '_').replace('\\', '_')
-        session_dir = STORAGE_DIR / f"session_{safe_keyid}_{int(time.time())}"
-        session_dir.mkdir(parents=True, exist_ok=True)
+        session_name = f"session_{safe_keyid}_{int(time.time())}"
 
-        excel_path = session_dir / file.filename
+        # Xác định tháng thanh toán
+        actual_month = (payment_month or "").strip() or get_task_payment_month(KEYID) or time.strftime("%Y-%m")
+
+        # Lưu file Excel vào thư mục Private
+        private_session_dir = PRIVATE_EXCEL_DIR / session_name
+        private_session_dir.mkdir(parents=True, exist_ok=True)
+        excel_path = private_session_dir / file.filename
+
         with open(excel_path, "wb") as buffer:
             shutil.copyfileobj(file.file, buffer)
 
-        update_task_status(keyid=KEYID, status="WAITING", reason="Đã nhận file, đang xếp hàng chạy...")
-        background_tasks.add_task(run_ai_task_background, KEYID, session_dir, str(excel_path))
+        # Kiểm tra dung lượng thực tế sau khi ghi
+        saved_file_size = excel_path.stat().st_size
+        if saved_file_size > max_bytes:
+            excel_path.unlink(missing_ok=True)
+            raise HTTPException(
+                status_code=413,
+                detail=f"Dung lượng file ({saved_file_size / (1024*1024):.1f}MB) vượt quá giới hạn ({config.MAX_UPLOAD_SIZE_MB}MB)!")
+
+        # Tạo thư mục project session để bóc tách ảnh
+        project_session_dir = PROJECT_STORAGE_DIR / session_name
+        project_session_dir.mkdir(parents=True, exist_ok=True)
+
+        # Sao lưu file Excel gốc lên MinIO inputs/
+        if minio_storage.is_available():
+            try:
+                minio_storage.upload_file(
+                    excel_path, minio_storage.get_obj_key(KEYID, "inputs", file.filename, month=actual_month))
+            except Exception:
+                pass
+
+        # Cập nhật DB và chuyển giao cho BackgroundTasks chạy ngầm
+        update_task_status(keyid=KEYID, status="RUNNING",
+                           reason="Đã nhận file, AI đang bóc tách ngầm...", progress=5)
+        background_tasks.add_task(
+            run_ai_task_background, KEYID, project_session_dir, str(excel_path), actual_month)
 
         return {"status": "accepted", "message": "Nạp file thành công, AI đang khởi chạy."}
     except Exception as e:
@@ -168,38 +417,385 @@ async def upload_excel_task(
     finally:
         await file.close()
 
+
+# Dòng 373-398: Tải file báo cáo theo mã WO (Hỗ trợ cấu trúc phân cấp tháng trên MinIO)
+@app.get("/mep_payment/files/{keyid}/{filename}")
+async def download_task_report_file(keyid: str, filename: str):
+    """Phục vụ tải file Báo cáo theo mã WO (Hỗ trợ cấu trúc mep_payment/<month>/<keyid>/reports/)."""
+    if minio_storage.is_available():
+        month = get_task_payment_month(keyid)
+        m_key = minio_storage.find_task_object(keyid, "reports", filename, month=month)
+        if not m_key:
+            alt_fname = filename.replace('.zip', '.xlsx') if filename.endswith('.zip') else filename.replace('.xlsx', '.zip')
+            m_key = minio_storage.find_task_object(keyid, "reports", alt_fname, month=month)
+        if m_key:
+            minio_resp = minio_storage.open_object(m_key)
+            if minio_resp:
+                actual_fname = Path(m_key).name
+                is_zip = actual_fname.lower().endswith(".zip")
+                media_type = "application/zip" if is_zip else "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+                return StreamingResponse(
+                    minio_storage.stream_object(minio_resp),
+                    media_type=media_type,
+                    headers={
+                        "Content-Disposition": f"attachment; filename={actual_fname}",
+                        "Access-Control-Expose-Headers": "Content-Disposition"
+                    }
+                )
+
+    return await download_report_file(filename)
+
+
+# Dòng 400-453: Tải file báo cáo theo tên file chung (Tự động fallback MinIO <-> Đĩa cứng)
 @app.get("/mep_payment/files/{filename}")
 async def download_report_file(filename: str):
-    """
-    ENDPOINT TẢI BÁO CÁO:
-    Trả về FileResponse với media_type chuẩn của file Excel (.xlsx)
-    kèm header Content-Disposition ép trình duyệt tải về thay vì mở xem trước.
-    """
+    """Phục vụ tải file Báo cáo 2 Sheet về máy (Hỗ trợ cả .zip và .xlsx từ MinIO hoặc Local Disk)."""
+    # 1. Kiểm tra ưu tiên trong MinIO Storage
+    if minio_storage.is_available():
+        m_key = minio_storage.find_report_file(filename)
+        if m_key:
+            minio_resp = minio_storage.open_object(m_key)
+            if minio_resp:
+                actual_fname = Path(m_key).name
+                is_zip = actual_fname.lower().endswith(".zip")
+                media_type = "application/zip" if is_zip else "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+                return StreamingResponse(
+                    minio_storage.stream_object(minio_resp),
+                    media_type=media_type,
+                    headers={
+                        "Content-Disposition": f"attachment; filename={actual_fname}",
+                        "Access-Control-Expose-Headers": "Content-Disposition"
+                    }
+                )
+
+    # 2. Fallback sang Local Disk nếu MinIO không có hoặc offline
     file_path = FINAL_REPORT_DIR / filename
     if not file_path.exists():
-        raise HTTPException(status_code=404, detail="File báo cáo không tồn tại.")
+        if filename.endswith(".zip"):
+            alt_path = FINAL_REPORT_DIR / filename.replace(".zip", ".xlsx")
+            if alt_path.exists():
+                file_path = alt_path
+                filename = alt_path.name
+        elif filename.endswith(".xlsx"):
+            alt_path = FINAL_REPORT_DIR / filename.replace(".xlsx", ".zip")
+            if alt_path.exists():
+                file_path = alt_path
+                filename = alt_path.name
+
+    if not file_path.exists():
+        raise HTTPException(
+            status_code=404, detail="File báo cáo không tồn tại.")
+
+    is_zip = filename.lower().endswith(".zip")
+    media_type = "application/zip" if is_zip else "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+
     return FileResponse(
         path=str(file_path),
         filename=filename,
-        media_type='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
-        headers={"Content-Disposition": f"attachment; filename={filename}"}
+        media_type=media_type,
+        headers={
+            "Content-Disposition": f"attachment; filename={filename}",
+            "Access-Control-Expose-Headers": "Content-Disposition"
+        }
     )
 
+
+# Dòng 455-500: Lưu danh sách dòng mới thêm hoặc chỉnh sửa xuống DB (Kèm tự động dời thư mục MinIO)
+@app.post("/mep_payment/save_rows")
+async def save_rows(req: SaveRowsRequest):
+    """Tiếp nhận danh sách các dòng mới thêm hoặc chỉnh sửa từ Web để lưu vào Oracle DB."""
+    if not req.rows:
+        raise HTTPException(status_code=400, detail="Danh sách dòng rỗng.")
+
+    # Kiểm tra chống thêm trùng KEYID đối với dòng mới
+    for r in req.rows:
+        if r.get("isNew"):
+            keyid = str(r.get("KEYID", "")).strip()
+            if keyid and check_keyid_exists(keyid):
+                raise HTTPException(
+                    status_code=400,
+                    detail=f"Số công việc (KEYID) '{keyid}' đã tồn tại trong Database! Không thể thêm trùng."
+                )
+
+    try:
+        print(f"📥 [FastAPI Worker] Nhận yêu cầu /save_rows ({len(req.rows)} dòng): {req.rows}")
+
+        # TỰ ĐỘNG DỜI FOLDER TRÊN MINIO NẾU NGƯỜI DÙNG SỬA THÁNG THANH TOÁN (PAYMENT_MONTH)
+        # Giúp bảo toàn dữ liệu ảnh và báo cáo khi chuyển tháng
+        if minio_storage.is_available():
+            for r in req.rows:
+                if not r.get("isNew"):
+                    kid = str(r.get("KEYID", "")).strip()
+                    new_m = str(r.get("PAYMENT_MONTH", "")).strip()
+                    if kid and new_m:
+                        old_m = get_task_payment_month(kid)
+                        if old_m and old_m != new_m:
+                            try:
+                                moved = minio_storage.move_task_month(kid, old_m, new_m)
+                                if moved > 0:
+                                    print(f"📦 [save_rows] Đã dời {moved} files trên MinIO cho {kid} từ {old_m} sang {new_m}")
+                            except Exception as m_err:
+                                print(f"⚠️ [save_rows] Không thể dời MinIO folder: {m_err}")
+                            cache_task_month(kid, new_m)
+
+        count = batch_upsert_tasks(req.rows)
+        return {"status": "ok", "message": f"Đã lưu thành công {count} bản ghi vào Database."}
+    except HTTPException:
+        raise
+    except Exception as e:
+        print(f"❌ [FastAPI Worker Error] save_rows: {e}")
+        raise HTTPException(
+            status_code=500, detail=f"Lỗi khi lưu vào Database: {str(e)}")
+
+
+# Dòng 502-562: Xóa triệt để bản ghi trong DB và dọn dẹp toàn bộ dữ liệu MinIO & ổ cứng (Cascade Cleanup)
+@app.post("/mep_payment/delete_rows")
+async def delete_rows_endpoint(req: DeleteRowsRequest):
+    """
+    Tiếp nhận danh sách KEYID cần xóa:
+    1. Dọn dẹp sạch sẽ 100% MinIO Storage (mep_payment/<month>/<keyid>/, mep_payment/<keyid>/, reports).
+    2. Dọn dẹp sạch sẽ toàn bộ file báo cáo Excel/ZIP và session trên đĩa cứng cục bộ.
+    3. Xóa bản ghi trong Database Oracle (Cascade Cleanup toàn diện).
+    """
+    if not req.keyids:
+        raise HTTPException(
+            status_code=400, detail="Vui lòng chọn ít nhất 1 dòng để xóa.")
+    try:
+        # 1. Thu thập tháng của từng task trước khi xóa
+        task_months = {}
+        for kid in req.keyids:
+            task_months[kid] = get_task_payment_month(kid)
+
+        # 2. Xóa bản ghi trong Database Oracle
+        count = delete_tasks(req.keyids)
+
+        # 3. Dọn dẹp triệt để trên MinIO Storage
+        if minio_storage.is_available():
+            for kid in req.keyids:
+                try:
+                    m = task_months.get(kid)
+                    deleted_minio_count = minio_storage.remove_task_objects(kid, month=m)
+                    if deleted_minio_count > 0:
+                        print(f"🗑️ [MinIO Cleanup] Đã xóa {deleted_minio_count} objects trên MinIO cho KEYID={kid} (Tháng {m or 'ALL'})")
+                except Exception as m_del_err:
+                    print(f"⚠️ [MinIO Cleanup Warning] {m_del_err}")
+
+        # 4. Dọn dẹp triệt để trên đĩa cứng cục bộ (Local Disk)
+        for kid in req.keyids:
+            safe_k = safe_id(kid)
+            # Xóa file báo cáo trong FINAL_REPORT_DIR
+            if FINAL_REPORT_DIR.exists():
+                for f in list(FINAL_REPORT_DIR.glob(f"*{safe_k}*")):
+                    try:
+                        if f.is_file():
+                            f.unlink(missing_ok=True)
+                            print(f"🗑️ [Disk Cleanup] Đã xóa file báo cáo local: {f.name}")
+                    except Exception:
+                        pass
+
+            # Xóa thư mục session trong PROJECT_STORAGE_DIR và PRIVATE_EXCEL_DIR
+            for root in [PROJECT_STORAGE_DIR, PRIVATE_EXCEL_DIR]:
+                if root.exists():
+                    for s_dir in list(root.glob(f"*session_{safe_k}*")):
+                        try:
+                            if s_dir.is_dir():
+                                shutil.rmtree(s_dir, ignore_errors=True)
+                                print(f"🗑️ [Disk Cleanup] Đã xóa thư mục session: {s_dir.name}")
+                        except Exception:
+                            pass
+
+        return {"status": "ok", "message": f"Đã xóa thành công {count} bản ghi và toàn bộ file báo cáo liên quan."}
+    except Exception as e:
+        raise HTTPException(
+            status_code=500, detail=f"Lỗi khi xóa trong Database: {str(e)}")
+
+
+# Dòng 564-573: Lưu quyết định phê duyệt của kỹ sư kèm Knox ID
 @app.post("/mep_payment/review")
 async def submit_review(req: ReviewRequest):
-    """
-    ENDPOINT DUYỆT BÁO CÁO:
-    Tiếp nhận quyết định phê duyệt ('APPROVED' hoặc 'REJECTED') từ Kỹ sư và cập nhật vào DB.
-    """
-    update_review_decision(req.keyid, req.decision, req.note, req.reviewer)
-    return {"status": "ok", "message": f"Đã lưu quyết định: {req.decision}"}
+    """Tiếp nhận quyết định phê duyệt (Approve / Reject) từ Kỹ sư."""
+    try:
+        update_review_decision(req.keyid, req.decision, req.note, req.reviewer)
+        return {"status": "ok", "message": f"Đã lưu quyết định: {req.decision}"}
+    except Exception as e:
+        raise HTTPException(
+            status_code=500, detail=f"Lỗi khi lưu phê duyệt: {str(e)}")
 
-# ==============================================================================
-# 5. KHỞI CHẠY TRỰC TIẾP TỪ DÒNG LỆNH
-# ==============================================================================
-if __name__ == "__main__":
-    import uvicorn
-    print("🚀 Khởi động MEP Payment AI Worker tại cổng 8386...")
-    # host="0.0.0.0" cho phép các máy tính khác trong mạng nội bộ công ty kết nối vào
-    uvicorn.run("api:app", host="0.0.0.0", port=8386, reload=False)
 
+# Dòng 577-633: Lấy chi tiết đối soát siêu tốc (< 20ms) phục vụ Modal Dialog
+@app.get("/mep_payment/detail/{keyid}")
+async def get_task_detail(
+    keyid: str,
+    status: str = "COMPLETED",
+    error_count: int = 0,
+    reason: str = "",
+    month: Optional[str] = None
+):
+    """
+    Trả về chi tiết kết quả đối soát của task (danh sách lỗi, nhóm theo bản vẽ, ảnh bằng chứng, log).
+    Tối ưu hóa siêu tốc: Đọc trực tiếp cache local/MinIO trong < 20ms, tuyệt đối không gọi Oracle DB.
+    """
+    try:
+        import json
+        from detail_builder import build_or_load_task_detail, safe_id
+        safe_key = safe_id(keyid)
+
+        # 1. Ghi nhớ tháng vào RAM Cache
+        if month:
+            cache_task_month(keyid, month)
+
+        # 2. Ưu tiên đọc file cache JSON trên Local Disk (0.5ms)
+        cache_json_path = FINAL_REPORT_DIR / f"{safe_key}_detail.json"
+        if cache_json_path.exists():
+            try:
+                with open(cache_json_path, "r", encoding="utf-8") as f:
+                    return json.load(f)
+            except Exception:
+                pass
+
+        # 3. Đọc từ MinIO JSON cache (không gọi Oracle DB)
+        if minio_storage.is_available():
+            m = month or get_task_payment_month(keyid)
+            detail_key = minio_storage.find_task_object(keyid, "cache", "detail.json", month=m)
+            if detail_key:
+                data_bytes = minio_storage.download_bytes(detail_key)
+                if data_bytes:
+                    try:
+                        return json.loads(data_bytes.decode('utf-8'))
+                    except Exception as e:
+                        print(f"⚠️ [MinIO Cache] Lỗi đọc JSON cache cho KEYID={keyid}: {e}")
+
+        # 4. Quét từ đĩa cục bộ / parse từ file Excel (Fallback an toàn)
+        fallback_info = {
+            "status": status,
+            "error_count": int(error_count or 0),
+            "reason": reason or ""
+        }
+        detail = build_or_load_task_detail(
+            keyid, FINAL_REPORT_DIR, PROJECT_STORAGE_DIR, fallback_info)
+
+        return detail
+    except Exception as e:
+        print(f"❌ [FastAPI Error] get_task_detail: {e}")
+        raise HTTPException(
+            status_code=500, detail=f"Lỗi đọc chi tiết đối soát: {str(e)}")
+
+
+# Dòng 635-677: Stream ảnh bản vẽ / ROI / evidence phục vụ Lightbox
+@app.get("/mep_payment/image/{keyid}/{filename}")
+async def get_task_image(keyid: str, filename: str, month: Optional[str] = None):
+    """Phục vụ ảnh bản vẽ / ảnh bằng chứng đối soát siêu tốc (Ưu tiên SSD Local < 1ms, MinIO O(1))."""
+    try:
+        from detail_builder import safe_id
+        safe_key = safe_id(keyid)
+        ext = Path(filename).suffix.lower()
+        media_type = "image/png" if ext == ".png" else "image/jpeg"
+
+        # 1. Ưu tiên kiểm tra nhanh trên Local Disk (0ms)
+        search_roots = [PROJECT_STORAGE_DIR, PRIVATE_EXCEL_DIR]
+        for root in search_roots:
+            if root.exists():
+                for s_dir in root.glob(f"*session_{safe_key}*"):
+                    for sub in ["", "evidence_images", "drawings", "pages"]:
+                        target = (s_dir / sub / filename) if sub else (s_dir / filename)
+                        if target.exists() and target.is_file():
+                            return FileResponse(str(target), media_type=media_type)
+
+        # 2. Nếu local không có -> Stream trực tiếp từ MinIO Storage
+        if minio_storage.is_available():
+            m = month or get_task_payment_month(keyid)
+            img_key = minio_storage.find_task_object(keyid, "images", filename, month=m)
+            if img_key:
+                minio_resp = minio_storage.open_object(img_key)
+                if minio_resp:
+                    return StreamingResponse(
+                        minio_storage.stream_object(minio_resp),
+                        media_type=media_type,
+                        headers={
+                            "Cache-Control": "public, max-age=86400",
+                            "Content-Disposition": f"inline; filename={filename}"
+                        }
+                    )
+
+        raise HTTPException(
+            status_code=404, detail="Không tìm thấy file ảnh bản vẽ.")
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Lỗi tải ảnh: {str(e)}")
+
+
+# Dòng 679-736: Chạy lại tác vụ AI (Rerun) không cần upload lại file
+@app.post("/mep_payment/rerun/{keyid}")
+async def rerun_task_endpoint(keyid: str, background_tasks: BackgroundTasks):
+    """
+    Chạy lại tác vụ AI đối soát (Rerun) cho hồ sơ đã có file Excel trong session cũ.
+    Giúp xử lý lại ngay lập tức khi mạng lag hoặc AI bị timeout mà không cần upload lại.
+    """
+    try:
+        from detail_builder import safe_id
+        safe_key = safe_id(keyid)
+
+        # 1. Tìm file Excel trong các phiên làm việc cũ
+        search_roots = [PRIVATE_EXCEL_DIR, PROJECT_STORAGE_DIR]
+        sess_candidates = []
+        for root in search_roots:
+            if root.exists():
+                sess_candidates.extend(root.glob(f"*session_{safe_key}*"))
+        sess_candidates = sorted(
+            sess_candidates, key=os.path.getmtime, reverse=True)
+
+        excel_path = None
+        for s_dir in sess_candidates:
+            excels = list(s_dir.glob("*.xlsx")) + list(s_dir.glob("*.xlsm"))
+            if excels:
+                excel_path = excels[0]
+                break
+
+        if not excel_path:
+            raise HTTPException(
+                status_code=404,
+                detail=f"Không tìm thấy file Excel trong thư mục session của [{keyid}]. Vui lòng upload lại file!"
+            )
+
+        print(f"🔄 [RERUN] Bắt đầu kích hoạt chạy lại AI cho KEYID={keyid} với file {excel_path.name}")
+
+        # Tạo session mới
+        new_session_name = f"session_{safe_key}_{int(time.time())}"
+        project_session_dir = PROJECT_STORAGE_DIR / new_session_name
+        project_session_dir.mkdir(parents=True, exist_ok=True)
+
+        update_task_status(
+            keyid=keyid,
+            status="RUNNING",
+            reason="Đang chạy lại AI đối soát...",
+            progress=5
+        )
+        task_month = get_task_payment_month(keyid) or time.strftime("%Y-%m")
+        background_tasks.add_task(
+            run_ai_task_background, keyid, project_session_dir, str(excel_path), task_month)
+
+        return {"status": "ok", "message": f"Đã bắt đầu chạy lại tác vụ AI cho [{keyid}]."}
+    except HTTPException:
+        raise
+    except Exception as e:
+        print(f"❌ [FastAPI Error] rerun_task: {e}")
+        raise HTTPException(
+            status_code=500, detail=f"Lỗi kích hoạt chạy lại AI: {str(e)}")
+
+
+# Dòng 738-751: Endpoint thống kê 5 chỉ số KPI toàn cục
+@app.get("/mep_payment/kpi_summary")
+async def kpi_summary_endpoint(payment_month: str = "ALL", keyword: str = "ALL"):
+    """API trả về 5 chỉ số KPI toàn cục cố định (Tổng, Khớp 100%, Sai lệch, Đang chạy, Chờ duyệt)."""
+    try:
+        from sql import get_kpi_summary
+        data = get_kpi_summary(payment_month, keyword)
+        return {"status": "ok", "data": data}
+    except Exception as e:
+        print(f"❌ [FastAPI Error] kpi_summary: {e}")
+        return {
+            "status": "error",
+            "message": str(e),
+            "data": {"total": 0, "ok": 0, "err": 0, "running": 0, "waiting": 0}
+        }

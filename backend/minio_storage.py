@@ -18,6 +18,7 @@ Chức năng:
 
 import os
 import io
+import time
 import mimetypes
 from pathlib import Path
 from typing import Optional, Generator, Union

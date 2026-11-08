@@ -6,3 +6,6 @@ quest.txt
 *.log
 sessions/
 final_reports/
+__pycache__/
+*.pyc
+*.webp
