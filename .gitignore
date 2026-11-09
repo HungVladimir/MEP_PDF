@@ -9,6 +9,8 @@ final_reports/
 __pycache__/
 *.pyc
 *.webp
+*.png
+*.jpg
 
 # Thư mục dữ liệu & tài liệu tạm
 Filequest/

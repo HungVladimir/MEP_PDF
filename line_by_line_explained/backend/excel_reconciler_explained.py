@@ -11,6 +11,7 @@ import glob                     # Quét danh sách các file CSV
 import pandas as pd             # DataFrame, Pivot Table, Groupby, Merge bảng dữ liệu
 from openpyxl import load_workbook # Mở và chỉnh sửa định dạng file Excel trực tiếp
 from openpyxl.styles import PatternFill, Alignment, Border, Side, Font # Định dạng ô: màu sắc, căn lề, kẻ bảng, phông chữ
+from openpyxl.utils import get_column_letter # Chuyển đổi số thứ tự cột (1, 2, 3...) thành chữ cái (A, B, C...) để chỉnh độ rộng cột
 import config                   # Cấu hình đường dẫn, tên cột, tên sheet mặc định
 
 
@@ -402,6 +403,85 @@ def format_cond_label(e, r):
     return ", ".join(parts) if parts else "Gốc"
 
 
+def auto_fit_columns_and_rows(ws, default_row_height=24, header_row_height=28):
+    """
+    Tự động căn chỉnh độ rộng cột và chiều cao hàng tối ưu (chuẩn hóa hiển thị giống Excel 2):
+    1. Cột Specification (quy cách) được mở rộng rộng rãi (~50 ký tự) như thao tác kéo chuột thủ công.
+    2. Các cột khác tự động tính toán độ rộng theo nội dung và tiêu đề dài nhất (+ padding 3-4 ký tự).
+    3. Toàn bộ hàng dữ liệu được đặt chiều cao chuẩn 24pt (thanh thoát, 1 dòng gọn gàng như excel2),
+       hàng tiêu đề đặt 28pt.
+    """
+    # 1. Đặt chiều cao hàng tiêu đề (Header row)
+    ws.row_dimensions[1].height = header_row_height
+
+    # 2. Bảng cấu hình độ rộng ưu tiên cho các cột phổ biến
+    column_width_presets = {
+        "sdac code nhân công": 19,
+        "sdac code": 16,
+        "no (stt)": 8,
+        "stt": 8,
+        "no": 8,
+        "description": 28,
+        "specification": 50,  # Kéo dài cột Specification ra một đoạn để chữ nằm gọn 1 dòng
+        "unit": 8,
+        "đvt": 8,
+        "material cost": 14,
+        "labor cost": 14,
+        "khối lượng tổng": 16,
+        "tổng kl bản vẽ": 16,
+        "kl vật tư sdv": 15,
+        "kl vendor cần mang vào (trừ sdv)": 22,
+        "kl thực tế gate pass": 18,
+        "chênh lệch (gate pass - cần mang)": 20,
+        "phụ trội": 10,
+        "remark": 10,
+        "note": 35,
+        "kết luận đối soát": 38,
+    }
+
+    # 3. Tính toán và gán độ rộng cho từng cột
+    for col in ws.columns:
+        col_letter = get_column_letter(col[0].column)
+        header_val = str(col[0].value or "").strip().lower()
+
+        preset_w = None
+        for key in sorted(column_width_presets.keys(), key=len, reverse=True):
+            if key in header_val:
+                preset_w = column_width_presets[key]
+                break
+
+        if preset_w is not None:
+            ws.column_dimensions[col_letter].width = preset_w
+        else:
+            max_len = 0
+            for cell in col:
+                if cell.value is not None:
+                    lines = str(cell.value).split('\n')
+                    for line in lines:
+                        max_len = max(max_len, len(str(line).strip()))
+            ws.column_dimensions[col_letter].width = max(max_len + 3, 9)
+
+    # 4. Đặt chiều cao cho từng hàng dữ liệu (Data rows)
+    for row_idx in range(2, ws.max_row + 1):
+        max_lines = 1
+        for col_idx in range(1, ws.max_column + 1):
+            cell = ws.cell(row=row_idx, column=col_idx)
+            val = str(cell.value or '')
+            if '\n' in val:
+                max_lines = max(max_lines, len(val.split('\n')))
+            else:
+                col_letter = get_column_letter(col_idx)
+                w = ws.column_dimensions[col_letter].width or 10
+                if len(val) > w * 1.4 and col_idx not in [1, 2, 3]:
+                    estimated = max(1, int(len(val) / w) + 1)
+                    max_lines = max(max_lines, min(estimated, 3))
+
+        if max_lines > 1:
+            ws.row_dimensions[row_idx].height = max(default_row_height, max_lines * 18)
+        else:
+            ws.row_dimensions[row_idx].height = default_row_height
+
+
 def reconcile_and_highlight(df_ai, df_vendor, drawing_columns, dict_gatepass=None, output_excel_path="Final_Report.xlsx"):
     """
     Hàm đối soát cốt lõi:
@@ -588,6 +668,9 @@ def reconcile_and_highlight(df_ai, df_vendor, drawing_columns, dict_gatepass=Non
             ws1.cell(row=r_idx, column=c_idx).fill = red_fill
             ws1.cell(row=r_idx, column=note_col_idx).fill = red_fill
 
+    # Tự động căn chỉnh độ rộng cột và chiều cao hàng (Auto-fit chuẩn layout excel2)
+    auto_fit_columns_and_rows(ws1)
+
     # Format Sheet 2: Đối soát Gate Pass
     if "2. Đối Soát Gate Pass" in wb.sheetnames and df_gp_report is not None:
         ws2 = wb["2. Đối Soát Gate Pass"]
@@ -612,6 +695,8 @@ def reconcile_and_highlight(df_ai, df_vendor, drawing_columns, dict_gatepass=Non
                     cell.fill = red_fill
                 elif col_idx == 11 and cell.value == "✅ Khớp 100%":
                     cell.fill = green_fill
+
+        auto_fit_columns_and_rows(ws2)
 
     wb.save(output_excel_path)
     print(f"✅ Hoàn tất! Báo cáo Final (2 Sheet) lưu tại: {output_excel_path}")
