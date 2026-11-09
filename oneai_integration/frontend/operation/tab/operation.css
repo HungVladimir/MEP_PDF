@@ -1,45 +1,46 @@
 /* ====================================================================
    MEP ONEAI SYSTEM - INDUSTRIAL DARK TECH STYLESHEET
    File: operation.css
-   Design System: ui-ux-pro-max (Glassmorphism & Industrial Operations Console)
-   Tối ưu: Bảng đối soát, Thẻ KPI, Modal chi tiết 4 Tabs, Khối phê duyệt 2 cột
-   Accessibility: WCAG AA (Contrast > 4.5:1, Visible Focus, Reduced Motion)
-   Responsive: Hỗ trợ linh hoạt màn hình 1920px, 1440px, 1024px và <= 768px
+   Mô tả: Dark Mode công nghiệp hiện đại, độ tương phản chuẩn WCAG AA.
+         Khung viền rõ ràng, chia ô tách biệt cho các thẻ KPI, Modal chi tiết,
+         Tab đối chiếu từng bản vẽ và Khối soi ảnh trích xuất.
    ==================================================================== */
 
-:root {
-  /* 1. MÀU NỀN & BỀ MẶT (SLATE DARK THEME) */
-  --mep-bg-base: #0F141C;
-  --mep-bg-surface: #151C28;
-  --mep-bg-card: #1A2332;
-  --mep-bg-card-hover: #212C3F;
-  --mep-bg-input: #121824;
-  --mep-bg-active: #1C2D44;
+:root,
+:host,
+.mep-container,
+.mep-detail-dialog,
+.el-dialog {
+  /* 1. PALETTE MÀU CƠ BẢN (SOLID HEX CHO COMPATIBILITY VỚI SCOPED CSS) */
+  --mep-bg-base: #141414;
+  --mep-bg-surface: #1D1E1F;
+  --mep-bg-card: #262727;
+  --mep-bg-card-hover: #323334;
+  --mep-bg-input: #121314;
+  --mep-bg-active: #1a2a3a;
 
-  /* 2. ĐƯỜNG VIỀN & HIỆU ỨNG KÍNH (GLASSMORPHISM) */
-  --mep-border: #2D3A4F;
-  --mep-border-subtle: rgba(255, 255, 255, 0.08);
-  --mep-border-hover: #38BDF8;
-  --mep-glass-blur: blur(12px);
+  /* 2. ĐƯỜNG VIỀN & PHÂN CÁCH KHỐI */
+  --mep-border: #363637;
+  --mep-border-subtle: #2b2b2c;
+  --mep-border-hover: #409EFF;
 
   /* 3. MÀU CHỮ & ĐỘ TƯƠNG PHẢN (WCAG AA COMPLIANT) */
-  --mep-text-primary: #F8FAFC;       /* Tương phản 14:1 trên nền tối */
-  --mep-text-secondary: #CBD5E1;     /* Tương phản 8:1 */
-  --mep-text-muted: #94A3B8;         /* Tương phản 4.8:1 */
-  --mep-text-disabled: #64748B;
+  --mep-text-primary: #E5EAF3;
+  --mep-text-secondary: #C0C4CC;
+  --mep-text-muted: #A3A6AD;
+  --mep-text-disabled: #606266;
 
-  /* 4. MÀU TÍN HIỆU CÔNG NGHIỆP (ACCENTS & STATUS) */
-  --mep-accent-blue: #38BDF8;        /* Cyan Blue công nghệ */
-  --mep-accent-primary: #409EFF;     /* Element Plus Primary */
-  --mep-status-ok: #22C55E;          /* Xanh lá chuẩn thành công */
-  --mep-status-err: #EF4444;         /* Đỏ cảnh báo sai lệch */
-  --mep-status-warn: #F59E0B;        /* Vàng hổ phách cảnh báo */
-  --mep-status-info: #94A3B8;        /* Xám trung tính */
+  /* 4. MÀU TÍN HIỆU CÔNG NGHIỆP */
+  --mep-accent-blue: #409EFF;
+  --mep-status-ok: #67C23A;
+  --mep-status-err: #F56C6C;
+  --mep-status-warn: #E6A23C;
+  --mep-status-info: #909399;
 
   /* 5. ĐỔ BÓNG & CHUYỂN ĐỘNG */
-  --mep-shadow-card: 0 4px 16px rgba(0, 0, 0, 0.35);
+  --mep-shadow-card: 0 4px 14px rgba(0, 0, 0, 0.35);
   --mep-shadow-hover: 0 8px 24px rgba(0, 0, 0, 0.45);
-  --mep-transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+  --mep-transition: all 0.2s ease;
 }
 
 /* ====================================================================
@@ -47,14 +48,14 @@
    ==================================================================== */
 .mep-container {
   padding: 16px;
-  background-color: var(--mep-bg-base);
-  color: var(--mep-text-primary);
+  background-color: #141414;
+  color: #E5EAF3;
   min-height: 100vh;
   box-sizing: border-box;
 }
 
 /* ====================================================================
-   1. KHỐI THẺ KPI THỐNG KÊ (5 THẺ INTERACTIVE DASHBOARD)
+   1. KHỐI THẺ KPI THỐNG KÊ (5 THẺ INTERACTIVE DASHBOARD CÓ KHUNG VIỀN)
    ==================================================================== */
 .kpi-cards-grid {
   display: grid;
@@ -64,55 +65,38 @@
 }
 
 .kpi-card {
-  background: linear-gradient(180deg, var(--mep-bg-card) 0%, var(--mep-bg-surface) 100%);
-  border: 1px solid var(--mep-border);
-  border-radius: 10px;
-  padding: 12px 16px;
+  background-color: #262727;
+  border: 1px solid #363637;
+  border-radius: 8px;
+  padding: 12px 14px;
   display: flex;
   align-items: center;
-  gap: 14px;
+  gap: 12px;
   cursor: pointer;
-  transition: var(--mep-transition);
+  transition: all 0.2s ease;
   user-select: none;
+  box-sizing: border-box;
   position: relative;
   overflow: hidden;
-}
-
-.kpi-card::after {
-  content: "";
-  position: absolute;
-  top: 0;
-  left: 0;
-  right: 0;
-  height: 2px;
-  background: transparent;
-  transition: var(--mep-transition);
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.25);
 }
 
 .kpi-card:hover {
   transform: translateY(-2px);
-  border-color: var(--mep-accent-blue);
-  box-shadow: var(--mep-shadow-hover);
-}
-
-.kpi-card:hover::after {
-  background: var(--mep-accent-blue);
+  border-color: #409EFF;
+  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.35);
 }
 
 .kpi-card.active {
-  border-color: var(--mep-accent-blue);
-  background: linear-gradient(180deg, var(--mep-bg-active) 0%, var(--mep-bg-surface) 100%);
-  box-shadow: 0 0 0 1px var(--mep-accent-blue), 0 4px 16px rgba(56, 189, 248, 0.15);
-}
-
-.kpi-card.active::after {
-  background: var(--mep-accent-blue);
+  border-color: #409EFF;
+  background-color: #1a2a3a;
+  box-shadow: 0 0 0 1px #409EFF, 0 4px 14px rgba(64, 158, 255, 0.25);
 }
 
 .kpi-icon {
   width: 42px;
   height: 42px;
-  border-radius: 10px;
+  border-radius: 8px;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -121,33 +105,33 @@
 }
 
 .kpi-icon.total {
-  background: rgba(148, 163, 184, 0.12);
+  background: rgba(148, 163, 184, 0.15);
   color: #E2E8F0;
-  border: 1px solid rgba(148, 163, 184, 0.2);
+  border: 1px solid rgba(148, 163, 184, 0.25);
 }
 
 .kpi-icon.ok {
-  background: rgba(34, 197, 94, 0.12);
-  color: var(--mep-status-ok);
-  border: 1px solid rgba(34, 197, 94, 0.25);
+  background: rgba(103, 194, 58, 0.15);
+  color: #67C23A;
+  border: 1px solid rgba(103, 194, 58, 0.3);
 }
 
 .kpi-icon.err {
-  background: rgba(239, 68, 68, 0.12);
-  color: var(--mep-status-err);
-  border: 1px solid rgba(239, 68, 68, 0.25);
+  background: rgba(245, 108, 108, 0.15);
+  color: #F56C6C;
+  border: 1px solid rgba(245, 108, 108, 0.3);
 }
 
 .kpi-icon.running {
-  background: rgba(245, 158, 11, 0.12);
-  color: var(--mep-status-warn);
-  border: 1px solid rgba(245, 158, 11, 0.25);
+  background: rgba(230, 162, 60, 0.15);
+  color: #E6A23C;
+  border: 1px solid rgba(230, 162, 60, 0.3);
 }
 
 .kpi-icon.waiting {
-  background: rgba(148, 163, 184, 0.08);
-  color: var(--mep-text-muted);
-  border: 1px solid rgba(148, 163, 184, 0.15);
+  background: rgba(144, 147, 153, 0.12);
+  color: #909399;
+  border: 1px solid rgba(144, 147, 153, 0.2);
 }
 
 .kpi-info {
@@ -161,22 +145,23 @@
   font-weight: 700;
   font-family: ui-monospace, SFMono-Regular, Consolas, "Fira Code", monospace;
   line-height: 1.2;
-  color: var(--mep-text-primary);
+  color: #FFFFFF;
 }
 
 .kpi-label {
   font-size: 11px;
-  color: var(--mep-text-muted);
+  color: #A3A6AD;
   margin-top: 3px;
   white-space: nowrap;
   text-overflow: ellipsis;
   overflow: hidden;
   text-transform: uppercase;
   letter-spacing: 0.4px;
+  font-weight: 500;
 }
 
 /* ====================================================================
-   2. THANH BỘ LỌC (TOOLBAR FLUID RESPONSIVE)
+   2. THANH BỘ LỌC (TOOLBAR FLUID RESPONSIVE CÓ KHUNG VIỀN)
    ==================================================================== */
 .toolbar {
   display: flex;
@@ -184,8 +169,8 @@
   gap: 12px;
   align-items: center;
   margin-bottom: 12px;
-  background: var(--mep-bg-surface);
-  border: 1px solid var(--mep-border);
+  background-color: #1D1E1F;
+  border: 1px solid #363637;
   border-radius: 8px;
   padding: 10px 14px;
 }
@@ -220,21 +205,20 @@
 
 .total-count {
   font-size: 13px;
-  color: var(--mep-text-muted);
+  color: #A3A6AD;
   display: flex;
   align-items: center;
   gap: 6px;
 }
 
 .count-number {
-  color: var(--mep-text-primary);
+  color: #409EFF;
   font-weight: 700;
   font-family: monospace;
-  background: rgba(56, 189, 248, 0.1);
+  background: rgba(64, 158, 255, 0.12);
   padding: 2px 8px;
   border-radius: 4px;
-  border: 1px solid rgba(56, 189, 248, 0.25);
-  color: var(--mep-accent-blue);
+  border: 1px solid rgba(64, 158, 255, 0.3);
 }
 
 .action-buttons {
@@ -248,97 +232,98 @@
   display: inline-block;
   width: 1px;
   height: 22px;
-  background-color: var(--mep-border);
+  background-color: #363637;
   margin: 0 4px;
 }
 
 /* Nút Reload */
 .btn-reload {
-  background-color: var(--mep-bg-card);
-  border-color: var(--mep-border);
-  color: var(--mep-text-primary);
-  transition: var(--mep-transition);
+  background-color: #262727;
+  border-color: #363637;
+  color: #E5EAF3;
+  transition: all 0.2s ease;
 }
 .btn-reload:hover {
-  background-color: var(--mep-bg-card-hover);
-  border-color: var(--mep-accent-blue);
-  color: var(--mep-accent-blue);
+  background-color: #323334;
+  border-color: #409EFF;
+  color: #409EFF;
 }
 
 /* Nút Insert: Tone xanh ngọc dịu mắt */
 .btn-insert {
-  background-color: rgba(34, 197, 94, 0.12);
-  border-color: rgba(34, 197, 94, 0.4);
-  color: #4ADE80;
+  background-color: rgba(103, 194, 58, 0.15);
+  border-color: rgba(103, 194, 58, 0.4);
+  color: #67C23A;
   font-weight: 600;
-  transition: var(--mep-transition);
+  transition: all 0.2s ease;
 }
 .btn-insert:hover {
-  background-color: var(--mep-status-ok);
-  border-color: var(--mep-status-ok);
+  background-color: #67C23A;
+  border-color: #67C23A;
   color: #FFF;
 }
 
 /* Nút Save: Nút CTA trung tâm nổi bật nhất */
 .btn-save {
-  background: linear-gradient(135deg, #38BDF8 0%, #2563EB 100%);
-  border: none;
+  background-color: #409EFF;
+  border-color: #409EFF;
   color: #FFF;
   font-weight: 600;
-  box-shadow: 0 2px 10px rgba(37, 99, 235, 0.35);
-  transition: var(--mep-transition);
+  box-shadow: 0 2px 10px rgba(64, 158, 255, 0.35);
+  transition: all 0.2s ease;
 }
 .btn-save:hover {
-  background: linear-gradient(135deg, #60A5FA 0%, #1D4ED8 100%);
-  box-shadow: 0 4px 16px rgba(37, 99, 235, 0.5);
+  background-color: #66b1ff;
+  border-color: #66b1ff;
+  box-shadow: 0 4px 14px rgba(64, 158, 255, 0.5);
   transform: translateY(-1px);
 }
 
 /* Nút Export CSV */
 .btn-export {
-  background-color: var(--mep-bg-card);
-  border-color: var(--mep-border);
-  color: var(--mep-text-primary);
-  transition: var(--mep-transition);
+  background-color: #262727;
+  border-color: #363637;
+  color: #E5EAF3;
+  transition: all 0.2s ease;
 }
 .btn-export:hover {
-  background-color: var(--mep-bg-card-hover);
-  border-color: var(--mep-accent-blue);
-  color: var(--mep-accent-blue);
+  background-color: #323334;
+  border-color: #409EFF;
+  color: #409EFF;
 }
 
 /* Nút Delete: Cảnh báo đỏ ở cuối hàng */
 .btn-delete {
-  background-color: rgba(239, 68, 68, 0.15);
-  border-color: rgba(239, 68, 68, 0.4);
-  color: #F87171;
+  background-color: rgba(245, 108, 108, 0.15);
+  border-color: rgba(245, 108, 108, 0.4);
+  color: #F56C6C;
   font-weight: 600;
-  transition: var(--mep-transition);
+  transition: all 0.2s ease;
 }
 .btn-delete:hover:not(:disabled) {
-  background-color: var(--mep-status-err);
-  border-color: var(--mep-status-err);
+  background-color: #F56C6C;
+  border-color: #F56C6C;
   color: #FFF;
 }
 .btn-delete:disabled {
   opacity: 0.35;
   cursor: not-allowed;
-  background-color: var(--mep-bg-card);
-  border-color: var(--mep-border);
-  color: var(--mep-text-disabled);
+  background-color: #262727;
+  border-color: #363637;
+  color: #606266;
 }
 
 /* Nút Upload trong từng dòng */
 .btn-upload-file {
-  background-color: rgba(56, 189, 248, 0.1);
-  border-color: rgba(56, 189, 248, 0.3);
-  color: var(--mep-accent-blue);
+  background-color: rgba(64, 158, 255, 0.12);
+  border-color: rgba(64, 158, 255, 0.35);
+  color: #409EFF;
   font-weight: 500;
-  transition: var(--mep-transition);
+  transition: all 0.2s ease;
 }
 .btn-upload-file:hover:not(:disabled) {
-  background-color: rgba(56, 189, 248, 0.2);
-  border-color: var(--mep-accent-blue);
+  background-color: rgba(64, 158, 255, 0.25);
+  border-color: #409EFF;
   color: #FFF;
 }
 
@@ -348,41 +333,66 @@
 .table-container {
   width: 100%;
   overflow-x: auto;
-  border: 1px solid var(--mep-border);
+  border: 1px solid #363637;
   border-radius: 8px;
-  background: var(--mep-bg-surface);
+  background-color: #1D1E1F;
 }
 
 .table-container::-webkit-scrollbar {
-  height: 10px;
+  height: 8px;
 }
 .table-container::-webkit-scrollbar-track {
-  background: var(--mep-bg-base);
-  border-radius: 5px;
+  background: #141414;
+  border-radius: 4px;
 }
 .table-container::-webkit-scrollbar-thumb {
-  background: #334155;
-  border-radius: 5px;
+  background: #363637;
+  border-radius: 4px;
 }
 .table-container::-webkit-scrollbar-thumb:hover {
-  background: #475569;
+  background: #4C4D4F;
 }
 
-/* Đảm bảo cột Sticky (fixed left / fixed right) có nền tối liền mạch, không trong suốt */
+/* Element Plus Table Styles */
+:deep(.el-table) {
+  background-color: #1D1E1F !important;
+  color: #E5EAF3 !important;
+}
+
+:deep(.el-table th.el-table__cell) {
+  background-color: #262727 !important;
+  color: #C0C4CC !important;
+  border-color: #363637 !important;
+  font-weight: 600;
+}
+
+:deep(.el-table td.el-table__cell) {
+  background-color: #1D1E1F !important;
+  color: #E5EAF3 !important;
+  border-color: #363637 !important;
+}
+
+:deep(.el-table--border),
+:deep(.el-table--border th),
+:deep(.el-table--border td) {
+  border-color: #363637 !important;
+}
+
+/* Cột Sticky (fixed left / fixed right) */
 :deep(.el-table__fixed-left),
 :deep(.el-table__fixed-right) {
-  background-color: var(--mep-bg-surface) !important;
+  background-color: #1D1E1F !important;
   box-shadow: 4px 0 12px rgba(0, 0, 0, 0.35) !important;
 }
 
 :deep(.el-table__fixed-left .el-table__cell),
 :deep(.el-table__fixed-right .el-table__cell) {
-  background-color: var(--mep-bg-surface) !important;
+  background-color: #1D1E1F !important;
 }
 
 /* Hàng hover nổi bật */
 :deep(.el-table--enable-row-hover .el-table__body tr:hover > td.el-table__cell) {
-  background-color: var(--mep-bg-card-hover) !important;
+  background-color: #262727 !important;
 }
 
 .font-bold {
@@ -397,7 +407,7 @@
   cursor: pointer;
 }
 
-/* Ô có thể bấm đúp chuột để chỉnh sửa (Visual Affordance) */
+/* Ô có thể bấm đúp chuột để chỉnh sửa */
 .cell-text {
   cursor: pointer;
   display: inline-flex;
@@ -406,20 +416,20 @@
   width: 100%;
   padding: 2px 4px;
   border-radius: 4px;
-  transition: var(--mep-transition);
+  transition: all 0.2s ease;
 }
 
 .cell-text:hover {
-  background-color: rgba(56, 189, 248, 0.08);
-  color: var(--mep-accent-blue);
+  background-color: rgba(64, 158, 255, 0.12);
+  color: #409EFF;
 }
 
 .cell-text::after {
   content: "✎";
   font-size: 10px;
   opacity: 0;
-  color: var(--mep-accent-blue);
-  transition: var(--mep-transition);
+  color: #409EFF;
+  transition: all 0.2s ease;
 }
 
 .cell-text:hover::after {
@@ -434,8 +444,8 @@
 }
 
 .inline-input :deep(.el-input__inner) {
-  background-color: var(--mep-bg-input);
-  border-color: var(--mep-accent-blue);
+  background-color: #121314;
+  border-color: #409EFF;
   color: #FFF;
   font-weight: 500;
 }
@@ -445,7 +455,7 @@
   font-weight: 600;
   padding: 4px 10px;
   border-radius: 6px;
-  transition: var(--mep-transition);
+  transition: all 0.2s ease;
 }
 .result-tag-badge:hover {
   transform: scale(1.04);
@@ -453,30 +463,32 @@
 }
 
 .download-btn {
-  color: var(--mep-status-ok);
+  color: #67C23A;
   font-weight: 600;
   text-decoration: underline;
-  transition: var(--mep-transition);
+  transition: all 0.2s ease;
 }
 .download-btn:hover {
-  color: #4ADE80;
+  color: #85CE61;
 }
 
 .btn-rerun-mini {
-  background-color: var(--mep-bg-card);
-  border-color: rgba(245, 158, 11, 0.4);
-  color: var(--mep-status-warn);
+  background-color: #262727;
+  border-color: #4C4D4F;
+  color: #E6A23C;
   padding: 3px 8px;
   font-size: 11px;
   border-radius: 4px;
+  transition: all 0.2s ease;
 }
 .btn-rerun-mini:hover {
-  background-color: var(--mep-status-warn);
-  color: #000;
+  background-color: #363637;
+  border-color: #E6A23C;
+  color: #E6A23C;
 }
 
 .text-reason {
-  color: var(--mep-status-err);
+  color: #F56C6C;
   font-size: 11px;
   line-height: 1.3;
 }
@@ -501,24 +513,24 @@
 }
 
 /* ====================================================================
-   5. MODAL DIALOG CHI TIẾT ĐỐI SOÁT (INDUSTRIAL DARK TECH CONSOLE)
+   5. MODAL DIALOG CHI TIẾT ĐỐI SOÁT (DARK TECH INDUSTRIAL MODAL)
    ==================================================================== */
 :deep(.mep-detail-dialog) {
-  background-color: #111723 !important;
-  border: 1px solid var(--mep-border) !important;
-  border-radius: 12px !important;
-  box-shadow: 0 24px 64px rgba(0, 0, 0, 0.75) !important;
-  backdrop-filter: var(--mep-glass-blur);
+  background-color: #1D1E1F !important;
+  border: 1px solid #363637 !important;
+  border-radius: 10px !important;
+  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.75) !important;
 }
 
 :deep(.mep-detail-dialog .el-dialog__header) {
   padding: 16px 20px;
-  border-bottom: 1px solid var(--mep-border);
+  border-bottom: 1px solid #363637;
   margin-right: 0;
+  background-color: #1D1E1F;
 }
 
 :deep(.mep-detail-dialog .el-dialog__title) {
-  color: var(--mep-text-primary);
+  color: #FFF;
   font-size: 16px;
   font-weight: 700;
   display: flex;
@@ -528,6 +540,7 @@
 
 :deep(.mep-detail-dialog .el-dialog__body) {
   padding: 16px 20px;
+  background-color: #141414;
 }
 
 .detail-loading-box {
@@ -544,29 +557,28 @@
 }
 
 .detail-body {
-  color: var(--mep-text-primary);
+  color: #E5EAF3;
 }
 
-/* KHỐI HEADER SUMMARY CARD */
+/* KHỐI HEADER SUMMARY CARD CÓ KHUNG VIỀN */
 .detail-header-card {
-  background: linear-gradient(180deg, #182234 0%, #121A28 100%);
-  border: 1px solid #2B384E;
-  border-radius: 10px;
+  background-color: #1D1E1F;
+  border: 1px solid #363637;
+  border-radius: 8px;
   padding: 14px 18px;
   display: flex;
   justify-content: space-between;
   align-items: flex-start;
   gap: 16px;
   margin-bottom: 14px;
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.25);
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.25);
 }
 
 .dh-title h3 {
-  margin: 0 0 8px 0;
-  font-size: 17px;
+  margin: 0 0 6px 0;
+  font-size: 16px;
   font-weight: 700;
   color: #FFF;
-  letter-spacing: 0.3px;
 }
 
 .dh-meta {
@@ -574,7 +586,7 @@
   flex-wrap: wrap;
   gap: 14px;
   font-size: 12px;
-  color: var(--mep-text-muted);
+  color: #A3A6AD;
 }
 
 .dh-meta span {
@@ -584,7 +596,7 @@
 }
 
 .dh-meta b {
-  color: var(--mep-text-secondary);
+  color: #C0C4CC;
 }
 
 .dh-badges {
@@ -595,7 +607,7 @@
   flex-shrink: 0;
 }
 
-/* 4 THẺ THỐNG KÊ NHANH (METRIC TILES) */
+/* 4 THẺ THỐNG KÊ NHANH (METRIC TILES CÓ KHUNG VIỀN VÀ MÀU NỀN TÁCH BIỆT) */
 .modal-stats-grid {
   display: grid;
   grid-template-columns: repeat(4, 1fr);
@@ -604,43 +616,47 @@
 }
 
 .m-stat {
-  background: var(--mep-bg-surface);
-  border: 1px solid var(--mep-border);
-  border-radius: 8px;
-  padding: 12px 16px;
+  background-color: #262727;
+  border: 1px solid #363637;
+  border-radius: 6px;
+  padding: 10px 14px;
   display: flex;
   flex-direction: column;
-  transition: var(--mep-transition);
+  transition: all 0.2s ease;
+  box-sizing: border-box;
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.2);
 }
+
 .m-stat:hover {
   transform: translateY(-2px);
-  border-color: var(--mep-accent-blue);
+  border-color: #409EFF;
 }
 
 .m-stat.border-err {
-  border-left: 4px solid var(--mep-status-err);
-  background: linear-gradient(135deg, rgba(239, 68, 68, 0.08) 0%, var(--mep-bg-surface) 100%);
+  border-left: 4px solid #F56C6C;
+  background: linear-gradient(135deg, rgba(245, 108, 108, 0.08) 0%, #262727 100%);
 }
 
 .m-stat.border-ok {
-  border-left: 4px solid var(--mep-status-ok);
-  background: linear-gradient(135deg, rgba(34, 197, 94, 0.08) 0%, var(--mep-bg-surface) 100%);
+  border-left: 4px solid #67C23A;
+  background: linear-gradient(135deg, rgba(103, 194, 58, 0.08) 0%, #262727 100%);
 }
 
 .m-stat b {
-  font-size: 24px;
+  font-size: 22px;
   font-weight: 700;
   font-family: ui-monospace, SFMono-Regular, Consolas, "Fira Code", monospace;
-  color: var(--mep-text-primary);
+  color: #E5EAF3;
   line-height: 1.1;
 }
 
 .m-stat span {
   font-size: 11px;
-  color: var(--mep-text-muted);
+  color: #A3A6AD;
   margin-top: 4px;
   text-transform: uppercase;
   letter-spacing: 0.5px;
+  font-weight: 500;
 }
 
 /* PHÂN LOẠI LỖI (ERROR BREAKDOWN BADGES) */
@@ -650,8 +666,8 @@
   flex-wrap: wrap;
   margin-bottom: 14px;
   padding: 8px 12px;
-  background: rgba(239, 68, 68, 0.06);
-  border: 1px solid rgba(239, 68, 68, 0.2);
+  background: rgba(245, 108, 108, 0.08);
+  border: 1px solid rgba(245, 108, 108, 0.25);
   border-radius: 6px;
 }
 
@@ -662,43 +678,46 @@
   font-weight: 600;
 }
 
-/* TABS CHI TIẾT */
+/* TABS CHI TIẾT CÓ KHUNG VIỀN */
 .detail-tabs {
-  background-color: var(--mep-bg-surface) !important;
-  border: 1px solid var(--mep-border) !important;
+  background-color: #1D1E1F !important;
+  border: 1px solid #363637 !important;
   border-radius: 8px;
   margin-bottom: 14px;
+  overflow: hidden;
 }
 
 :deep(.detail-tabs .el-tabs__header) {
-  background-color: #111724;
-  border-bottom: 1px solid var(--mep-border);
+  background-color: #1D1E1F;
+  border-bottom: 1px solid #363637;
   margin: 0;
 }
 
 :deep(.detail-tabs .el-tabs__item) {
-  color: var(--mep-text-muted);
+  color: #A3A6AD;
   font-weight: 500;
 }
 
 :deep(.detail-tabs .el-tabs__item.is-active) {
-  color: var(--mep-accent-blue) !important;
-  background-color: var(--mep-bg-surface) !important;
-  border-bottom: 2px solid var(--mep-accent-blue);
+  color: #409EFF !important;
+  background-color: #262727 !important;
+  border-bottom: 2px solid #409EFF;
   font-weight: 600;
 }
 
 .clean-state-box {
   text-align: center;
-  padding: 44px 16px;
+  padding: 40px 16px;
 }
 .clean-state-box h4 {
   margin: 14px 0 6px;
-  color: var(--mep-status-ok);
+  color: #67C23A;
   font-size: 16px;
 }
 
-/* TAB 2: COLLAPSE THEO BẢN VẼ */
+/* ====================================================================
+   TAB 2: ĐỐI CHIẾU THEO BẢN VẼ (CHIA KHUNG TỪNG BẢN VẼ VÀ BẢNG KẺ Ô)
+   ==================================================================== */
 .collapse-title-row {
   display: flex;
   align-items: center;
@@ -706,54 +725,140 @@
   font-size: 13px;
 }
 
+:deep(.el-collapse) {
+  border: none !important;
+  background-color: transparent !important;
+}
+
+/* Từng bản vẽ là 1 card độc lập có viền, bo góc và nền tách biệt */
+:deep(.el-collapse-item) {
+  margin-bottom: 8px;
+  border: 1px solid #363637 !important;
+  border-radius: 6px !important;
+  overflow: hidden;
+  background-color: #262727;
+  transition: border-color 0.2s ease, box-shadow 0.2s ease;
+}
+
+:deep(.el-collapse-item:hover) {
+  border-color: #4C4D4F !important;
+}
+
+:deep(.el-collapse-item.is-active) {
+  border-color: #409EFF !important;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.35);
+}
+
 :deep(.el-collapse-item__header) {
-  background-color: var(--mep-bg-surface) !important;
-  color: var(--mep-text-primary) !important;
-  border-bottom: 1px solid var(--mep-border) !important;
-  padding: 0 14px;
+  background-color: #262727 !important;
+  color: #E5EAF3 !important;
+  border-bottom: 1px solid #363637 !important;
+  padding: 0 16px;
+  height: 44px;
+  line-height: 44px;
+  font-size: 13px;
+  transition: background-color 0.2s ease;
+}
+
+:deep(.el-collapse-item__header:hover) {
+  background-color: #2D2E2F !important;
+}
+
+:deep(.el-collapse-item__wrap) {
+  background-color: #1D1E1F !important;
+  border-bottom: none !important;
 }
 
 :deep(.el-collapse-item__content) {
-  background-color: var(--mep-bg-base);
-  padding: 12px;
+  padding: 12px !important;
+  background-color: #1D1E1F !important;
 }
 
-/* TAB 3: THƯ VIỆN ẢNH SOI BẢN VẼ */
+/* Bảng kẻ ô chi tiết bên trong collapse item */
+:deep(.el-collapse-item__content .el-table) {
+  background-color: #1D1E1F !important;
+  border: 1px solid #363637 !important;
+}
+
+:deep(.el-collapse-item__content .el-table th.el-table__cell) {
+  background-color: #262727 !important;
+  color: #C0C4CC !important;
+  border-bottom: 1px solid #363637 !important;
+  border-right: 1px solid #363637 !important;
+  font-weight: 600;
+}
+
+:deep(.el-collapse-item__content .el-table td.el-table__cell) {
+  background-color: #1D1E1F !important;
+  color: #E5EAF3 !important;
+  border-bottom: 1px solid #363637 !important;
+  border-right: 1px solid #363637 !important;
+}
+
+:deep(.el-collapse-item__content .el-table--enable-row-hover .el-table__body tr:hover > td.el-table__cell) {
+  background-color: #262727 !important;
+}
+
+/* ====================================================================
+   TAB 3: THƯ VIỆN ẢNH SOI BẢN VẼ (KHUNG ẢNH THUMBNAIL & SCROLLBAR TỐI)
+   ==================================================================== */
 .images-strip {
   display: flex;
   gap: 14px;
   overflow-x: auto;
-  padding: 10px 4px;
+  padding: 12px 10px;
+  background-color: #141414;
+  border: 1px solid #363637;
+  border-radius: 8px;
+}
+
+/* Custom Dark Scrollbar (Loại bỏ triệt để thanh cuộn trắng của trình duyệt) */
+.images-strip::-webkit-scrollbar {
+  height: 8px;
+}
+.images-strip::-webkit-scrollbar-track {
+  background: #1D1E1F;
+  border-radius: 4px;
+}
+.images-strip::-webkit-scrollbar-thumb {
+  background: #4C4D4F;
+  border-radius: 4px;
+}
+.images-strip::-webkit-scrollbar-thumb:hover {
+  background: #606266;
 }
 
 .img-thumb-box {
-  flex: 0 0 170px;
-  border: 1px solid var(--mep-border);
-  border-radius: 8px;
+  flex: 0 0 180px;
+  border: 1px solid #363637;
+  border-radius: 6px;
   padding: 8px;
-  background-color: var(--mep-bg-card);
+  background-color: #262727;
   text-align: center;
-  transition: var(--mep-transition);
+  transition: transform 0.2s ease, border-color 0.2s ease, box-shadow 0.2s ease;
   cursor: pointer;
+  box-sizing: border-box;
 }
+
 .img-thumb-box:hover {
-  transform: translateY(-3px);
-  border-color: var(--mep-accent-blue);
-  box-shadow: 0 6px 18px rgba(0, 0, 0, 0.45);
+  transform: translateY(-2px);
+  border-color: #409EFF;
+  box-shadow: 0 6px 16px rgba(0, 0, 0, 0.45);
 }
 
 .thumb-img {
   width: 100%;
-  height: 145px;
-  border-radius: 6px;
-  background-color: var(--mep-bg-base);
+  height: 140px;
+  border: 1px solid #363637;
+  border-radius: 4px;
+  background-color: #1D1E1F;
   display: block;
 }
 
 .thumb-title,
 .img-name {
   font-size: 11px;
-  color: var(--mep-text-muted);
+  color: #A3A6AD;
   margin-top: 6px;
   white-space: nowrap;
   overflow: hidden;
@@ -761,19 +866,21 @@
   font-weight: 500;
 }
 
-/* TAB 4: TERMINAL LOG CONSOLE */
+/* ====================================================================
+   TAB 4: TERMINAL LOG CONSOLE
+   ==================================================================== */
 .log-console,
 .logs-console {
-  background-color: #0B0E14;
-  border: 1px solid var(--mep-border);
-  border-radius: 8px;
+  background-color: #121314;
+  border: 1px solid #363637;
+  border-radius: 6px;
   padding: 12px 16px;
   font-family: ui-monospace, SFMono-Regular, Consolas, "Fira Code", monospace;
   font-size: 12px;
-  line-height: 1.7;
+  line-height: 1.6;
   max-height: 280px;
   overflow-y: auto;
-  color: var(--mep-text-muted);
+  color: #A3A6AD;
 }
 
 .log-line {
@@ -781,7 +888,7 @@
 }
 .log-index,
 .log-idx {
-  color: var(--mep-accent-blue);
+  color: #409EFF;
   margin-right: 6px;
   font-weight: 600;
 }
@@ -791,9 +898,9 @@
    ==================================================================== */
 .detail-review-card,
 .review-approval-card {
-  background: linear-gradient(180deg, #182234 0%, #131A27 100%);
-  border: 1px solid #2B384E;
-  border-radius: 10px;
+  background-color: #1D1E1F;
+  border: 1px solid #363637;
+  border-radius: 8px;
   padding: 16px 20px;
   box-shadow: 0 4px 16px rgba(0, 0, 0, 0.35);
 }
@@ -834,17 +941,17 @@
 .review-field-label {
   display: block;
   font-size: 12px;
-  color: var(--mep-text-muted);
+  color: #A3A6AD;
   margin-bottom: 6px;
   font-weight: 500;
 }
 
 .readonly-input :deep(.el-input__inner) {
-  background-color: #0E141F !important;
-  color: var(--mep-status-ok) !important;
+  background-color: #121314 !important;
+  color: #67C23A !important;
   font-weight: 600;
   cursor: default;
-  border-color: #2D3A4F !important;
+  border-color: #363637 !important;
 }
 
 /* 1 HÀNG NÚT BẤM DUY NHẤT */
@@ -854,7 +961,7 @@
   flex-wrap: wrap;
   gap: 12px;
   padding-top: 4px;
-  border-top: 1px solid rgba(255, 255, 255, 0.06);
+  border-top: 1px solid rgba(255, 255, 255, 0.08);
 }
 
 .review-main-btns {
@@ -871,14 +978,15 @@
 }
 
 .btn-rerun {
-  background-color: rgba(245, 158, 11, 0.12);
-  border-color: rgba(245, 158, 11, 0.4);
-  color: var(--mep-status-warn);
+  background-color: rgba(230, 162, 60, 0.12);
+  border-color: rgba(230, 162, 60, 0.4);
+  color: #E6A23C;
   font-weight: 500;
+  transition: all 0.2s ease;
 }
 .btn-rerun:hover {
-  background-color: var(--mep-status-warn);
-  color: #000;
+  background-color: #E6A23C;
+  color: #1D1E1F;
 }
 
 .spacer {
@@ -888,7 +996,7 @@
 /* Checkbox Header Table */
 :deep(.el-table th.el-table__cell .el-checkbox__input.is-indeterminate .el-checkbox__inner) {
   background-color: transparent !important;
-  border-color: var(--mep-border) !important;
+  border-color: #4C4D4F !important;
 }
 :deep(.el-table th.el-table__cell .el-checkbox__input.is-indeterminate .el-checkbox__inner::before),
 :deep(.el-table th.el-table__cell .el-checkbox__input.is-indeterminate .el-checkbox__inner::after) {
