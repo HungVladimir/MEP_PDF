@@ -337,7 +337,9 @@
         <!-- PHÂN LOẠI LỖI (ERROR BREAKDOWN BADGES) -->
         <div v-if="errorTypeEntries.length > 0" class="error-breakdown-row">
           <span class="breakdown-label">Phân loại sai lệch:</span>
-          <el-tag v-for="[type, count] in errorTypeEntries" :key="type" type="danger" effect="light" class="me-2 mb-1">
+          <el-tag v-for="[type, count] in errorTypeEntries" :key="type"
+            :type="type.includes('Phụ trội') ? 'warning' : (type.includes('Ghi chú') ? 'info' : 'danger')"
+            effect="light" class="me-2 mb-1">
             {{ type }}: <b>{{ count }}</b>
           </el-tag>
         </div>
@@ -358,9 +360,12 @@
             </div>
             <el-table v-else :data="currentDetail.errors" border size="small" height="340" style="width: 100%">
               <el-table-column prop="id" label="#" width="50" align="center" />
-              <el-table-column prop="type" label="Phân loại lỗi" width="160">
+              <el-table-column prop="type" label="Phân loại lỗi" width="165">
                 <template #default="{ row }">
-                  <el-tag type="danger" size="mini">{{ row.type }}</el-tag>
+                  <el-tag v-if="row.type.includes('Phụ trội')" type="warning" size="mini">{{ row.type }}</el-tag>
+                  <el-tag v-else-if="row.type.includes('Ghi chú')" type="info" size="mini">{{ row.type }}</el-tag>
+                  <el-tag v-else-if="row.type.includes('mồ côi')" type="danger" effect="plain" size="mini">{{ row.type }}</el-tag>
+                  <el-tag v-else type="danger" size="mini">{{ row.type }}</el-tag>
                 </template>
               </el-table-column>
               <el-table-column prop="dwg" label="Bản vẽ" width="130" align="center" />
@@ -380,13 +385,25 @@
                   <span v-else class="font-bold">{{ row.ai_qty }}</span>
                 </template>
               </el-table-column>
-              <el-table-column prop="diff" label="Chênh lệch" width="145" align="center">
+              <el-table-column prop="diff" label="Chênh lệch" width="165" align="center">
                 <template #default="{ row }">
-                  <el-tag v-if="String(row.diff).includes('Thiếu') || String(row.diff).includes('Lệch')" type="danger" size="mini" effect="dark" style="font-weight: 700; border-radius: 4px;">
+                  <el-tag v-if="String(row.diff).includes('Thiếu')" type="danger" size="mini" effect="dark" style="font-weight: 700; border-radius: 4px;">
                     <i class="bi bi-arrow-down-right me-1"></i>{{ row.diff }}
                   </el-tag>
                   <el-tag v-else-if="String(row.diff).includes('Thừa')" type="warning" size="mini" effect="dark" style="font-weight: 700; border-radius: 4px;">
                     <i class="bi bi-arrow-up-right me-1"></i>{{ row.diff }}
+                  </el-tag>
+                  <el-tag v-else-if="String(row.diff).includes('Lệch PT') || String(row.diff).includes('Phụ trội')" type="warning" size="mini" effect="plain" style="font-weight: 700; border-radius: 4px;">
+                    <i class="bi bi-percent me-1"></i>{{ row.diff }}
+                  </el-tag>
+                  <el-tag v-else-if="String(row.diff).includes('Lệch RM') || String(row.diff).includes('Ghi chú')" type="info" size="mini" effect="plain" style="font-weight: 700; border-radius: 4px;">
+                    <i class="bi bi-tag me-1"></i>{{ row.diff }}
+                  </el-tag>
+                  <el-tag v-else-if="String(row.diff).includes('mồ côi')" type="danger" size="mini" effect="plain" style="font-weight: 700; border-radius: 4px;">
+                    <i class="bi bi-exclamation-circle me-1"></i>{{ row.diff }}
+                  </el-tag>
+                  <el-tag v-else-if="String(row.diff).includes('Lệch')" type="danger" size="mini" effect="dark" style="font-weight: 700; border-radius: 4px;">
+                    <i class="bi bi-exclamation-triangle me-1"></i>{{ row.diff }}
                   </el-tag>
                   <span v-else class="text-danger font-bold">{{ row.diff }}</span>
                 </template>

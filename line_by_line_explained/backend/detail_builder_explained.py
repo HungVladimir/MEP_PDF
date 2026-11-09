@@ -21,14 +21,14 @@ def safe_id(keyid: str) -> str:
     return str(keyid).replace('/', '_').replace('\\', '_').replace(':', '_').strip()
 
 
-# Dòng 18-48: Hàm phân tách các phân đoạn lỗi theo từng bản vẽ từ cột Ghi chú
+# Dòng 18-65: Hàm phân tách các phân đoạn lỗi theo từng bản vẽ từ cột Ghi chú
 def parse_dwg_segments(text: str) -> list:
     """
     Tách chuỗi ghi chú note_col thành danh sách các segment theo từng bản vẽ hoặc lỗi đơn lẻ.
     Ví dụ chuỗi đầu vào:
     'Lệch BV 0205 (AI:1.4 | Ven:1.8) | Lệch BV 0405 (AI:58.0 | Ven:59.0)'
     -> Tách thành 2 segment có thông tin chi tiết:
-       [{'dwg': '0205', 'ai': 1.4, 'ven': 1.8, 'raw': '...'}, {'dwg': '0405', 'ai': 58.0, 'ven': 59.0, 'raw': '...'}]
+       [{'dwg': '0205', 'ai': 1.4, 'ven': 1.8, 'ai_pt': ..., 'ven_pt': ..., 'raw': '...'}, ...]
     """
     if not text or not str(text).strip():
         return []
@@ -51,16 +51,109 @@ def parse_dwg_segments(text: str) -> list:
         m_ai = re.search(r'AI\s*(?:\[[^\]]*\])?\s*[:=]\s*([\d\.]+)', seg, re.IGNORECASE)
         m_ven = re.search(r'Ven(?:dor)?\s*(?:\[[^\]]*\])?\s*[:=]\s*([\d\.]+)', seg, re.IGNORECASE)
 
+        # Trích xuất % Phụ trội (PT) và Ghi chú (RM) của cả 2 phía AI và Vendor
+        m_ai_pt = re.search(r'AI\s*\[[^\]]*?PT:([^,\]]+)', seg, re.IGNORECASE)
+        m_ai_rm = re.search(r'AI\s*\[[^\]]*?RM:([^,\]]+)', seg, re.IGNORECASE)
+        m_ven_pt = re.search(r'Ven(?:dor)?\s*\[[^\]]*?PT:([^,\]]+)', seg, re.IGNORECASE)
+        m_ven_rm = re.search(r'Ven(?:dor)?\s*\[[^\]]*?RM:([^,\]]+)', seg, re.IGNORECASE)
+
         ai_val = float(m_ai.group(1)) if m_ai else None
         ven_val = float(m_ven.group(1)) if m_ven else None
+        ai_pt = m_ai_pt.group(1).strip() if m_ai_pt else None
+        ai_rm = m_ai_rm.group(1).strip() if m_ai_rm else None
+        ven_pt = m_ven_pt.group(1).strip() if m_ven_pt else None
+        ven_rm = m_ven_rm.group(1).strip() if m_ven_rm else None
 
         results.append({
             'dwg': dwg,
             'ai': ai_val,
             'ven': ven_val,
+            'ai_pt': ai_pt,
+            'ai_rm': ai_rm,
+            'ven_pt': ven_pt,
+            'ven_rm': ven_rm,
             'raw': seg
         })
     return results
+
+
+# Dòng 66-140: Hàm phân loại chính xác lỗi đối soát và xác định text hiển thị chênh lệch
+def classify_reconcile_error(raw_text: str, ai_val: float = None, ven_val: float = None,
+                             ai_pt: str = None, ven_pt: str = None,
+                             ai_rm: str = None, ven_rm: str = None):
+    """
+    Phân loại chính xác nguyên nhân sai lệch và chuỗi hiển thị chênh lệch trực quan cho kỹ sư.
+    Phân biệt rõ ràng: Lệch khối lượng, Lệch phụ trội, Lệch ghi chú (Remark), Mã mồ côi.
+    """
+    raw_lower = raw_text.lower() if raw_text else ""
+
+    # 1. Mã mồ côi
+    if "mồ côi" in raw_lower:
+        return "Mã mồ côi (Chưa khai báo)", "Mã mồ côi (Chỉ có ở bản vẽ)"
+
+    # Trích xuất bổ sung nếu chưa có sẵn
+    if ai_pt is None:
+        m = re.search(r'AI\s*\[[^\]]*?PT:([^,\]]+)', raw_text, re.IGNORECASE)
+        if m:
+            ai_pt = m.group(1).strip()
+    if ven_pt is None:
+        m = re.search(r'Ven(?:dor)?\s*\[[^\]]*?PT:([^,\]]+)', raw_text, re.IGNORECASE)
+        if m:
+            ven_pt = m.group(1).strip()
+    if ai_rm is None:
+        m = re.search(r'AI\s*\[[^\]]*?RM:([^,\]]+)', raw_text, re.IGNORECASE)
+        if m:
+            ai_rm = m.group(1).strip()
+    if ven_rm is None:
+        m = re.search(r'Ven(?:dor)?\s*\[[^\]]*?RM:([^,\]]+)', raw_text, re.IGNORECASE)
+        if m:
+            ven_rm = m.group(1).strip()
+
+    is_pt_diff = bool(ai_pt and ven_pt and ai_pt.upper() != ven_pt.upper())
+    is_rm_diff = bool(ai_rm and ven_rm and ai_rm.upper() != ven_rm.upper())
+
+    delta = None
+    if ai_val is not None and ven_val is not None:
+        delta = round(ai_val - ven_val, 2)
+
+    # 2. Trường hợp khối lượng bằng nhau (delta == 0) nhưng lệch Phụ trội hoặc Remark
+    if delta is not None and delta == 0:
+        if is_pt_diff and is_rm_diff:
+            return "Lệch phụ trội & Ghi chú", f"Lệch PT ({ai_pt} vs {ven_pt})"
+        elif is_pt_diff:
+            return "Lệch phụ trội", f"Lệch PT ({ai_pt} vs {ven_pt})"
+        elif is_rm_diff:
+            return "Lệch ghi chú (Remark)", f"Lệch RM ({ai_rm} vs {ven_rm})"
+        elif "pt:" in raw_lower or "phụ trội" in raw_lower:
+            return "Lệch phụ trội", "Lệch phụ trội"
+        elif "rm:" in raw_lower or "remark" in raw_lower or "sdv" in raw_lower:
+            return "Lệch ghi chú (Remark)", "Lệch ghi chú"
+        else:
+            return "Sai lệch điều kiện", "Lệch điều kiện"
+
+    # 3. Trường hợp khối lượng lệch nhau (delta != 0)
+    if delta is not None and delta != 0:
+        qty_str = f"Thiếu {abs(delta):g}" if delta < 0 else f"Thừa {delta:g}"
+        if is_pt_diff:
+            return "Lệch KL & Phụ trội", f"{qty_str} (Lệch PT)"
+        elif is_rm_diff:
+            return "Lệch KL & Ghi chú", f"{qty_str} (Lệch RM)"
+        else:
+            return "Lệch khối lượng", qty_str
+
+    # 4. Fallback nhận diện theo từ khóa trong raw string
+    if "thiếu" in raw_lower:
+        return "Thiếu vật tư", raw_text.split('|')[0].strip()
+    elif "thừa" in raw_lower:
+        return "Thừa vật tư ngoài BOM", raw_text.split('|')[0].strip()
+    elif "sai" in raw_lower:
+        return "Sai thông số / đơn giá", raw_text.split('|')[0].strip()
+    elif is_pt_diff or "pt:" in raw_lower or "phụ trội" in raw_lower:
+        return "Lệch phụ trội", f"Lệch PT ({ai_pt} vs {ven_pt})" if (ai_pt and ven_pt) else "Lệch phụ trội"
+    elif is_rm_diff or "rm:" in raw_lower or "remark" in raw_lower or "sdv" in raw_lower:
+        return "Lệch ghi chú (Remark)", f"Lệch RM ({ai_rm} vs {ven_rm})" if (ai_rm and ven_rm) else "Lệch ghi chú"
+
+    return "Lệch khối lượng", raw_text.split('|')[0].strip()
 
 
 # Dòng 50-403: Hàm đọc và phân tích toàn diện file Excel báo cáo ra từ điển dữ liệu
@@ -174,29 +267,20 @@ def parse_excel_report_to_detail(excel_path: Path, keyid: str, session_dir: Path
                             dwg_s = seg.get('dwg') or "Chung"
                             ai_s = seg.get('ai')
                             ven_s = seg.get('ven')
+                            ai_pt = seg.get('ai_pt')
+                            ven_pt = seg.get('ven_pt')
+                            ai_rm = seg.get('ai_rm')
+                            ven_rm = seg.get('ven_rm')
 
-                            # Phân loại loại lỗi
-                            err_type = "Lệch khối lượng"
-                            if "mồ côi" in seg['raw'].lower():
-                                err_type = "Mã mồ côi (Chưa khai báo)"
-                            elif "thiếu" in seg['raw'].lower():
-                                err_type = "Thiếu vật tư"
-                            elif "thừa" in seg['raw'].lower():
-                                err_type = "Thừa vật tư ngoài BOM"
-                            elif "sai" in seg['raw'].lower():
-                                err_type = "Sai thông số / đơn giá"
+                            # Phân loại lỗi và xác định chuỗi chênh lệch trực quan
+                            err_type, diff_text = classify_reconcile_error(
+                                seg['raw'], ai_s, ven_s, ai_pt, ven_pt, ai_rm, ven_rm
+                            )
 
                             error_type_counts[err_type] = error_type_counts.get(err_type, 0) + 1
 
                             v_qty_display = f"{ven_s:g}" if ven_s is not None else str(v_qty_raw)
                             ai_qty_display = f"{ai_s:g}" if ai_s is not None else (f"{ai_sum:g}" if has_ai_val else "0")
-
-                            # Tính chênh lệch định lượng
-                            if ai_s is not None and ven_s is not None:
-                                delta = round(ai_s - ven_s, 2)
-                                diff_text = f"Thiếu {abs(delta):g}" if delta < 0 else (f"Thừa {delta:g}" if delta > 0 else "Khớp")
-                            else:
-                                diff_text = seg['raw'].split('|')[0] if '|' in seg['raw'] else seg['raw']
 
                             error_items.append({
                                 "id": len(error_items) + 1,
@@ -214,18 +298,6 @@ def parse_excel_report_to_detail(excel_path: Path, keyid: str, session_dir: Path
                             })
                     else:
                         # Dòng 193-228: Trường hợp không chỉ định mã bản vẽ cụ thể trong ghi chú
-                        err_type = "Lệch khối lượng"
-                        if "mồ côi" in note_val.lower():
-                            err_type = "Mã mồ côi (Chưa khai báo)"
-                        elif "thiếu" in note_val.lower():
-                            err_type = "Thiếu vật tư"
-                        elif "thừa" in note_val.lower():
-                            err_type = "Thừa vật tư ngoài BOM"
-                        elif "sai" in note_val.lower():
-                            err_type = "Sai thông số / đơn giá"
-
-                        error_type_counts[err_type] = error_type_counts.get(err_type, 0) + 1
-
                         dwg_found = "Chung"
                         for d in drawing_names:
                             if str(d).lower() in note_val.lower():
@@ -234,6 +306,19 @@ def parse_excel_report_to_detail(excel_path: Path, keyid: str, session_dir: Path
 
                         v_qty_display = str(v_qty_raw) if pd.notna(v_qty_raw) else '—'
                         ai_qty_display = f"{ai_sum:g}" if has_ai_val else "0"
+
+                        v_qty_f = None
+                        try:
+                            if pd.notna(v_qty_raw):
+                                v_qty_f = float(str(v_qty_raw).replace(',', '').strip())
+                        except (ValueError, TypeError):
+                            pass
+
+                        err_type, diff_text = classify_reconcile_error(
+                            note_val, ai_sum if has_ai_val else None, v_qty_f
+                        )
+
+                        error_type_counts[err_type] = error_type_counts.get(err_type, 0) + 1
 
                         error_items.append({
                             "id": len(error_items) + 1,
@@ -245,7 +330,7 @@ def parse_excel_report_to_detail(excel_path: Path, keyid: str, session_dir: Path
                             "vendor_qty": v_qty_display,
                             "ai_qty": ai_qty_display,
                             "ai_breakdown": ai_breakdown_text,
-                            "diff": note_val.split('|')[0] if '|' in note_val else note_val,
+                            "diff": diff_text,
                             "cell": f"Row {idx + 2}",
                             "msg": note_val or "Phát hiện sai lệch đối chiếu giữa Dự toán và Bản vẽ AI"
                         })
