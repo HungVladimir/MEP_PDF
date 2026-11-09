@@ -144,9 +144,13 @@ Tạo file `backend/.env` với các thông số mẫu:
 # ====================================================================
 # 1. TÀI KHOẢN ORACLE DATABASE (LOCAL_AI.MEP_PAYMENT_ANALYSIS)
 # ====================================================================
-DB_USER_YMS_AI=********
-DB_PASSWORD_YMS_AI==********
-DB_SERVICE==********
+# Quy tắc đặt tên biến mật khẩu Database đồng bộ K8s & Local (Chu Đức Hải):
+# Cú pháp: DB_[tên database]_[userName]__[mật khẩu] -> Bắt buộc 2 dấu gạch dưới '__'
+# User được khai báo trực tiếp dạng string trong code: user_name="LOCAL_AI"
+DB_MBLDB_LOCAL_AI__PASSWORD=********
+# Giữ thêm biến dự phòng tương thích ngược (1 gạch dưới):
+DB_MBLDB_LOCAL_AI_PASSWORD=********
+DB_SERVICE=MBLDB_SVC
 ORACLE_CLIENT_LIB_DIR=C:\oracle_client
 
 # ====================================================================

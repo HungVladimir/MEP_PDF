@@ -20,12 +20,13 @@ if sys.stdout and hasattr(sys.stdout, 'reconfigure'):
     except Exception:
         pass
 
-# Dòng 17-18: Nạp cấu hình các biến môi trường từ file .env
+# Dòng 17-18: Nạp cấu hình các biến môi trường từ file .env (Chuẩn K8s & Local)
 load_dotenv(find_dotenv())
+load_dotenv(Path(__file__).resolve().parent.parent.parent / "backend" / ".env")
 
-# Dòng 20-22: Đọc thông tin xác thực tài khoản Oracle DB và thư mục Instant Client
-DB_USER_YMS_AI = os.getenv("DB_USER_YMS_AI")
-DB_PASSWORD_YMS_AI = os.getenv("DB_PASSWORD_YMS_AI")
+# Dòng 20-22: Quy tắc đặt tên biến mật khẩu Database đồng bộ K8s & Local (Chu Đức Hải)
+# Cú pháp: DB_[tên database]_[userName]__[mật khẩu] -> 2 dấu gạch dưới '__'
+pwd_mbldb = os.getenv("DB_MBLDB_LOCAL_AI__PASSWORD") or os.getenv("DB_MBLDB_LOCAL_AI_PASSWORD")
 oracle_client_path = os.getenv("ORACLE_CLIENT_LIB_DIR")
 
 # Dòng 24-29: Khởi tạo Oracle Thick Client (Nếu có đường dẫn thư viện client)
@@ -48,12 +49,12 @@ except ImportError:
 def get_cur():
     """
     Hàm lấy con trỏ kết nối OneAI Oracle (MBLDB).
-    Kết nối bằng tài khoản LOCAL_AI để thao tác trực tiếp trên bảng MEP_PAYMENT_ANALYSIS.
+    Khai báo trực tiếp userName dưới dạng string ("LOCAL_AI") theo quy chuẩn K8s của team.
     """
     return oracle_conn(
         dns="MBLDB",
-        user_name=DB_USER_YMS_AI,
-        password=DB_PASSWORD_YMS_AI,
+        user_name="LOCAL_AI",
+        password=pwd_mbldb,
         oracle_client_dir=oracle_client_path,
     )
 

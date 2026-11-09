@@ -155,7 +155,7 @@ Script Python này dùng để khởi tạo bảng tự động từ Terminal (`
    * Đọc file `.env`, lấy `ORACLE_CLIENT_LIB_DIR` (ví dụ: `C:\oracle_client`).
    * Gọi `oracledb.init_oracle_client(lib_dir=oracle_client_path)`. Đây là bước then chốt nạp thư viện `oci.dll` vào bộ nhớ, hóa giải lỗi password verifier `0x939`.
 2. **Chiến lược Thử nghiệm Đa tầng trong hàm `run_init()` (Dòng 99-162):**
-   * **Cách 1:** Thử kết nối bằng thư viện nội bộ công ty: `oneai_sdv.oracle_conn(dns="MBAYMS", user_name=DB_USER_YMS_AI, ...)`.
+   * **Cách 1:** Thử kết nối bằng thư viện nội bộ công ty: `oneai_sdv.oracle_conn(dns="MBLDB", user_name="LOCAL_AI", password=pwd_mbldb, ...)` (theo quy chuẩn K8s của team Chu Đức Hải).
    * **Cách 2:** Nếu máy chưa có `oneai_sdv`, tự động chuyển sang dùng thư viện Native: `oracledb.connect(user=DB_USER_YMS, password=DB_PASSWORD_YMS, dsn=TNS_YMS)`.
 3. **Thực thi DDL & Bắt lỗi an toàn (Idempotency):**
    * Thực hiện lệnh `CREATE TABLE LOCAL_AI.MEP_PAYMENT_ANALYSIS (...)`.

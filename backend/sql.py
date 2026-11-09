@@ -14,11 +14,13 @@ if sys.stdout and hasattr(sys.stdout, 'reconfigure'):
     except Exception:
         pass
 
-# 1. NẠP CẤU HÌNH BIẾN MÔI TRƯỜNG TỪ .ENV
+# 1. NẠP CẤU HÌNH BIẾN MÔI TRƯỜNG TỪ .ENV (CHUẨN ĐỒNG BỘ K8S & LOCAL)
 load_dotenv(find_dotenv())
+load_dotenv(Path(__file__).parent / ".env")
 
-DB_USER_YMS_AI = os.getenv("DB_USER_YMS_AI")
-DB_PASSWORD_YMS_AI = os.getenv("DB_PASSWORD_YMS_AI")
+# Quy tắc đặt tên biến mật khẩu Database đồng bộ K8s & Local (Chu Đức Hải):
+# Cú pháp: DB_[tên database]_[userName]__[mật khẩu] -> 2 dấu gạch dưới '__'
+pwd_mbldb = os.getenv("DB_MBLDB_LOCAL_AI__PASSWORD") or os.getenv("DB_MBLDB_LOCAL_AI_PASSWORD")
 oracle_client_path = os.getenv("ORACLE_CLIENT_LIB_DIR")
 
 # 2. KHỞI TẠO ORACLE THICK CLIENT (NẾU CÓ ĐƯỜNG DẪN CLIENT)
@@ -38,10 +40,11 @@ except ImportError:
 
 def get_cur():
     """Hàm lấy con trỏ kết nối OneAI Oracle (MBLDB)."""
+    # Khai báo trực tiếp userName dưới dạng string theo quy chuẩn K8s
     return oracle_conn(
         dns="MBLDB",
-        user_name=DB_USER_YMS_AI,
-        password=DB_PASSWORD_YMS_AI,
+        user_name="LOCAL_AI",
+        password=pwd_mbldb,
         oracle_client_dir=oracle_client_path,
     )
 

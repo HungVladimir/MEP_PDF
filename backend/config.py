@@ -49,9 +49,14 @@ DIR_CSV_EXTRACTED = os.path.join(
 # Lưu CSV của Biên bản vật tư (Gate Pass)
 DIR_GATEPASS_CSV = os.path.join(BASE_DIR, "output", "gatepass_csv")
 
-# --- THƯ MỤC CHỨA DỮ LIỆU EXCEL THỰC TẾ & BÁO CÁO ĐẦU RA ---
-DIR_VENDOR_EXCEL = r"D:/Private_Documents/Doc/AI-Infra"
-DIR_FINAL_REPORT = r"D:/Private_Documents/Doc/AI-Infra/FinalReport"
+# --- THƯ MỤC CHỨA DỮ LIỆU EXCEL THỰC TẾ & BÁO CÁO ĐẦU RA (TỰ ĐỘNG THÍCH ỨNG LOCAL/SERVER) ---
+COMPANY_DOC_DIR = os.getenv("COMPANY_PRIVATE_ROOT", r"D:/Private_Documents/Doc/AI-Infra")
+if os.path.exists(COMPANY_DOC_DIR):
+    DIR_VENDOR_EXCEL = COMPANY_DOC_DIR
+    DIR_FINAL_REPORT = os.path.join(COMPANY_DOC_DIR, "FinalReport")
+else:
+    DIR_VENDOR_EXCEL = os.path.join(BASE_DIR, "sessions")
+    DIR_FINAL_REPORT = os.path.join(BASE_DIR, "final_reports")
 
 # Tự động tạo toàn bộ thư mục nếu chưa tồn tại
 for folder in [
@@ -59,7 +64,10 @@ for folder in [
     DIR_IMG_EXTRACTED, DIR_CSV_EXTRACTED, DIR_GATEPASS_CSV,
     DIR_VENDOR_EXCEL, DIR_FINAL_REPORT
 ]:
-    os.makedirs(folder, exist_ok=True)
+    try:
+        os.makedirs(folder, exist_ok=True)
+    except Exception:
+        pass
 
 # ==========================================
 # 4. CẤU HÌNH FILE VENDOR (BẢNG KHỐI QLƯỢNG)

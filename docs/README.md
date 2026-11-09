@@ -1,6 +1,21 @@
 # TỔNG MỤC TÀI LIỆU DỰ ÁN MEP ONEAI SYSTEM
 
-Thư mục tài liệu này đã được tinh gọn, quy hoạch và nâng cấp thành **10 BỘ TÀI LIỆU MASTER HOÀN CHỈNH (PHIÊN BẢN v3.0 MASTER)**, bao quát 100% tất cả các khía cạnh từ hướng dẫn thực chiến từng bước cho người mới, kiến trúc toàn cảnh 4 tầng, giải mã code của sếp, thuật toán thị giác máy tính, bóc tách CAD vector, giao diện trực quan 4 tab Dual-Theme (Dark/Light mode), tích hợp MinIO Cloud Storage chuẩn Enterprise, xuất Excel auto-fit compact tự động, đến cẩm nang phân giải chi tiết từng con số trên màn hình và giải mã chuyên sâu 2 module lõi:
+Thư mục tài liệu này đã được tinh gọn, quy hoạch và nâng cấp thành **11 BỘ TÀI LIỆU MASTER HOÀN CHỈNH (PHIÊN BẢN v3.0 MASTER)**, bao quát 100% tất cả các khía cạnh từ hướng dẫn thực chiến từng bước cho người mới, kiến trúc toàn cảnh 4 tầng, giải mã code của sếp, thuật toán thị giác máy tính, bóc tách CAD vector, giao diện trực quan 4 tab Dual-Theme (Dark/Light mode), tích hợp MinIO Cloud Storage chuẩn Enterprise, xuất Excel auto-fit compact tự động, cẩm nang phân giải chi tiết từng con số trên màn hình, giải mã chuyên sâu 2 module lõi, đến cẩm nang toàn tập triển khai Server/Kubernetes (K8s) và checklist vận hành:
+
+---
+
+### 🌟 [11. Cẩm Nang Toàn Tập: Nâng Cấp & Triển Khai Hệ Thống MEP OneAI Từ Local Lên Server / K8s & Checklist Vận Hành](./11_CAM_NANG_DEPLOY_SERVER_K8S_VA_CHECKLIST_VAN_HANH.md) 🚀 *(CẨM NANG TRIỂN KHAI PRODUCTION & DEVOPS - v3.0 MASTER)*
+* **Tên file:** `11_CAM_NANG_DEPLOY_SERVER_K8S_VA_CHECKLIST_VAN_HANH.md`
+* **Nội dung:** Toàn bộ giải pháp chuyển dịch hệ thống từ Localhost lên hạ tầng Server Doanh nghiệp / Kubernetes (K8s):
+  * **Bản chất lỗi `127.0.0.1:8000`:** Tại sao trình duyệt kỹ sư bị lỗi `net::ERR_CONNECTION_REFUSED` khi lên server, cơ chế `getFastApiBaseUrl()` tự động phân giải domain và định tuyến K8s Ingress Path Routing.
+  * **Quy chuẩn Database của Team (Chu Đức Hải):** Chuẩn hóa cú pháp `DB_[tên database]_[userName]__[mật khẩu]` (bắt buộc 2 dấu gạch dưới `__`), khai báo trực tiếp `user_name="LOCAL_AI"` dạng string, kết nối DNS `MBLDB` tương thích 100% K8s Secret Vault.
+  * **Lưu trữ phân tán MinIO S3 (Stateless Pod Lifecycle):** Giải quyết vấn đề mất dữ liệu khi Pod restart, chuyển toàn bộ ảnh, file báo cáo `.xlsx`, `.zip` và cache `detail.json` lên MinIO bucket `oneai`.
+  * **Tường lửa mạng nội bộ (NetworkPolicy & Egress Whitelist):** Danh sách IP & Port cần mở thông tới Oracle RAC (1621), MinIO (31800) và Server GPU AI (32200).
+  * **Quản trị RAM & Phòng chống OOMKilled:** Kỹ thuật cấp phát tài nguyên K8s (`limits.memory: 6Gi`) khi xử lý bản vẽ kỹ thuật CAD/PDF A0 dung lượng lớn, giữ Semaphore `MAX_AI_WORKERS = 5`.
+  * **Health Check Probes & Logging:** Tích hợp `/healthz` cho K8s liveness/readiness probes, logging UTF-8 ra `stdout` tập trung.
+  * **An ninh bảo mật & DLP:** Lách cơ chế chặn file Excel của tường lửa doanh nghiệp bằng luồng tải Blob file nén `.zip`.
+  * **Trọn bộ file mẫu cấu hình:** Mẫu chuẩn `Dockerfile` (Python + OpenCV + Oracle), `k8s-deployment.yaml`, `k8s-ingress.yaml`.
+  * **Bảng Checklist thực chiến 10 bước:** Ma trận nghiệm thu nghiêm ngặt trước khi bấm Deploy Go-Live.
 
 ---
 

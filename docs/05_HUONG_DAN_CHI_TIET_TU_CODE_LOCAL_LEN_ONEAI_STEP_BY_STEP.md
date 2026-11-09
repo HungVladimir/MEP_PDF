@@ -615,7 +615,8 @@ def update_task_status(keyid: str, status: str, error_count: int = 0, result_lin
     params = {"STATUS": status, "ERROR_COUNT": error_count, "RESULT_LINK": result_link, "REASON": reason, "KEYID": str(keyid).strip()}
     if progress is not None:
         params["PROGRESS"] = int(progress)
-    cur = oracle_conn(dns="MBLDB", user_name=os.getenv("DB_USER_YMS_AI"), password=os.getenv("DB_PASSWORD_YMS_AI"))
+    pwd_mbldb = os.getenv("DB_MBLDB_LOCAL_AI__PASSWORD") or os.getenv("DB_MBLDB_LOCAL_AI_PASSWORD")
+    cur = oracle_conn(dns="MBLDB", user_name="LOCAL_AI", password=pwd_mbldb)
     cur.execute(sql, params=params)
     if hasattr(cur, 'commit'): cur.commit()
     elif hasattr(cur, 'connection'): cur.connection.commit()

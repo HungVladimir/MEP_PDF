@@ -827,8 +827,9 @@ DB_USER_YMS = os.getenv("DB_USER_YMS")
 DB_PASSWORD_YMS = os.getenv("DB_PASSWORD_YMS")
 TNS_YMS = os.getenv("TNS_YMS")
 
-DB_USER_YMS_AI = os.getenv("DB_USER_YMS_AI")
-DB_PASSWORD_YMS_AI = os.getenv("DB_PASSWORD_YMS_AI")
+# Quy tắc đặt tên biến mật khẩu Database đồng bộ K8s & Local (Chu Đức Hải):
+# Cú pháp: DB_[tên database]_[userName]__[mật khẩu] -> 2 dấu gạch dưới '__'
+pwd_mbldb = os.getenv("DB_MBLDB_LOCAL_AI__PASSWORD") or os.getenv("DB_MBLDB_LOCAL_AI_PASSWORD")
 
 # Tự động nhận diện thư mục Oracle Instant Client
 oracle_client_path = os.getenv("ORACLE_CLIENT_LIB_DIR")
@@ -874,7 +875,7 @@ def update_task_status(keyid: str, status: str, error_count: int = 0, result_lin
     """
     params = {"STATUS": status, "ERROR_COUNT": error_count, "RESULT_LINK": result_link, "REASON": reason, "KEYID": str(keyid).strip()}
     if HAS_ONEAI_SDV and oracle_conn is not None:
-        cur = oracle_conn(dns="MBAYMS", user_name=DB_USER_YMS_AI, password=DB_PASSWORD_YMS_AI, oracle_client_dir=oracle_client_path)
+        cur = oracle_conn(dns="MBLDB", user_name="LOCAL_AI", password=pwd_mbldb, oracle_client_dir=oracle_client_path)
         cur.execute(sql, params=params)
     else:
         conn = get_native_conn()
@@ -887,7 +888,7 @@ def update_review_decision(keyid: str, decision: str, note: str, reviewer: str):
     sql = "UPDATE LOCAL_AI.MEP_PAYMENT_ANALYSIS SET REVIEW_DECISION = :DECISION, REVIEW_NOTE = :NOTE, REVIEW_BY = :REVIEWER WHERE KEYID = :KEYID"
     params = {"DECISION": decision, "NOTE": note, "REVIEWER": reviewer, "KEYID": str(keyid).strip()}
     if HAS_ONEAI_SDV and oracle_conn is not None:
-        cur = oracle_conn(dns="MBAYMS", user_name=DB_USER_YMS_AI, password=DB_PASSWORD_YMS_AI, oracle_client_dir=oracle_client_path)
+        cur = oracle_conn(dns="MBLDB", user_name="LOCAL_AI", password=pwd_mbldb, oracle_client_dir=oracle_client_path)
         cur.execute(sql, params=params)
     else:
         conn = get_native_conn()
@@ -918,7 +919,7 @@ def batch_upsert_tasks(rows: list) -> int:
     } for r in rows]
 
     if HAS_ONEAI_SDV and oracle_conn is not None:
-        cur = oracle_conn(dns="MBAYMS", user_name=DB_USER_YMS_AI, password=DB_PASSWORD_YMS_AI, oracle_client_dir=oracle_client_path)
+        cur = oracle_conn(dns="MBLDB", user_name="LOCAL_AI", password=pwd_mbldb, oracle_client_dir=oracle_client_path)
         for p in params_list: cur.execute(sql, params=p)
     else:
         conn = get_native_conn()
@@ -933,7 +934,7 @@ def delete_tasks(keyids: list) -> int:
     sql = "DELETE FROM LOCAL_AI.MEP_PAYMENT_ANALYSIS WHERE KEYID = :KEYID"
     params_list = [{"KEYID": str(k).strip()} for k in keyids]
     if HAS_ONEAI_SDV and oracle_conn is not None:
-        cur = oracle_conn(dns="MBAYMS", user_name=DB_USER_YMS_AI, password=DB_PASSWORD_YMS_AI, oracle_client_dir=oracle_client_path)
+        cur = oracle_conn(dns="MBLDB", user_name="LOCAL_AI", password=pwd_mbldb, oracle_client_dir=oracle_client_path)
         for p in params_list: cur.execute(sql, params=p)
     else:
         conn = get_native_conn()

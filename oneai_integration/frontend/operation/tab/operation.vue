@@ -602,8 +602,25 @@ import { ElMessage, ElMessageBox } from 'element-plus'
 import axios from 'axios'
 import { get_total_row, get_data_page, save_mep_rows, delete_mep_rows, get_kpi_summary } from '../js/mepPayment'
 
-// Địa chỉ Worker API & Kích thước nút bấm
-const FASTAPI_BASE_URL = 'http://127.0.0.1:8000'
+// Địa chỉ Worker API & Kích thước nút bấm (Tự động nhận diện Localhost vs Server Production/K8s)
+const getFastApiBaseUrl = () => {
+  if (typeof window !== 'undefined' && window.__FASTAPI_BASE_URL__) {
+    return window.__FASTAPI_BASE_URL__
+  }
+  if (typeof process !== 'undefined' && process.env && process.env.VITE_FASTAPI_BASE_URL) {
+    return process.env.VITE_FASTAPI_BASE_URL
+  }
+  if (typeof window !== 'undefined' && window.location) {
+    const host = window.location.hostname
+    if (host === 'localhost' || host === '127.0.0.1') {
+      return 'http://127.0.0.1:8000'
+    }
+    // Khi chạy trên Server nội bộ / K8s: mặc định trỏ theo hostname của server cổng 8000
+    return `${window.location.protocol}//${host}:8000`
+  }
+  return 'http://127.0.0.1:8000'
+}
+const FASTAPI_BASE_URL = getFastApiBaseUrl()
 const buttonSize = ref('default')
 const MAX_UPLOAD_SIZE_MB = 50 // Giới hạn file Excel upload tối đa 50MB
 

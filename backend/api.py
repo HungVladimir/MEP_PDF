@@ -298,9 +298,10 @@ def run_ai_task_background(keyid: str, session_dir: Path, excel_path: str, payme
 # 4. CÁC ENDPOINT API GIAO TIẾP VỚI WEB
 
 
+@app.get("/healthz")
 @app.get("/mep_payment/health")
 async def health_check():
-    """Kiểm tra tình trạng hoạt động của Worker Service."""
+    """Kiểm tra tình trạng hoạt động của Worker Service (Hỗ trợ K8s Liveness/Readiness Probe)."""
     return {"status": "ok", "service": "MEP Payment AI Worker", "timestamp": time.time()}
 
 
