@@ -1,17 +1,23 @@
 /* ====================================================================
-   MEP ONEAI SYSTEM - INDUSTRIAL DARK TECH STYLESHEET
+   MEP ONEAI SYSTEM - DUAL-THEME STYLESHEET (DARK & LIGHT COMPATIBLE)
    File: operation.css
-   Mô tả: Dark Mode công nghiệp hiện đại, độ tương phản chuẩn WCAG AA.
-         Khung viền rõ ràng, chia ô tách biệt cho các thẻ KPI, Modal chi tiết,
-         Tab đối chiếu từng bản vẽ và Khối soi ảnh trích xuất.
+   Mô tả: Tương thích hoàn hảo cả Dark Mode (chuẩn công nghiệp hiện đại)
+         và Light Mode (theo Computer Mode / Theme của OneAI Portal).
+         Tự động đổi màu mượt mà, khung viền rõ ràng, độ tương phản chuẩn WCAG AA.
    ==================================================================== */
 
+/* ====================================================================
+   1. PALETTE BIẾN MÀU THEME (DYNAMIC CSS DESIGN TOKENS)
+   ==================================================================== */
+
+/* MẶC ĐỊNH: DARK INDUSTRIAL THEME (ĐÃ XÁC NHẬN CHUẨN TẠI ẢNH DARK2) */
 :root,
 :host,
 .mep-container,
+.mep-container.theme-dark,
 .mep-detail-dialog,
+.mep-detail-dialog.theme-dark,
 .el-dialog {
-  /* 1. PALETTE MÀU CƠ BẢN (SOLID HEX CHO COMPATIBILITY VỚI SCOPED CSS) */
   --mep-bg-base: #141414;
   --mep-bg-surface: #1D1E1F;
   --mep-bg-card: #262727;
@@ -19,28 +25,62 @@
   --mep-bg-input: #121314;
   --mep-bg-active: #1a2a3a;
 
-  /* 2. ĐƯỜNG VIỀN & PHÂN CÁCH KHỐI */
   --mep-border: #363637;
   --mep-border-subtle: #2b2b2c;
   --mep-border-hover: #409EFF;
 
-  /* 3. MÀU CHỮ & ĐỘ TƯƠNG PHẢN (WCAG AA COMPLIANT) */
   --mep-text-primary: #E5EAF3;
   --mep-text-secondary: #C0C4CC;
   --mep-text-muted: #A3A6AD;
   --mep-text-disabled: #606266;
 
-  /* 4. MÀU TÍN HIỆU CÔNG NGHIỆP */
   --mep-accent-blue: #409EFF;
   --mep-status-ok: #67C23A;
   --mep-status-err: #F56C6C;
   --mep-status-warn: #E6A23C;
   --mep-status-info: #909399;
 
-  /* 5. ĐỔ BÓNG & CHUYỂN ĐỘNG */
-  --mep-shadow-card: 0 4px 14px rgba(0, 0, 0, 0.35);
-  --mep-shadow-hover: 0 8px 24px rgba(0, 0, 0, 0.45);
+  --mep-shadow-card: 0 2px 6px rgba(0, 0, 0, 0.25);
+  --mep-shadow-hover: 0 4px 14px rgba(0, 0, 0, 0.35);
   --mep-transition: all 0.2s ease;
+
+  --mep-scrollbar-track: #141414;
+  --mep-scrollbar-thumb: #363637;
+  --mep-scrollbar-thumb-hover: #4C4D4F;
+}
+
+/* KHI CHUYỂN SANG LIGHT MODE (COMPUTER MODE HOẶC ONEAI LIGHT THEME) */
+.mep-container.theme-light,
+.mep-detail-dialog.theme-light,
+:deep(.mep-detail-dialog.theme-light) {
+  --mep-bg-base: #F8FAFC;
+  --mep-bg-surface: #FFFFFF;
+  --mep-bg-card: #FFFFFF;
+  --mep-bg-card-hover: #F1F5F9;
+  --mep-bg-input: #F8FAFC;
+  --mep-bg-active: #EFF6FF;
+
+  --mep-border: #E2E8F0;
+  --mep-border-subtle: #EDF2F7;
+  --mep-border-hover: #3B82F6;
+
+  --mep-text-primary: #0F172A;
+  --mep-text-secondary: #334155;
+  --mep-text-muted: #64748B;
+  --mep-text-disabled: #94A3B8;
+
+  --mep-accent-blue: #2563EB;
+  --mep-status-ok: #16A34A;
+  --mep-status-err: #DC2626;
+  --mep-status-warn: #D97706;
+  --mep-status-info: #64748B;
+
+  --mep-shadow-card: 0 1px 3px rgba(0, 0, 0, 0.06), 0 1px 2px rgba(0, 0, 0, 0.04);
+  --mep-shadow-hover: 0 6px 16px rgba(0, 0, 0, 0.08);
+
+  --mep-scrollbar-track: #F1F5F9;
+  --mep-scrollbar-thumb: #CBD5E1;
+  --mep-scrollbar-thumb-hover: #94A3B8;
 }
 
 /* ====================================================================
@@ -48,10 +88,11 @@
    ==================================================================== */
 .mep-container {
   padding: 16px;
-  background-color: #141414;
-  color: #E5EAF3;
+  background-color: var(--mep-bg-base);
+  color: var(--mep-text-primary);
   min-height: 100vh;
   box-sizing: border-box;
+  transition: var(--mep-transition);
 }
 
 /* ====================================================================
@@ -65,32 +106,32 @@
 }
 
 .kpi-card {
-  background-color: #262727;
-  border: 1px solid #363637;
+  background-color: var(--mep-bg-card);
+  border: 1px solid var(--mep-border);
   border-radius: 8px;
   padding: 12px 14px;
   display: flex;
   align-items: center;
   gap: 12px;
   cursor: pointer;
-  transition: all 0.2s ease;
+  transition: var(--mep-transition);
   user-select: none;
   box-sizing: border-box;
   position: relative;
   overflow: hidden;
-  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.25);
+  box-shadow: var(--mep-shadow-card);
 }
 
 .kpi-card:hover {
   transform: translateY(-2px);
-  border-color: #409EFF;
-  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.35);
+  border-color: var(--mep-border-hover);
+  box-shadow: var(--mep-shadow-hover);
 }
 
 .kpi-card.active {
-  border-color: #409EFF;
-  background-color: #1a2a3a;
-  box-shadow: 0 0 0 1px #409EFF, 0 4px 14px rgba(64, 158, 255, 0.25);
+  border-color: var(--mep-border-hover);
+  background-color: var(--mep-bg-active);
+  box-shadow: 0 0 0 1px var(--mep-border-hover), var(--mep-shadow-hover);
 }
 
 .kpi-icon {
@@ -102,8 +143,10 @@
   justify-content: center;
   font-size: 20px;
   flex-shrink: 0;
+  transition: var(--mep-transition);
 }
 
+/* Icon Colors - Dark Mode Default */
 .kpi-icon.total {
   background: rgba(148, 163, 184, 0.15);
   color: #E2E8F0;
@@ -112,25 +155,25 @@
 
 .kpi-icon.ok {
   background: rgba(103, 194, 58, 0.15);
-  color: #67C23A;
+  color: var(--mep-status-ok);
   border: 1px solid rgba(103, 194, 58, 0.3);
 }
 
 .kpi-icon.err {
   background: rgba(245, 108, 108, 0.15);
-  color: #F56C6C;
+  color: var(--mep-status-err);
   border: 1px solid rgba(245, 108, 108, 0.3);
 }
 
 .kpi-icon.running {
   background: rgba(230, 162, 60, 0.15);
-  color: #E6A23C;
+  color: var(--mep-status-warn);
   border: 1px solid rgba(230, 162, 60, 0.3);
 }
 
 .kpi-icon.waiting {
   background: rgba(144, 147, 153, 0.12);
-  color: #909399;
+  color: var(--mep-text-muted);
   border: 1px solid rgba(144, 147, 153, 0.2);
 }
 
@@ -145,12 +188,12 @@
   font-weight: 700;
   font-family: ui-monospace, SFMono-Regular, Consolas, "Fira Code", monospace;
   line-height: 1.2;
-  color: #FFFFFF;
+  color: var(--mep-text-primary);
 }
 
 .kpi-label {
   font-size: 11px;
-  color: #A3A6AD;
+  color: var(--mep-text-muted);
   margin-top: 3px;
   white-space: nowrap;
   text-overflow: ellipsis;
@@ -169,10 +212,11 @@
   gap: 12px;
   align-items: center;
   margin-bottom: 12px;
-  background-color: #1D1E1F;
-  border: 1px solid #363637;
+  background-color: var(--mep-bg-surface);
+  border: 1px solid var(--mep-border);
   border-radius: 8px;
   padding: 10px 14px;
+  transition: var(--mep-transition);
 }
 
 .toolbar-select {
@@ -205,14 +249,14 @@
 
 .total-count {
   font-size: 13px;
-  color: #A3A6AD;
+  color: var(--mep-text-muted);
   display: flex;
   align-items: center;
   gap: 6px;
 }
 
 .count-number {
-  color: #409EFF;
+  color: var(--mep-accent-blue);
   font-weight: 700;
   font-family: monospace;
   background: rgba(64, 158, 255, 0.12);
@@ -232,34 +276,34 @@
   display: inline-block;
   width: 1px;
   height: 22px;
-  background-color: #363637;
+  background-color: var(--mep-border);
   margin: 0 4px;
 }
 
 /* Nút Reload */
 .btn-reload {
-  background-color: #262727;
-  border-color: #363637;
-  color: #E5EAF3;
-  transition: all 0.2s ease;
+  background-color: var(--mep-bg-card);
+  border-color: var(--mep-border);
+  color: var(--mep-text-primary);
+  transition: var(--mep-transition);
 }
 .btn-reload:hover {
-  background-color: #323334;
-  border-color: #409EFF;
-  color: #409EFF;
+  background-color: var(--mep-bg-card-hover);
+  border-color: var(--mep-border-hover);
+  color: var(--mep-border-hover);
 }
 
 /* Nút Insert: Tone xanh ngọc dịu mắt */
 .btn-insert {
   background-color: rgba(103, 194, 58, 0.15);
   border-color: rgba(103, 194, 58, 0.4);
-  color: #67C23A;
+  color: var(--mep-status-ok);
   font-weight: 600;
-  transition: all 0.2s ease;
+  transition: var(--mep-transition);
 }
 .btn-insert:hover {
-  background-color: #67C23A;
-  border-color: #67C23A;
+  background-color: var(--mep-status-ok);
+  border-color: var(--mep-status-ok);
   color: #FFF;
 }
 
@@ -270,7 +314,7 @@
   color: #FFF;
   font-weight: 600;
   box-shadow: 0 2px 10px rgba(64, 158, 255, 0.35);
-  transition: all 0.2s ease;
+  transition: var(--mep-transition);
 }
 .btn-save:hover {
   background-color: #66b1ff;
@@ -281,49 +325,49 @@
 
 /* Nút Export CSV */
 .btn-export {
-  background-color: #262727;
-  border-color: #363637;
-  color: #E5EAF3;
-  transition: all 0.2s ease;
+  background-color: var(--mep-bg-card);
+  border-color: var(--mep-border);
+  color: var(--mep-text-primary);
+  transition: var(--mep-transition);
 }
 .btn-export:hover {
-  background-color: #323334;
-  border-color: #409EFF;
-  color: #409EFF;
+  background-color: var(--mep-bg-card-hover);
+  border-color: var(--mep-border-hover);
+  color: var(--mep-border-hover);
 }
 
 /* Nút Delete: Cảnh báo đỏ ở cuối hàng */
 .btn-delete {
   background-color: rgba(245, 108, 108, 0.15);
   border-color: rgba(245, 108, 108, 0.4);
-  color: #F56C6C;
+  color: var(--mep-status-err);
   font-weight: 600;
-  transition: all 0.2s ease;
+  transition: var(--mep-transition);
 }
 .btn-delete:hover:not(:disabled) {
-  background-color: #F56C6C;
-  border-color: #F56C6C;
+  background-color: var(--mep-status-err);
+  border-color: var(--mep-status-err);
   color: #FFF;
 }
 .btn-delete:disabled {
-  opacity: 0.35;
+  opacity: 0.4;
   cursor: not-allowed;
-  background-color: #262727;
-  border-color: #363637;
-  color: #606266;
+  background-color: var(--mep-bg-card);
+  border-color: var(--mep-border);
+  color: var(--mep-text-disabled);
 }
 
 /* Nút Upload trong từng dòng */
 .btn-upload-file {
   background-color: rgba(64, 158, 255, 0.12);
   border-color: rgba(64, 158, 255, 0.35);
-  color: #409EFF;
+  color: var(--mep-accent-blue);
   font-weight: 500;
-  transition: all 0.2s ease;
+  transition: var(--mep-transition);
 }
 .btn-upload-file:hover:not(:disabled) {
   background-color: rgba(64, 158, 255, 0.25);
-  border-color: #409EFF;
+  border-color: var(--mep-accent-blue);
   color: #FFF;
 }
 
@@ -333,66 +377,67 @@
 .table-container {
   width: 100%;
   overflow-x: auto;
-  border: 1px solid #363637;
+  border: 1px solid var(--mep-border);
   border-radius: 8px;
-  background-color: #1D1E1F;
+  background-color: var(--mep-bg-surface);
+  transition: var(--mep-transition);
 }
 
 .table-container::-webkit-scrollbar {
   height: 8px;
 }
 .table-container::-webkit-scrollbar-track {
-  background: #141414;
+  background: var(--mep-scrollbar-track);
   border-radius: 4px;
 }
 .table-container::-webkit-scrollbar-thumb {
-  background: #363637;
+  background: var(--mep-scrollbar-thumb);
   border-radius: 4px;
 }
 .table-container::-webkit-scrollbar-thumb:hover {
-  background: #4C4D4F;
+  background: var(--mep-scrollbar-thumb-hover);
 }
 
 /* Element Plus Table Styles */
 :deep(.el-table) {
-  background-color: #1D1E1F !important;
-  color: #E5EAF3 !important;
+  background-color: var(--mep-bg-surface) !important;
+  color: var(--mep-text-primary) !important;
 }
 
 :deep(.el-table th.el-table__cell) {
-  background-color: #262727 !important;
-  color: #C0C4CC !important;
-  border-color: #363637 !important;
+  background-color: var(--mep-bg-card) !important;
+  color: var(--mep-text-secondary) !important;
+  border-color: var(--mep-border) !important;
   font-weight: 600;
 }
 
 :deep(.el-table td.el-table__cell) {
-  background-color: #1D1E1F !important;
-  color: #E5EAF3 !important;
-  border-color: #363637 !important;
+  background-color: var(--mep-bg-surface) !important;
+  color: var(--mep-text-primary) !important;
+  border-color: var(--mep-border) !important;
 }
 
 :deep(.el-table--border),
 :deep(.el-table--border th),
 :deep(.el-table--border td) {
-  border-color: #363637 !important;
+  border-color: var(--mep-border) !important;
 }
 
 /* Cột Sticky (fixed left / fixed right) */
 :deep(.el-table__fixed-left),
 :deep(.el-table__fixed-right) {
-  background-color: #1D1E1F !important;
-  box-shadow: 4px 0 12px rgba(0, 0, 0, 0.35) !important;
+  background-color: var(--mep-bg-surface) !important;
+  box-shadow: 4px 0 12px rgba(0, 0, 0, 0.25) !important;
 }
 
 :deep(.el-table__fixed-left .el-table__cell),
 :deep(.el-table__fixed-right .el-table__cell) {
-  background-color: #1D1E1F !important;
+  background-color: var(--mep-bg-surface) !important;
 }
 
 /* Hàng hover nổi bật */
 :deep(.el-table--enable-row-hover .el-table__body tr:hover > td.el-table__cell) {
-  background-color: #262727 !important;
+  background-color: var(--mep-bg-card-hover) !important;
 }
 
 .font-bold {
@@ -407,6 +452,20 @@
   cursor: pointer;
 }
 
+.text-wo-code {
+  color: var(--mep-accent-blue);
+  font-weight: 700;
+}
+
+.text-cyan {
+  color: var(--mep-accent-blue);
+  font-weight: 700;
+  background: rgba(64, 158, 255, 0.12);
+  padding: 2px 8px;
+  border-radius: 4px;
+  border: 1px solid rgba(64, 158, 255, 0.25);
+}
+
 /* Ô có thể bấm đúp chuột để chỉnh sửa */
 .cell-text {
   cursor: pointer;
@@ -416,20 +475,20 @@
   width: 100%;
   padding: 2px 4px;
   border-radius: 4px;
-  transition: all 0.2s ease;
+  transition: var(--mep-transition);
 }
 
 .cell-text:hover {
   background-color: rgba(64, 158, 255, 0.12);
-  color: #409EFF;
+  color: var(--mep-accent-blue);
 }
 
 .cell-text::after {
   content: "✎";
   font-size: 10px;
   opacity: 0;
-  color: #409EFF;
-  transition: all 0.2s ease;
+  color: var(--mep-accent-blue);
+  transition: var(--mep-transition);
 }
 
 .cell-text:hover::after {
@@ -444,9 +503,9 @@
 }
 
 .inline-input :deep(.el-input__inner) {
-  background-color: #121314;
-  border-color: #409EFF;
-  color: #FFF;
+  background-color: var(--mep-bg-input);
+  border-color: var(--mep-border-hover);
+  color: var(--mep-text-primary);
   font-weight: 500;
 }
 
@@ -455,40 +514,40 @@
   font-weight: 600;
   padding: 4px 10px;
   border-radius: 6px;
-  transition: all 0.2s ease;
+  transition: var(--mep-transition);
 }
 .result-tag-badge:hover {
   transform: scale(1.04);
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.2);
 }
 
 .download-btn {
-  color: #67C23A;
+  color: var(--mep-status-ok);
   font-weight: 600;
   text-decoration: underline;
-  transition: all 0.2s ease;
+  transition: var(--mep-transition);
 }
 .download-btn:hover {
   color: #85CE61;
 }
 
 .btn-rerun-mini {
-  background-color: #262727;
-  border-color: #4C4D4F;
-  color: #E6A23C;
+  background-color: var(--mep-bg-card);
+  border-color: rgba(230, 162, 60, 0.4);
+  color: var(--mep-status-warn);
   padding: 3px 8px;
   font-size: 11px;
   border-radius: 4px;
-  transition: all 0.2s ease;
+  transition: var(--mep-transition);
 }
 .btn-rerun-mini:hover {
-  background-color: #363637;
-  border-color: #E6A23C;
-  color: #E6A23C;
+  background-color: var(--mep-status-warn);
+  border-color: var(--mep-status-warn);
+  color: #000;
 }
 
 .text-reason {
-  color: #F56C6C;
+  color: var(--mep-status-err);
   font-size: 11px;
   line-height: 1.3;
 }
@@ -513,24 +572,24 @@
 }
 
 /* ====================================================================
-   5. MODAL DIALOG CHI TIẾT ĐỐI SOÁT (DARK TECH INDUSTRIAL MODAL)
+   5. MODAL DIALOG CHI TIẾT ĐỐI SOÁT (DUAL THEME COMPATIBLE)
    ==================================================================== */
 :deep(.mep-detail-dialog) {
-  background-color: #1D1E1F !important;
-  border: 1px solid #363637 !important;
+  background-color: var(--mep-bg-surface) !important;
+  border: 1px solid var(--mep-border) !important;
   border-radius: 10px !important;
-  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.75) !important;
+  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.5) !important;
 }
 
 :deep(.mep-detail-dialog .el-dialog__header) {
   padding: 16px 20px;
-  border-bottom: 1px solid #363637;
+  border-bottom: 1px solid var(--mep-border);
   margin-right: 0;
-  background-color: #1D1E1F;
+  background-color: var(--mep-bg-surface);
 }
 
 :deep(.mep-detail-dialog .el-dialog__title) {
-  color: #FFF;
+  color: var(--mep-text-primary);
   font-size: 16px;
   font-weight: 700;
   display: flex;
@@ -540,12 +599,18 @@
 
 :deep(.mep-detail-dialog .el-dialog__body) {
   padding: 16px 20px;
-  background-color: #141414;
+  background-color: var(--mep-bg-base);
 }
 
 .detail-loading-box {
   text-align: center;
   padding: 60px 0;
+}
+
+.loading-desc {
+  margin-top: 12px;
+  color: var(--mep-text-primary);
+  font-size: 14px;
 }
 
 .mep-spin-icon {
@@ -557,13 +622,13 @@
 }
 
 .detail-body {
-  color: #E5EAF3;
+  color: var(--mep-text-primary);
 }
 
 /* KHỐI HEADER SUMMARY CARD CÓ KHUNG VIỀN */
 .detail-header-card {
-  background-color: #1D1E1F;
-  border: 1px solid #363637;
+  background-color: var(--mep-bg-surface);
+  border: 1px solid var(--mep-border);
   border-radius: 8px;
   padding: 14px 18px;
   display: flex;
@@ -571,14 +636,15 @@
   align-items: flex-start;
   gap: 16px;
   margin-bottom: 14px;
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.25);
+  box-shadow: var(--mep-shadow-card);
+  transition: var(--mep-transition);
 }
 
 .dh-title h3 {
   margin: 0 0 6px 0;
   font-size: 16px;
   font-weight: 700;
-  color: #FFF;
+  color: var(--mep-text-primary);
 }
 
 .dh-meta {
@@ -586,7 +652,7 @@
   flex-wrap: wrap;
   gap: 14px;
   font-size: 12px;
-  color: #A3A6AD;
+  color: var(--mep-text-muted);
 }
 
 .dh-meta span {
@@ -596,7 +662,7 @@
 }
 
 .dh-meta b {
-  color: #C0C4CC;
+  color: var(--mep-text-secondary);
 }
 
 .dh-badges {
@@ -616,43 +682,43 @@
 }
 
 .m-stat {
-  background-color: #262727;
-  border: 1px solid #363637;
+  background-color: var(--mep-bg-card);
+  border: 1px solid var(--mep-border);
   border-radius: 6px;
   padding: 10px 14px;
   display: flex;
   flex-direction: column;
-  transition: all 0.2s ease;
+  transition: var(--mep-transition);
   box-sizing: border-box;
-  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.2);
+  box-shadow: var(--mep-shadow-card);
 }
 
 .m-stat:hover {
   transform: translateY(-2px);
-  border-color: #409EFF;
+  border-color: var(--mep-border-hover);
 }
 
 .m-stat.border-err {
-  border-left: 4px solid #F56C6C;
-  background: linear-gradient(135deg, rgba(245, 108, 108, 0.08) 0%, #262727 100%);
+  border-left: 4px solid var(--mep-status-err);
+  background: linear-gradient(135deg, rgba(245, 108, 108, 0.08) 0%, var(--mep-bg-card) 100%);
 }
 
 .m-stat.border-ok {
-  border-left: 4px solid #67C23A;
-  background: linear-gradient(135deg, rgba(103, 194, 58, 0.08) 0%, #262727 100%);
+  border-left: 4px solid var(--mep-status-ok);
+  background: linear-gradient(135deg, rgba(103, 194, 58, 0.08) 0%, var(--mep-bg-card) 100%);
 }
 
 .m-stat b {
   font-size: 22px;
   font-weight: 700;
   font-family: ui-monospace, SFMono-Regular, Consolas, "Fira Code", monospace;
-  color: #E5EAF3;
+  color: var(--mep-text-primary);
   line-height: 1.1;
 }
 
 .m-stat span {
   font-size: 11px;
-  color: #A3A6AD;
+  color: var(--mep-text-muted);
   margin-top: 4px;
   text-transform: uppercase;
   letter-spacing: 0.5px;
@@ -673,46 +739,52 @@
 
 .breakdown-label {
   font-size: 12px;
-  color: #FCA5A5;
+  color: var(--mep-status-err);
   margin-right: 10px;
   font-weight: 600;
 }
 
 /* TABS CHI TIẾT CÓ KHUNG VIỀN */
 .detail-tabs {
-  background-color: #1D1E1F !important;
-  border: 1px solid #363637 !important;
+  background-color: var(--mep-bg-surface) !important;
+  border: 1px solid var(--mep-border) !important;
   border-radius: 8px;
   margin-bottom: 14px;
   overflow: hidden;
+  transition: var(--mep-transition);
 }
 
 :deep(.detail-tabs .el-tabs__header) {
-  background-color: #1D1E1F;
-  border-bottom: 1px solid #363637;
+  background-color: var(--mep-bg-surface);
+  border-bottom: 1px solid var(--mep-border);
   margin: 0;
 }
 
 :deep(.detail-tabs .el-tabs__item) {
-  color: #A3A6AD;
+  color: var(--mep-text-muted);
   font-weight: 500;
 }
 
 :deep(.detail-tabs .el-tabs__item.is-active) {
-  color: #409EFF !important;
-  background-color: #262727 !important;
-  border-bottom: 2px solid #409EFF;
+  color: var(--mep-accent-blue) !important;
+  background-color: var(--mep-bg-card) !important;
+  border-bottom: 2px solid var(--mep-accent-blue);
   font-weight: 600;
 }
 
 .clean-state-box {
   text-align: center;
   padding: 40px 16px;
+  background-color: var(--mep-bg-surface);
+  transition: var(--mep-transition);
 }
 .clean-state-box h4 {
   margin: 14px 0 6px;
-  color: #67C23A;
+  color: var(--mep-status-ok);
   font-size: 16px;
+}
+.clean-state-box p {
+  color: var(--mep-text-muted);
 }
 
 /* ====================================================================
@@ -733,70 +805,70 @@
 /* Từng bản vẽ là 1 card độc lập có viền, bo góc và nền tách biệt */
 :deep(.el-collapse-item) {
   margin-bottom: 8px;
-  border: 1px solid #363637 !important;
+  border: 1px solid var(--mep-border) !important;
   border-radius: 6px !important;
   overflow: hidden;
-  background-color: #262727;
-  transition: border-color 0.2s ease, box-shadow 0.2s ease;
+  background-color: var(--mep-bg-card);
+  transition: var(--mep-transition);
 }
 
 :deep(.el-collapse-item:hover) {
-  border-color: #4C4D4F !important;
+  border-color: var(--mep-border-hover) !important;
 }
 
 :deep(.el-collapse-item.is-active) {
-  border-color: #409EFF !important;
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.35);
+  border-color: var(--mep-border-hover) !important;
+  box-shadow: var(--mep-shadow-hover);
 }
 
 :deep(.el-collapse-item__header) {
-  background-color: #262727 !important;
-  color: #E5EAF3 !important;
-  border-bottom: 1px solid #363637 !important;
+  background-color: var(--mep-bg-card) !important;
+  color: var(--mep-text-primary) !important;
+  border-bottom: 1px solid var(--mep-border) !important;
   padding: 0 16px;
   height: 44px;
   line-height: 44px;
   font-size: 13px;
-  transition: background-color 0.2s ease;
+  transition: var(--mep-transition);
 }
 
 :deep(.el-collapse-item__header:hover) {
-  background-color: #2D2E2F !important;
+  background-color: var(--mep-bg-card-hover) !important;
 }
 
 :deep(.el-collapse-item__wrap) {
-  background-color: #1D1E1F !important;
+  background-color: var(--mep-bg-surface) !important;
   border-bottom: none !important;
 }
 
 :deep(.el-collapse-item__content) {
   padding: 12px !important;
-  background-color: #1D1E1F !important;
+  background-color: var(--mep-bg-surface) !important;
 }
 
 /* Bảng kẻ ô chi tiết bên trong collapse item */
 :deep(.el-collapse-item__content .el-table) {
-  background-color: #1D1E1F !important;
-  border: 1px solid #363637 !important;
+  background-color: var(--mep-bg-surface) !important;
+  border: 1px solid var(--mep-border) !important;
 }
 
 :deep(.el-collapse-item__content .el-table th.el-table__cell) {
-  background-color: #262727 !important;
-  color: #C0C4CC !important;
-  border-bottom: 1px solid #363637 !important;
-  border-right: 1px solid #363637 !important;
+  background-color: var(--mep-bg-card) !important;
+  color: var(--mep-text-secondary) !important;
+  border-bottom: 1px solid var(--mep-border) !important;
+  border-right: 1px solid var(--mep-border) !important;
   font-weight: 600;
 }
 
 :deep(.el-collapse-item__content .el-table td.el-table__cell) {
-  background-color: #1D1E1F !important;
-  color: #E5EAF3 !important;
-  border-bottom: 1px solid #363637 !important;
-  border-right: 1px solid #363637 !important;
+  background-color: var(--mep-bg-surface) !important;
+  color: var(--mep-text-primary) !important;
+  border-bottom: 1px solid var(--mep-border) !important;
+  border-right: 1px solid var(--mep-border) !important;
 }
 
 :deep(.el-collapse-item__content .el-table--enable-row-hover .el-table__body tr:hover > td.el-table__cell) {
-  background-color: #262727 !important;
+  background-color: var(--mep-bg-card-hover) !important;
 }
 
 /* ====================================================================
@@ -807,58 +879,60 @@
   gap: 14px;
   overflow-x: auto;
   padding: 12px 10px;
-  background-color: #141414;
-  border: 1px solid #363637;
+  background-color: var(--mep-bg-base);
+  border: 1px solid var(--mep-border);
   border-radius: 8px;
+  transition: var(--mep-transition);
 }
 
-/* Custom Dark Scrollbar (Loại bỏ triệt để thanh cuộn trắng của trình duyệt) */
+/* Custom Scrollbar */
 .images-strip::-webkit-scrollbar {
   height: 8px;
 }
 .images-strip::-webkit-scrollbar-track {
-  background: #1D1E1F;
+  background: var(--mep-scrollbar-track);
   border-radius: 4px;
 }
 .images-strip::-webkit-scrollbar-thumb {
-  background: #4C4D4F;
+  background: var(--mep-scrollbar-thumb);
   border-radius: 4px;
 }
 .images-strip::-webkit-scrollbar-thumb:hover {
-  background: #606266;
+  background: var(--mep-scrollbar-thumb-hover);
 }
 
 .img-thumb-box {
   flex: 0 0 180px;
-  border: 1px solid #363637;
+  border: 1px solid var(--mep-border);
   border-radius: 6px;
   padding: 8px;
-  background-color: #262727;
+  background-color: var(--mep-bg-card);
   text-align: center;
-  transition: transform 0.2s ease, border-color 0.2s ease, box-shadow 0.2s ease;
+  transition: var(--mep-transition);
   cursor: pointer;
   box-sizing: border-box;
+  box-shadow: var(--mep-shadow-card);
 }
 
 .img-thumb-box:hover {
   transform: translateY(-2px);
-  border-color: #409EFF;
-  box-shadow: 0 6px 16px rgba(0, 0, 0, 0.45);
+  border-color: var(--mep-border-hover);
+  box-shadow: var(--mep-shadow-hover);
 }
 
 .thumb-img {
   width: 100%;
   height: 140px;
-  border: 1px solid #363637;
+  border: 1px solid var(--mep-border);
   border-radius: 4px;
-  background-color: #1D1E1F;
+  background-color: var(--mep-bg-surface);
   display: block;
 }
 
 .thumb-title,
 .img-name {
   font-size: 11px;
-  color: #A3A6AD;
+  color: var(--mep-text-muted);
   margin-top: 6px;
   white-space: nowrap;
   overflow: hidden;
@@ -871,8 +945,8 @@
    ==================================================================== */
 .log-console,
 .logs-console {
-  background-color: #121314;
-  border: 1px solid #363637;
+  background-color: var(--mep-bg-surface);
+  border: 1px solid var(--mep-border);
   border-radius: 6px;
   padding: 12px 16px;
   font-family: ui-monospace, SFMono-Regular, Consolas, "Fira Code", monospace;
@@ -880,7 +954,7 @@
   line-height: 1.6;
   max-height: 280px;
   overflow-y: auto;
-  color: #A3A6AD;
+  color: var(--mep-text-secondary);
 }
 
 .log-line {
@@ -888,7 +962,7 @@
 }
 .log-index,
 .log-idx {
-  color: #409EFF;
+  color: var(--mep-accent-blue);
   margin-right: 6px;
   font-weight: 600;
 }
@@ -898,11 +972,12 @@
    ==================================================================== */
 .detail-review-card,
 .review-approval-card {
-  background-color: #1D1E1F;
-  border: 1px solid #363637;
+  background-color: var(--mep-bg-surface);
+  border: 1px solid var(--mep-border);
   border-radius: 8px;
   padding: 16px 20px;
-  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.35);
+  box-shadow: var(--mep-shadow-card);
+  transition: var(--mep-transition);
 }
 
 .review-card-header {
@@ -918,8 +993,29 @@
   margin: 0;
   font-size: 14px;
   font-weight: 700;
-  color: #FFF;
+  color: var(--mep-text-primary);
   letter-spacing: 0.3px;
+}
+
+.badge-approved {
+  color: var(--mep-status-ok);
+  background: rgba(103, 194, 58, 0.1);
+  padding: 3px 8px;
+  border-radius: 4px;
+  border: 1px solid rgba(103, 194, 58, 0.3);
+}
+
+.badge-rejected {
+  color: var(--mep-status-err);
+  background: rgba(245, 108, 108, 0.1);
+  padding: 3px 8px;
+  border-radius: 4px;
+  border: 1px solid rgba(245, 108, 108, 0.3);
+}
+
+.review-note-preview {
+  color: var(--mep-text-secondary);
+  margin-left: 6px;
 }
 
 /* GRID 2 CỘT CÂN ĐỐI */
@@ -941,17 +1037,17 @@
 .review-field-label {
   display: block;
   font-size: 12px;
-  color: #A3A6AD;
+  color: var(--mep-text-muted);
   margin-bottom: 6px;
   font-weight: 500;
 }
 
 .readonly-input :deep(.el-input__inner) {
-  background-color: #121314 !important;
-  color: #67C23A !important;
+  background-color: var(--mep-bg-input) !important;
+  color: var(--mep-status-ok) !important;
   font-weight: 600;
   cursor: default;
-  border-color: #363637 !important;
+  border-color: var(--mep-border) !important;
 }
 
 /* 1 HÀNG NÚT BẤM DUY NHẤT */
@@ -961,7 +1057,7 @@
   flex-wrap: wrap;
   gap: 12px;
   padding-top: 4px;
-  border-top: 1px solid rgba(255, 255, 255, 0.08);
+  border-top: 1px solid var(--mep-border-subtle);
 }
 
 .review-main-btns {
@@ -980,12 +1076,12 @@
 .btn-rerun {
   background-color: rgba(230, 162, 60, 0.12);
   border-color: rgba(230, 162, 60, 0.4);
-  color: #E6A23C;
+  color: var(--mep-status-warn);
   font-weight: 500;
-  transition: all 0.2s ease;
+  transition: var(--mep-transition);
 }
 .btn-rerun:hover {
-  background-color: #E6A23C;
+  background-color: var(--mep-status-warn);
   color: #1D1E1F;
 }
 
@@ -996,7 +1092,7 @@
 /* Checkbox Header Table */
 :deep(.el-table th.el-table__cell .el-checkbox__input.is-indeterminate .el-checkbox__inner) {
   background-color: transparent !important;
-  border-color: #4C4D4F !important;
+  border-color: var(--mep-border) !important;
 }
 :deep(.el-table th.el-table__cell .el-checkbox__input.is-indeterminate .el-checkbox__inner::before),
 :deep(.el-table th.el-table__cell .el-checkbox__input.is-indeterminate .el-checkbox__inner::after) {
@@ -1008,7 +1104,65 @@
 }
 
 /* ====================================================================
-   7. MEDIA QUERIES RESPONSIVE (THEO CHUẨN UI-UX-PRO-MAX)
+   7. PHẦN TỐI ƯU RIÊNG CHO LIGHT MODE (KHI THEME LÀ LIGHT)
+   ==================================================================== */
+.theme-light .kpi-icon.total,
+@media (prefers-color-scheme: light) {
+  .mep-container:not(.theme-dark) .kpi-icon.total {
+    background: #F1F5F9;
+    color: #475569;
+    border-color: #E2E8F0;
+  }
+  .mep-container:not(.theme-dark) .kpi-icon.ok {
+    background: #ECFDF5;
+    color: #16A34A;
+    border-color: #A7F3D0;
+  }
+  .mep-container:not(.theme-dark) .kpi-icon.err {
+    background: #FEF2F2;
+    color: #DC2626;
+    border-color: #FECACA;
+  }
+  .mep-container:not(.theme-dark) .kpi-icon.running {
+    background: #FFFBEB;
+    color: #D97706;
+    border-color: #FDE68A;
+  }
+  .mep-container:not(.theme-dark) .kpi-icon.waiting {
+    background: #F8FAFC;
+    color: #64748B;
+    border-color: #E2E8F0;
+  }
+}
+
+.theme-light .kpi-icon.total {
+  background: #F1F5F9;
+  color: #475569;
+  border-color: #E2E8F0;
+}
+.theme-light .kpi-icon.ok {
+  background: #ECFDF5;
+  color: #16A34A;
+  border-color: #A7F3D0;
+}
+.theme-light .kpi-icon.err {
+  background: #FEF2F2;
+  color: #DC2626;
+  border-color: #FECACA;
+}
+.theme-light .kpi-icon.running {
+  background: #FFFBEB;
+  color: #D97706;
+  border-color: #FDE68A;
+}
+.theme-light .kpi-icon.waiting {
+  background: #F8FAFC;
+  color: #64748B;
+  border-color: #E2E8F0;
+}
+
+/* ====================================================================
+   8. MEDIA QUERIES RESPONSIVE (THEO CHUẨN UI-UX-PRO-MAX)
    ==================================================================== */
 /* Màn hình laptop tiêu chuẩn / Tablet ngang (<= 1200px) */
 @media (max-width: 1200px) {

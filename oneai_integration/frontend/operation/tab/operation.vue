@@ -1,5 +1,5 @@
 <template>
-  <div class="mep-container">
+  <div class="mep-container" :class="{ 'theme-dark': isDarkMode, 'theme-light': !isDarkMode }">
     <!-- 1. KHỐI THẺ KPI THỐNG KÊ 5 THẺ TƯƠNG TÁC (CLICK-TO-FILTER THEO PHONG CÁCH SẾP GỬI) -->
     <div class="kpi-cards-grid">
       <div class="kpi-card" :class="{ active: activeKpiFilter === 'ALL' }" @click="handleKpiFilter('ALL')">
@@ -105,7 +105,7 @@
           <template #default="{ row }">
             <el-input v-if="row.isNew" v-model="row.KEYID" placeholder="Nhập số WO..." size="mini"
               class="inline-input" />
-            <span v-else class="font-bold font-mono" style="color: #38BDF8;">{{ row.KEYID }}</span>
+            <span v-else class="font-bold font-mono text-wo-code">{{ row.KEYID }}</span>
           </template>
         </el-table-column>
 
@@ -273,10 +273,12 @@
 
     <!-- 6. DIALOG CHI TIẾT ĐỐI SOÁT (XEM LỖI, BẢN VẼ, SOI ẢNH, LOG VÀ DUYỆT THEO CHUẨN SẾP) -->
     <el-dialog v-model="showDetailDialog" :title="`📋 Chi Tiết Đối Soát Hồ Sơ: ${currentTask?.KEYID || ''}`" width="85%"
-      top="4vh" :before-close="handleCloseDetailDialog" destroy-on-close custom-class="mep-detail-dialog">
+      top="4vh" :before-close="handleCloseDetailDialog" destroy-on-close
+      :custom-class="isDarkMode ? 'mep-detail-dialog theme-dark' : 'mep-detail-dialog theme-light'"
+      :class="isDarkMode ? 'mep-detail-dialog theme-dark' : 'mep-detail-dialog theme-light'">
       <div v-if="detailLoading" class="detail-loading-box">
         <i class="bi bi-arrow-repeat mep-spin-icon" style="font-size: 36px; color: #409EFF; display: inline-block;"></i>
-        <p style="margin-top: 12px; color: #E5EAF3;">Đang tải và đồng bộ kết quả đối soát AI...</p>
+        <p class="loading-desc">Đang tải và đồng bộ kết quả đối soát AI...</p>
       </div>
 
       <div v-else-if="currentDetail" class="detail-body">
@@ -285,7 +287,7 @@
           <div class="dh-title">
             <h3><i class="bi bi-file-earmark-spreadsheet text-primary me-2"></i>{{ currentTask?.TASK_NAME || 'Chưa đặt tên công việc' }}</h3>
             <div class="dh-meta">
-              <span><b>Mã WO:</b> <span class="font-mono text-cyan" style="color: #38BDF8; font-weight: 700; background: rgba(56, 189, 248, 0.12); padding: 2px 8px; border-radius: 4px; border: 1px solid rgba(56, 189, 248, 0.25);">{{ currentTask?.KEYID }}</span></span>
+              <span><b>Mã WO:</b> <span class="font-mono text-cyan">{{ currentTask?.KEYID }}</span></span>
               <span><b>PIC:</b> {{ currentTask?.PIC || '—' }}</span>
               <span><b>Phần việc:</b> {{ currentTask?.PART_NAME }} / {{ currentTask?.GROUP_NAME }}</span>
               <span><b>Tháng TT:</b> {{ currentTask?.PAYMENT_MONTH }}</span>
@@ -477,18 +479,18 @@
 
         <!-- KHỐI PHÊ DUYỆT & THAO TÁC HỒ SƠ -->
         <div class="detail-review-card">
-          <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px;">
-            <h4 style="margin: 0; font-size: 14px; font-weight: 600; color: #FFF;">
+          <div class="review-card-header">
+            <h4 class="review-title">
               ✍️ Phê Duyệt & Thao Tác Hồ Sơ
             </h4>
             <div v-if="currentTask?.REVIEW_DECISION" style="font-size: 12px;">
-              <span v-if="currentTask.REVIEW_DECISION === 'APPROVED'" style="color: #67C23A; background: rgba(103, 194, 58, 0.1); padding: 3px 8px; border-radius: 4px; border: 1px solid rgba(103, 194, 58, 0.3);">
+              <span v-if="currentTask.REVIEW_DECISION === 'APPROVED'" class="badge-approved">
                 <i class="bi bi-check-circle-fill me-1"></i> Đã duyệt bởi: <b>{{ currentTask.REVIEW_BY }}</b>
-                <span v-if="currentTask.REVIEW_NOTE" style="color: #CFD3DC; margin-left: 6px;">— "{{ currentTask.REVIEW_NOTE }}"</span>
+                <span v-if="currentTask.REVIEW_NOTE" class="review-note-preview">— "{{ currentTask.REVIEW_NOTE }}"</span>
               </span>
-              <span v-else-if="currentTask.REVIEW_DECISION === 'REJECTED'" style="color: #F56C6C; background: rgba(245, 108, 108, 0.1); padding: 3px 8px; border-radius: 4px; border: 1px solid rgba(245, 108, 108, 0.3);">
+              <span v-else-if="currentTask.REVIEW_DECISION === 'REJECTED'" class="badge-rejected">
                 <i class="bi bi-x-circle-fill me-1"></i> Bị từ chối bởi: <b>{{ currentTask.REVIEW_BY }}</b>
-                <span v-if="currentTask.REVIEW_NOTE" style="color: #CFD3DC; margin-left: 6px;">— "{{ currentTask.REVIEW_NOTE }}"</span>
+                <span v-if="currentTask.REVIEW_NOTE" class="review-note-preview">— "{{ currentTask.REVIEW_NOTE }}"</span>
               </span>
             </div>
           </div>
@@ -570,7 +572,7 @@
 
       <div v-else class="detail-loading-box">
         <i class="bi bi-exclamation-circle text-warning" style="font-size: 36px;"></i>
-        <p style="margin-top: 12px; color: #E5EAF3;">Chưa có dữ liệu chi tiết cho hồ sơ này.</p>
+        <p class="loading-desc">Chưa có dữ liệu chi tiết cho hồ sơ này.</p>
         <el-button size="small" type="primary" @click="handleCloseDetailDialog">Đóng</el-button>
       </div>
     </el-dialog>
@@ -1352,14 +1354,65 @@ const handleReview = async (row, decision, note = '') => {
   }
 }
 
+// 13. TỰ ĐỘNG NHẬN DIỆN VÀ ĐỒNG BỘ THEME (DARK / LIGHT MODE DỰA TRÊN COMPUTER MODE & PORTAL)
+const isDarkMode = ref(true)
+let mediaQueryWatcher = null
+let themeDomObserver = null
+
+const checkTheme = () => {
+  if (typeof window === 'undefined') return
+  const isHtmlDark = document.documentElement.classList.contains('dark') || document.body.classList.contains('dark')
+  const isHtmlLight = document.documentElement.classList.contains('light') || document.body.classList.contains('light')
+  const isPrefersDark = window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches
+
+  if (isHtmlDark) {
+    isDarkMode.value = true
+  } else if (isHtmlLight) {
+    isDarkMode.value = false
+  } else {
+    isDarkMode.value = !!isPrefersDark
+  }
+}
+
 // Vòng đời
 onMounted(() => {
   _userInfo.value = getUserInfo()
+  checkTheme()
+
+  // Lắng nghe thay đổi theme từ hệ điều hành / trình duyệt máy tính (Computer OS Mode)
+  if (window.matchMedia) {
+    mediaQueryWatcher = window.matchMedia('(prefers-color-scheme: dark)')
+    if (mediaQueryWatcher.addEventListener) {
+      mediaQueryWatcher.addEventListener('change', checkTheme)
+    } else if (mediaQueryWatcher.addListener) {
+      mediaQueryWatcher.addListener(checkTheme)
+    }
+  }
+
+  // Lắng nghe thay đổi class trên thẻ <html> hoặc <body> từ OneAI Portal
+  if (typeof MutationObserver !== 'undefined') {
+    themeDomObserver = new MutationObserver(() => {
+      checkTheme()
+    })
+    themeDomObserver.observe(document.documentElement, { attributes: true, attributeFilter: ['class'] })
+    themeDomObserver.observe(document.body, { attributes: true, attributeFilter: ['class'] })
+  }
+
   handleReload()
 })
 
 onUnmounted(() => {
   stopSmartPolling()
+  if (mediaQueryWatcher) {
+    if (mediaQueryWatcher.removeEventListener) {
+      mediaQueryWatcher.removeEventListener('change', checkTheme)
+    } else if (mediaQueryWatcher.removeListener) {
+      mediaQueryWatcher.removeListener(checkTheme)
+    }
+  }
+  if (themeDomObserver) {
+    themeDomObserver.disconnect()
+  }
 })
 
 const totalPages = computed(() => Math.max(1, Math.ceil(total.value / pageSize.value)))
