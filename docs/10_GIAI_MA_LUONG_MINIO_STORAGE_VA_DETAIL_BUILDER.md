@@ -262,7 +262,81 @@ Sơ đồ thể hiện rõ đường truyền mạng, giao thức và cổng k�
 
 ---
 
-## 7. CHECKLIST TRIỂN KHAI & KIỂM THỬ DÀNH CHO KỸ SƯ
+## 8. GIẢI MÃ NÂNG CẤP THUẬT TOÁN ĐỐI SOÁT ĐA ĐIỀU KIỆN (v3.0): HÀM classify_reconcile_error & XỬ LÝ LỆCH PHỤ TRỘI / REMARK
+
+### 8.1. Bối cảnh thực tế & Lỗi logic hiển thị ở phiên bản cũ
+Trong quá trình kiểm thử thực tế với hồ sơ đối soát đa dạng (ảnh `light5`), hệ thống phát hiện một tình huống nghiệp vụ đặc thù:
+* **Vật tư:** `M03-07798376` (`CABLE_DUCT_FITTING_JOINT_CONNECTOR`) tại Bản vẽ `0205`.
+* **SL Dự toán:** `4` | **SL Bản vẽ (AI):** `4`.
+* **Chuỗi ghi chú Note trích xuất:** `Lệch BV 0205: AI [PT:30%, RM:Trống]=4.0 | Vendor [PT:20%, RM:Trống]=4.0`.
+
+Ở các phiên bản trước:
+1. `parse_dwg_segments` trích xuất `ai_s = 4.0` và `ven_s = 4.0`.
+2. Công thức tính chênh lệch $\Delta = ai\_s - ven\_s = 4.0 - 4.0 = 0.0$.
+3. Vì $\Delta = 0$, code cũ gán text hiển thị là `"Khớp"`. Đồng thời do chuỗi không có các từ khóa `thiếu`, `thừa`, `mồ côi`, loại lỗi bị mặc định là `"Lệch khối lượng"`.
+4. Trên giao diện, dòng này nằm trong bảng "Danh Sách Lỗi", nhưng cột Chênh lệch lại in chữ đỏ **"Khớp"** $\rightarrow$ Gây mâu thuẫn trực quan nghiêm trọng cho kỹ sư kiểm toán!
+
+### 8.2. Giải pháp nâng cấp: Bóc tách Đa điều kiện & Module `classify_reconcile_error`
+Để giải quyết dứt điểm vấn đề này, [`backend/detail_builder.py`](file:///d:/Project/Payment_PDF/MEP_OneAI_System/backend/detail_builder.py) được nâng cấp 2 tầng:
+
+#### Tầng 1: Nâng cấp Regex trích xuất trong `parse_dwg_segments`
+Bổ sung các biểu thức chính quy bóc tách độc lập `% Phụ trội (PT)` và `Ghi chú (RM)` của cả 2 phía AI và Vendor:
+```python
+m_ai_pt = re.search(r'AI\s*\[[^\]]*?PT:([^,\]]+)', seg, re.IGNORECASE)
+m_ai_rm = re.search(r'AI\s*\[[^\]]*?RM:([^,\]]+)', seg, re.IGNORECASE)
+m_ven_pt = re.search(r'Ven(?:dor)?\s*\[[^\]]*?PT:([^,\]]+)', seg, re.IGNORECASE)
+m_ven_rm = re.search(r'Ven(?:dor)?\s*\[[^\]]*?RM:([^,\]]+)', seg, re.IGNORECASE)
+```
+
+#### Tầng 2: Hàm phân loại thông minh `classify_reconcile_error`
+```python
+def classify_reconcile_error(raw_text: str, ai_val: float = None, ven_val: float = None,
+                             ai_pt: str = None, ven_pt: str = None,
+                             ai_rm: str = None, ven_rm: str = None):
+    """
+    Phân loại chính xác nguyên nhân sai lệch và chuỗi hiển thị chênh lệch trực quan.
+    Phân biệt rõ ràng: Lệch khối lượng, Lệch phụ trội, Lệch ghi chú (Remark), Mã mồ côi.
+    """
+    # 1. Mã mồ côi (Chỉ có ở bản vẽ / chưa khai báo)
+    if "mồ côi" in raw_lower:
+        return "Mã mồ côi (Chưa khai báo)", "Mã mồ côi (Chỉ có ở bản vẽ)"
+
+    is_pt_diff = bool(ai_pt and ven_pt and ai_pt.upper() != ven_pt.upper())
+    is_rm_diff = bool(ai_rm and ven_rm and ai_rm.upper() != ven_rm.upper())
+    delta = round(ai_val - ven_val, 2) if (ai_val is not None and ven_val is not None) else None
+
+    # 2. Khối lượng bằng nhau (delta == 0) nhưng lệch Phụ trội hoặc Remark
+    if delta is not None and delta == 0:
+        if is_pt_diff and is_rm_diff:
+            return "Lệch phụ trội & Ghi chú", f"Lệch PT ({ai_pt} vs {ven_pt})"
+        elif is_pt_diff:
+            return "Lệch phụ trội", f"Lệch PT ({ai_pt} vs {ven_pt})"
+        elif is_rm_diff:
+            return "Lệch ghi chú (Remark)", f"Lệch RM ({ai_rm} vs {ven_rm})"
+
+    # 3. Khối lượng lệch nhau (delta != 0)
+    if delta is not None and delta != 0:
+        qty_str = f"Thiếu {abs(delta):g}" if delta < 0 else f"Thừa {delta:g}"
+        if is_pt_diff:
+            return "Lệch KL & Phụ trội", f"{qty_str} (Lệch PT)"
+        elif is_rm_diff:
+            return "Lệch KL & Ghi chú", f"{qty_str} (Lệch RM)"
+        return "Lệch khối lượng", qty_str
+```
+
+### 8.3. Ma trận kết quả sau khi nâng cấp
+| Tình huống thực tế | SL AI vs Dự toán | Điều kiện AI vs Vendor | Phân loại lỗi (`type`) | Cột Chênh lệch (`diff`) | Hiển thị trên UI (`operation.vue`) |
+| :--- | :---: | :---: | :--- | :--- | :--- |
+| **Lệch % phụ trội** | `4.0` vs `4.0` | `PT:30%` vs `PT:20%` | `Lệch phụ trội` | `Lệch PT (30% vs 20%)` | Tag vàng `<el-tag type="warning">` kèm icon `%` |
+| **Lệch ghi chú cung cấp** | `10.0` vs `10.0` | `RM:SDV` vs `RM:Trống` | `Lệch ghi chú (Remark)` | `Lệch RM (SDV vs Trống)` | Tag xanh dương `<el-tag type="info">` kèm icon tag |
+| **Vừa lệch KL vừa lệch PT** | `5.0` vs `4.0` | `PT:30%` vs `PT:20%` | `Lệch KL & Phụ trội` | `Thừa 1 (Lệch PT)` | Tag đỏ `<el-tag type="danger">` kèm icon cảnh báo |
+| **Thiếu vật tư** | `58.0` vs `59.0` | Giống nhau | `Lệch khối lượng` | `Thiếu 1` | Tag đỏ `<el-tag type="danger">` kèm icon mũi tên xuống |
+| **Thừa vật tư** | `18.0` vs `17.0` | Giống nhau | `Lệch khối lượng` | `Thừa 1` | Tag vàng `<el-tag type="warning">` kèm icon mũi tên lên |
+| **Mã mồ côi** | `107.0` vs `0` | Chỉ có ở bản vẽ | `Mã mồ côi (Chưa khai báo)`| `Mã mồ côi (Chỉ có ở bản vẽ)` | Tag đỏ viền trơn `<el-tag effect="plain">` |
+
+---
+
+## 9. CHECKLIST TRIỂN KHAI & KIỂM THỬ DÀNH CHO KỸ SƯ
 
 Khi triển khai hệ thống lên máy chủ mới hoặc chuyển giao dự án, hãy kiểm tra danh sách sau:
 
@@ -275,7 +349,8 @@ Khi triển khai hệ thống lên máy chủ mới hoặc chuyển giao dự á
   Khi gõ `python main.py`, console xuất hiện dòng:
   `📦 [MinIO] Đã kết nối MinIO Server (...)` hoặc `ℹ️ [MinIO] Tự động chuyển sang lưu đĩa.`
 - [x] **Kiểm thử Modal:** Nạp 1 file Excel nghiệm thu, đợi chạy xong 100%, click vào badge lỗi kiểm tra xem Tab 1 và Tab 2 có hiển thị đúng số lượng riêng của từng bản vẽ hay không.
+- [x] **Kiểm thử Phân loại lỗi đa điều kiện:** Kiểm tra các dòng có cùng khối lượng nhưng khác % phụ trội xem có hiển thị tag màu vàng `Lệch PT (30% vs 20%)` thay vì in chữ đỏ `Khớp` hay không.
 
 ---
-*Tài liệu này được biên soạn chuẩn xác theo cấu trúc mã nguồn thực tế của hệ thống `MEP_OneAI_System`. Vui lòng giữ nguyên cấu trúc ánh xạ này khi tiến hành nâng cấp hoặc bàn giao cho các kỹ sư mới tham gia dự án.*
+*Tài liệu này được biên soạn chuẩn xác theo cấu trúc mã nguồn thực tế của hệ thống `MEP_OneAI_System` (Phiên bản Master v3.0). Vui lòng giữ nguyên cấu trúc ánh xạ này khi tiến hành nâng cấp hoặc bàn giao cho các kỹ sư mới tham gia dự án.*
 

@@ -2,7 +2,7 @@
 
 > **Tài liệu Kỹ thuật Chuyên sâu**  
 > **Dự án:** MEP Payment AI Analysis System (`MEP_OneAI_System`)  
-> **Phiên bản:** 2.5 (Bản nâng cấp toàn diện: MinIO Object Storage + Smart Polling + Chuẩn hóa bóc tách số liệu đối chiếu)  
+> **Phiên bản:** 3.0 (Bản nâng cấp Master: MinIO Storage + Dual-Theme Dark/Light + Phân loại đa điều kiện PT/Remark + Auto-fit Excel Layout)  
 > **Ngày cập nhật:** Tháng 11/2026
 
 ---
@@ -10,9 +10,9 @@
 ## MỤC LỤC
 1. [Tổng Quan Nâng Cấp Hệ Thống](#1-tổng-quan-nâng-cấp-hệ-thống)
 2. [Kiến Trúc & Tích Hợp MinIO Object Storage Chuẩn OneAI Platform](#2-kiến-trúc--tích-hợp-minio-object-storage-chuẩn-oneai-platform)
-3. [Chuẩn Hóa Thuật Toán Bóc Tách Số Liệu Sai Lệch (Tab 1 & Tab 2)](#3-chuẩn-hóa-thuật-toán-bóc-tách-số-liệu-sai-lệch-tab-1--tab-2)
+3. [Chuẩn Hóa Thuật Toán Bóc Tách Số Liệu Sai Lệch & Phân Loại Đa Điều Kiện](#3-chuẩn-hóa-thuật-toán-bóc-tách-số-liệu-sai-lệch--phân-loại-đa-điều-kiện)
 4. [Cơ Chế Tự Động Nhận Diện & Rebuild Cache Thông Minh](#4-cơ-chế-tự-động-nhận-diện--rebuild-cache-thông-minh)
-5. [Tối Ưu Giao Diện Vue 3, Tách CSS & Fix Lỗi Smart Polling](#5-tối-ưu-giao-diện-vue-3-tách-css--fix-lỗi-smart-polling)
+5. [Tối Ưu Giao Diện Vue 3: Dual-Theme Sáng/Tối & Fix Lỗi Smart Polling](#5-tối-ưu-giao-diện-vue-3-dual-theme-sángtối--fix-lỗi-smart-polling)
 6. [Sửa Lỗi Kết Nối Oracle DB `check_keyid_exists`](#6-sửa-lỗi-kết-nối-oracle-db-check_keyid_exists)
 7. [Ma Trận Đối Chiếu Trước & Sau Khi Nâng Cấp](#7-ma-trận-đối-chiếu-trước--sau-khi-nâng-cấp)
 
@@ -173,6 +173,22 @@ def parse_dwg_segments(text: str) -> list:
      - Nếu vật tư **Khớp**: `SL Dự toán` bằng chính số lượng AI đọc được của bản vẽ đó (Ví dụ: Dự toán `0.4` vs Bản vẽ này `0.4` -> Khớp; Dự toán `58` vs Bản vẽ này `58` -> Khớp).
      - Nếu vật tư **Lệch**: `SL Dự toán` hiển thị đúng số lượng Vendor khai tại bản vẽ đó trích từ segment lỗi (Ví dụ: Dự toán `59` vs Bản vẽ này `58` -> Lệch; Dự toán `1.8` vs Bản vẽ này `1.4` -> Lệch).
 
+### 3.4. Phân loại lỗi đa điều kiện thông minh (`classify_reconcile_error`)
+Trong thực tế nghiệm thu, một vật tư có thể bằng nhau về số lượng nhưng khác nhau về **% phụ trội (PT)** hoặc **điều kiện cung cấp (Remark - SDV)**:
+* **Vấn đề bản cũ:** Khi số lượng bằng nhau ($\Delta = 4.0 - 4.0 = 0$), code cũ gán text là `"Khớp"` và loại lỗi là `"Lệch khối lượng"`, dẫn đến việc in chữ đỏ "Khớp" trong bảng lỗi gây hoang mang cho kỹ sư.
+* **Giải pháp v3.0:** Bổ sung hàm `classify_reconcile_error()`:
+  - Bóc tách phụ trội của AI và Vendor (`ai_pt`, `ven_pt`). Nếu lệch phụ trội và $\Delta = 0 \rightarrow$ Gán loại lỗi: **`"Lệch phụ trội"`**, chênh lệch: **`"Lệch PT (30% vs 20%)"`**.
+  - Bóc tách ghi chú của AI và Vendor (`ai_rm`, `ven_rm`). Nếu lệch ghi chú và $\Delta = 0 \rightarrow$ Gán loại lỗi: **`"Lệch ghi chú (Remark)"`**, chênh lệch: **`"Lệch RM (SDV vs Trống)"`**.
+  - Nếu vừa lệch khối lượng vừa lệch phụ trội ($\Delta \neq 0$) $\rightarrow$ Gán: **`"Lệch KL & Phụ trội"`**, chênh lệch: **`"Thừa/Thiếu X (Lệch PT)"`**.
+  - Tự động hiển thị các thẻ Tag màu sắc tương ứng: Vàng cam (`warning`) cho Phụ trội, Xanh dương (`info`) cho Ghi chú, Đỏ (`danger`) cho Khối lượng.
+
+### 3.5. Tự động căn chỉnh Báo cáo Excel gọn đẹp (Auto-fit Columns & Rows Layout)
+Để khắc phục tình trạng file Excel tạo ra bị co cụm các cột hoặc chiều cao dòng bị kéo giãn quá mức (80pt) khi có `wrap_text=True` (ảnh `excel1` $\rightarrow$ `excel2`):
+* Hệ thống bổ sung hàm `auto_fit_columns_and_rows(ws)` trong `excel_reconciler.py`:
+  - **Cột Specification (Quy cách):** Đặt độ rộng cố định chuẩn **50 ký tự** để hiển thị tên quy cách kỹ thuật dài mà không bị che khuất.
+  - **Các cột mã số và số liệu:** Tự động tính toán độ rộng theo độ dài lớn nhất của dữ liệu: $\text{width} = \min(\max(\text{max\_len} + 3, 10), 30)$.
+  - **Chiều cao dòng (Row Height):** Chuẩn hóa chiều cao dòng tiêu đề = **28pt**, dòng dữ liệu = **24pt** (thay vì để Excel tự tính làm phình to bảng). Giúp file Excel xuất ra mở lên là chuẩn compact chuyên nghiệp 100% không cần chỉnh tay.
+
 ---
 
 ## 4. CƠ CHẾ TỰ ĐỘNG NHẬN DIỆN & REBUILD CACHE THÔNG MINH
@@ -247,6 +263,15 @@ Nhờ cơ chế này, người dùng mở bất kỳ hồ sơ nào (kể cả h�
   ```
   Khi task hoàn tất, `tableData.value` lập tức được cập nhật thành `[]`, dòng 100% biến mất mượt mà, polling dừng lại và 5 thẻ KPI trên đầu màn hình tự động cập nhật ngay lập tức.
 
+### 5.4. Kiến trúc Giao diện Đa Chế Độ Dual-Theme (Dark & Light Mode Tự Động)
+Nhằm hỗ trợ kỹ sư làm việc linh hoạt ở mọi môi trường ánh sáng:
+1. **Tự động nhận diện Theme hệ thống:**
+   - Sử dụng `window.matchMedia('(prefers-color-scheme: dark)')` kết hợp bộ quan sát theme của OneAI Portal (`html.dark` hoặc `body[theme="dark"]`).
+   - Tự động hoán đổi giao diện Dark/Light ngay lập tức khi người dùng đổi chế độ máy tính từ Dark sang Light (hoặc ngược lại) mà **không cần bấm F5 tải lại trang**.
+2. **Khắc phục triệt để lỗi Vue Scoped CSS `:root` làm mất viền khung:**
+   - **Hiện tượng:** Khi chuyển giao diện hoặc biên dịch Vue SFC, selector `:root` bị compiler tự động đổi thành `:root[data-v-xxxx]`. Do `:root` ở mức document root, selector này không bao giờ khớp, khiến các biến CSS (`var(--mep-border)`) bị rỗng $\rightarrow$ Thẻ KPI, viền card modal, đường kẻ bản vẽ bị biến mất viền (ảnh lỗi người dùng phản ánh).
+   - **Giải pháp:** Khai báo trực tiếp các biến theme vào class gốc `.mep-container` và `.mep-theme-light`, đồng thời bổ sung màu solid hex fallback an toàn (`border: 1px solid #334155; border: 1px solid var(--mep-border);`). Đảm bảo viền khung luôn hiển thị sắc nét 100% trên cả 2 chế độ sáng và tối.
+
 ---
 
 ## 6. SỬA LỖI KẾT NỐI ORACLE DB `check_keyid_exists`
@@ -273,9 +298,12 @@ Trong file nhật ký thực thi `log.txt`, xuất hiện cảnh báo:
 
 ## 7. MA TRẬN ĐỐI CHIẾU TRƯỚC & SAU KHI NÂNG CẤP
 
-| Tiêu chí | Trước khi nâng cấp (v2.0) | Sau khi nâng cấp (v2.5) |
+| Tiêu chí | Trước khi nâng cấp (v2.0) | Sau khi nâng cấp (v3.0 Master) |
 | :--- | :--- | :--- |
 | **Lưu trữ Báo cáo & Ảnh** | Chỉ lưu đĩa cứng cục bộ, có nguy cơ đầy đĩa hoặc thất lạc khi triển khai cụm Container | **MinIO Object Storage** chuẩn OneAI Platform, hỗ trợ Dual-Mode, presigned URL, Streaming Response và dọn dẹp bù trừ khi xóa dòng |
+| **Phân loại lỗi đối soát** | Chỉ nhận diện chung chung "Lệch khối lượng", bằng nhau về số lượng nhưng lệch % phụ trội bị in chữ đỏ "Khớp" | **`classify_reconcile_error`**: Phân loại chuẩn xác "Lệch phụ trội", "Lệch ghi chú SDV", "Mã mồ côi", hiển thị tag chênh lệch `Lệch PT (30% vs 20%)` |
+| **Định dạng Báo cáo Excel** | Các cột bị co cụm, dòng kéo giãn 80pt phải tự căn chỉnh thủ công | **Auto-fit Columns & Rows**: Cột Spec rộng 50, các cột khác tự co giãn `max_len + 3`, chiều cao dòng chuẩn compact 24pt/28pt |
+| **Chế độ Giao diện (Theme)** | Chỉ hỗ trợ Dark Mode tĩnh, khi đổi máy tính sang Light Mode bị loang lổ mảng đen và mất viền khung | **Dual-Theme Adaptive**: Tự động nhận diện Dark/Light mode không cần F5, fix lỗi Scoped CSS `:root` giữ viền thẻ KPI sắc nét |
 | **Tab 1: Danh Sách Lỗi** | Hiển thị tổng cả dự án (`101.0` vs `101`), số bằng nhau nhưng vẫn báo lệch gây khó hiểu | Hiển thị **đúng số lượng tại bản vẽ bị lỗi** (`Dự toán: 59` vs `AI: 58` $\rightarrow$ `Thiếu 1`), kèm tooltip tổng thể |
 | **Tab 2: Đối Chiếu Bản Vẽ** | Lấy số tổng dự án gán vào bản vẽ con (`3.0` vs `0.4` mà vẫn báo Khớp) | **Tách biệt từng bản vẽ**: Khớp thì Dự toán $=$ Bản vẽ này; Lệch thì lấy đúng số lượng nhà thầu kê khai tại bản vẽ đó |
 | **Tương thích Dữ liệu cũ** | Mở hồ sơ cũ sẽ bị hiển thị số liệu sai lệch của cache cũ | **Auto-detect Old Cache**: Tự động nhận diện cache cũ trên MinIO / Local Disk và tự động rebuild chuẩn mới ngay khi mở modal |

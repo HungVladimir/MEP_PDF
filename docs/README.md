@@ -1,16 +1,17 @@
 # TỔNG MỤC TÀI LIỆU DỰ ÁN MEP ONEAI SYSTEM
 
-Thư mục tài liệu này đã được tinh gọn, quy hoạch và nâng cấp thành **10 BỘ TÀI LIỆU MASTER HOÀN CHỈNH**, bao quát 100% tất cả các khía cạnh từ hướng dẫn thực chiến từng bước cho người mới, kiến trúc toàn cảnh 4 tầng, giải mã code của sếp, thuật toán thị giác máy tính, bóc tách CAD vector, giao diện trực quan 4 tab, tích hợp MinIO Cloud Storage chuẩn Enterprise, đến cẩm nang phân giải chi tiết từng con số trên màn hình và giải mã chuyên sâu 2 module lõi:
+Thư mục tài liệu này đã được tinh gọn, quy hoạch và nâng cấp thành **10 BỘ TÀI LIỆU MASTER HOÀN CHỈNH (PHIÊN BẢN v3.0 MASTER)**, bao quát 100% tất cả các khía cạnh từ hướng dẫn thực chiến từng bước cho người mới, kiến trúc toàn cảnh 4 tầng, giải mã code của sếp, thuật toán thị giác máy tính, bóc tách CAD vector, giao diện trực quan 4 tab Dual-Theme (Dark/Light mode), tích hợp MinIO Cloud Storage chuẩn Enterprise, xuất Excel auto-fit compact tự động, đến cẩm nang phân giải chi tiết từng con số trên màn hình và giải mã chuyên sâu 2 module lõi:
 
 ---
 
-### 🌟 [10. Giải Mã Toàn Diện Về minio_storage.py & detail_builder.py: Bản Chất, Luồng Hoạt Động & Vị Trí Đặt File](./10_GIAI_MA_LUONG_MINIO_STORAGE_VA_DETAIL_BUILDER.md) 🚀 *(GIẢI THÍCH CHUYÊN SÂU 2 MODULE THEN CHỐT)*
+### 🌟 [10. Giải Mã Toàn Diện Về minio_storage.py & detail_builder.py: Bản Chất, Luồng Hoạt Động & Vị Trí Đặt File](./10_GIAI_MA_LUONG_MINIO_STORAGE_VA_DETAIL_BUILDER.md) 🚀 *(GIẢI THÍCH CHUYÊN SÂU 2 MODULE THEN CHỐT - v3.0 MASTER)*
 * **Tên file:** `10_GIAI_MA_LUONG_MINIO_STORAGE_VA_DETAIL_BUILDER.md`
 * **Nội dung:** Giải thích cặn kẽ bản chất, lý do tồn tại và vị trí triển khai của 2 module:
   * **Vị trí đặt file chuẩn xác:** Khẳng định dứt khoát cả 2 file **bắt buộc phải đặt trong dự án gốc của bạn** (FastAPI Worker Service `backend/`), tuyệt đối không đặt vào OneAI Core.
   * **Tại sao phải dùng chúng:** Phân tích hậu quả nếu không có (trình duyệt không đọc được Excel nhị phân, mất dữ liệu khi restart container, lỗi 404 khi chạy phân tán).
   * **Bản chất của `minio_storage.py`:** Bộ điều phối Cloud Storage Adapter Dual-Mode, quản lý stream ảnh/báo cáo, presigned URL và dọn dẹp bù trừ khi xóa dòng.
   * **Bản chất của `detail_builder.py`:** Bộ biên dịch dữ liệu (Data Reconcile Compiler), bóc tách từng bản vẽ, tính chênh lệch, gom ảnh, gom log đóng gói thành JSON cache `detail.json` chỉ 0.05s hiển thị.
+  * **Nâng cấp v3.0 - Hàm `classify_reconcile_error()`:** Giải quyết triệt để case bằng nhau về khối lượng nhưng khác % phụ trội ($30\%$ vs $20\%$), xóa bỏ lỗi in chữ đỏ "Khớp", hiển thị chuẩn xác `Lệch PT (30% vs 20%)` và phân loại đúng loại lỗi.
   * **Vòng đời 4 giai đoạn & Sơ đồ tương tác mạng:** Sequence Diagram từng bước và sơ đồ kết nối mạng giữa Vue $\rightarrow$ Gateway $\rightarrow$ Worker (:8000) $\rightarrow$ Oracle DB / MinIO S3.
 
 ---
@@ -28,11 +29,14 @@ Thư mục tài liệu này đã được tinh gọn, quy hoạch và nâng cấ
 
 ---
 
-### 🌟 [8. Hướng Dẫn Tích Hợp MinIO Storage, Bóc Tách Sai Lệch Chi Tiết & Tối Ưu Giao Diện](./08_HUONG_DAN_TICH_HOP_MINIO_STORAGE_VA_XU_LY_SAI_LECH_CHI_TIET.md) ⚡ *(PHIÊN BẢN v2.5 LATEST)*
+### 🌟 [8. Hướng Dẫn Tích Hợp MinIO Storage, Bóc Tách Sai Lệch Chi Tiết & Tối Ưu Giao Diện](./08_HUONG_DAN_TICH_HOP_MINIO_STORAGE_VA_XU_LY_SAI_LECH_CHI_TIET.md) ⚡ *(PHIÊN BẢN v3.0 MASTER)*
 * **Tên file:** `08_HUONG_DAN_TICH_HOP_MINIO_STORAGE_VA_XU_LY_SAI_LECH_CHI_TIET.md`
 * **Nội dung:** Toàn bộ giải pháp nâng cấp hạ tầng lưu trữ và chuẩn hóa dữ liệu đối chiếu:
   * **MinIO Object Storage Adapter Dual-Mode:** Tự nhận diện biến môi trường `ONEAI_MINIO_*` hoặc `MINIO_*` trong `.env`. Cơ chế Graceful Fallback tự chuyển sang đĩa cục bộ mà không crash nếu MinIO offline.
   * **Chuẩn hóa số liệu Tab 1 & Tab 2 (`detail_builder.py`):** Xây dựng hàm `parse_dwg_segments` trích xuất chính xác số lượng Vendor khai và số lượng AI bóc tách cho riêng bản vẽ đó (chấm dứt tình trạng $101 = 101$ mà báo lỗi hoặc $3.0 \neq 0.4$ mà báo khớp).
+  * **Phân loại lỗi đa điều kiện (`classify_reconcile_error`):** Nhận diện chính xác Lệch phụ trội (`PT:30%` vs `PT:20%`), Lệch ghi chú (`SDV` vs `Trống`), hiển thị tag chênh lệch trực quan.
+  * **Tự động căn chỉnh Excel Layout (`auto_fit_columns_and_rows`):** Cột Specification cố định 50, các cột khác tự co giãn `max_len + 3`, chiều cao dòng compact 24pt/28pt, tự động tạo file chuẩn đẹp như `excel2`.
+  * **Kiến trúc Dual-Theme (Dark & Light Mode):** Tự động nhận diện theme máy tính và OneAI Portal, sửa lỗi Scoped CSS `:root` giữ viền thẻ KPI sắc nét.
   * **Cơ chế Auto-Detect & Rebuild Cache:** Tự động phát hiện cache cũ trên MinIO / Local Disk và tự động rebuild lại từ file Excel báo cáo sang định dạng mới chuẩn xác ngay khi mở modal.
   * **Tách rời CSS (`operation.css`):** Giảm dung lượng file `operation.vue`, fix triệt để lỗi nhấp nháy thumbnail khi xem ảnh bằng `:preview-teleported="true"`.
   * **Sửa lỗi Smart Polling:** Tự động làm biến mất dòng 100% khi lọc tab "Đang đối soát AI", dừng polling ngầm và tự động cập nhật số liệu 5 thẻ KPI.
@@ -40,12 +44,13 @@ Thư mục tài liệu này đã được tinh gọn, quy hoạch và nâng cấ
 
 ---
 
-### 🎨 [7. Nâng Cấp Giao Diện Trực Quan 4 Tab Theo Chuẩn Sếp Gửi](./07_KIEN_TRUC_NANG_CAP_GIAO_DIEN_TRUC_QUAN_THEO_CHUAN_SEP_GUI.md) *(PHIÊN BẢN v2.0)*
+### 🎨 [7. Nâng Cấp Giao Diện Trực Quan 4 Tab Theo Chuẩn Sếp Gửi](./07_KIEN_TRUC_NANG_CAP_GIAO_DIEN_TRUC_QUAN_THEO_CHUAN_SEP_GUI.md) *(PHIÊN BẢN v3.0 MASTER)*
 * **Tên file:** `07_KIEN_TRUC_NANG_CAP_GIAO_DIEN_TRUC_QUAN_THEO_CHUAN_SEP_GUI.md`
 * **Nội dung:** Toàn bộ giải pháp nâng cấp giao diện trực quan và trải nghiệm người dùng (UX):
+  * **Kiến trúc Dual-Theme (Dark & Light Mode Tự Động):** Lắng nghe `window.matchMedia` và OneAI Portal theme, tự động đổi giao diện sáng/tối không cần F5. Khắc phục lỗi Vue Scoped CSS `:root` làm mất viền khung thẻ.
   * **Hệ thống 5 Thẻ KPI:** Tổng hồ sơ, Khớp 100%, Có sai lệch, Đang đối soát, Chờ duyệt (Click-to-filter nhanh danh sách).
   * **Hộp thoại Đối soát 4 Tab (Modal Dialog):** 
-    - Tab 1: Danh sách chi tiết lỗi sai lệch (Bản vẽ, Mã SDAC, Tên vật tư, SL Dự toán, SL Bản vẽ, Chênh lệch).
+    - Tab 1: Danh sách chi tiết lỗi sai lệch (Bản vẽ, Mã SDAC, Tên vật tư, SL Dự toán, SL Bản vẽ, Chênh lệch với Tag màu sắc động).
     - Tab 2: Đối chiếu gom nhóm theo từng Bản vẽ kỹ thuật (Accordion đa tầng).
     - Tab 3: Băng chuyền soi ảnh bản vẽ & xem phóng to độ phân giải cao (Lightbox SVG/PNG).
     - Tab 4: Console hiển thị nhật ký bóc tách của AI theo thời gian thực.
@@ -112,7 +117,7 @@ Thư mục tài liệu này đã được tinh gọn, quy hoạch và nâng cấ
   * Thuật toán OpenCV Magic Crop, bộ lọc hình thái học (Morphological Kernels 50x1), phát hiện viền bảng (Bounding Box).
   * Kỹ thuật RAM Chunking băm ảnh, loại bỏ nét vẽ CAD thừa, prompt AI Vision chống ảo giác (Zero Hallucination).
   * Động cơ Calamine Rust quét Radar động 20 dòng đầu file Vendor Excel.
-  * Thuật toán đối soát 2 Vòng (Bản vẽ + Gate Pass), tổ hợp khóa 3 chiều (Code + Phụ trội % + Remark), và định dạng tô màu tự động bằng OpenPyXL.
+  * Thuật toán đối soát 2 Vòng (Bản vẽ + Gate Pass), tổ hợp khóa 3 chiều (Code + Phụ trội % + Remark), định dạng tô màu tự động bằng OpenPyXL và thuật toán căn chỉnh auto-fit cột/dòng compact layout (`auto_fit_columns_and_rows`).
 
 ---
 

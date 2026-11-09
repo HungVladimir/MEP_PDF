@@ -130,6 +130,24 @@ Chịu trách nhiệm bóc tách số liệu từ file Excel kết quả 2 sheet
 
 ---
 
+### 3.3. Kiến trúc Dual-Theme (Dark & Light Mode) Công Nghiệp Hiện Đại (v3.0)
+
+Nhằm tối ưu trải nghiệm người dùng theo tiêu chuẩn UI/UX Pro Max:
+1. **Khả năng tự động thích ứng chế độ Sáng / Tối (Auto Theme Switch):**
+   - Tự động lắng nghe thay đổi từ hệ điều hành máy tính thông qua `window.matchMedia('(prefers-color-scheme: dark)')`.
+   - Tự động đồng bộ với thanh chuyển Theme của OneAI Portal (lớp `html.dark` hoặc `body[theme="dark"]`).
+   - Kỹ sư chuyển máy tính từ Dark sang Light (hoặc ngược lại) thì toàn bộ giao diện bảng quản trị và modal lập tức hoán đổi màu sắc tương thích mà **không cần bấm F5**.
+2. **Khắc phục lỗi Scoped CSS `:root` làm mất viền khung thẻ KPI và viền card modal:**
+   - Trong Vue 3, selector `:root` khi đặt trong thẻ `<style scoped>` sẽ bị trình biên dịch chuyển thành `:root[data-v-xxxx]`. Selector này không bao giờ khớp trên trình duyệt, dẫn đến việc các biến CSS màu viền bị rỗng $\rightarrow$ làm mất toàn bộ viền bao quanh các thẻ KPI và modal.
+   - **Giải pháp triệt để:** Di chuyển toàn bộ khai báo biến theme từ `:root` sang class gốc `.mep-container` và `.mep-theme-light`, đồng thời thêm cơ chế fallback màu tĩnh (`border: 1px solid #334155; border: 1px solid var(--mep-border);`). Đảm bảo thẻ KPI, modal thống kê và các đường chia bản vẽ luôn có viền rõ ràng, sắc nét.
+3. **Hệ thống nhãn màu sắc động theo mức độ cảnh báo (Dynamic Tag Semantics):**
+   - **Lệch khối lượng:** Tag đỏ đậm (`danger`) kèm icon mũi tên xuống/lên.
+   - **Lệch tỷ lệ phụ trội:** Tag vàng cam (`warning`) kèm icon `%` (ví dụ `Lệch PT (30% vs 20%)`).
+   - **Lệch ghi chú / điều kiện cấp:** Tag xanh dương (`info`) kèm icon tag (ví dụ `Lệch RM (SDV vs Trống)`).
+   - **Mã mồ côi:** Tag đỏ viền trơn (`plain danger`) kèm icon cảnh báo tròn.
+
+---
+
 ## 4. HƯỚNG DẪN KIỂM THỬ TRÊN MÔI TRƯỜNG THỰC TẾ
 
 1. **Khởi động Backend FastAPI**:

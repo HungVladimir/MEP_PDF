@@ -200,36 +200,49 @@ Khi người dùng click vào badge **`❌ Lệch 2 lỗi`** trên bảng chính
 * **Thẻ 4 (Bảng danh mục nguồn - 1. Đối Soát Bản Vẽ):**
   - Code: `currentDetail.sheet`.
   - Nguồn sinh ra: Tên Sheet đối soát chính trong file Excel báo cáo đầu ra.
-* **Badge phân loại sai lệch:** `Lệch khối lượng: 2`:
-  - Code: `v-for="[type, count] in errorTypeEntries"`.
-  - Nguồn sinh ra: Từ dictionary `currentDetail.error_types` được gom nhóm tự động theo regex từ khóa trong cột `Note` (`lệch`, `mã mồ côi`, `thiếu`, `thừa`, `sai`).
+* **Badge phân loại sai lệch (Dynamic Categorized Badges):**
+  - Code: `v-for="[type, count] in errorTypeEntries"` với `:type="type.includes('Phụ trội') ? 'warning' : (type.includes('Ghi chú') ? 'info' : 'danger')"`.
+  - Nguồn sinh ra: Từ dictionary `currentDetail.error_types` được phân loại chính xác bằng module `classify_reconcile_error`:
+    - `Lệch khối lượng: 5` $\rightarrow$ Thẻ đỏ (`type="danger"`)
+    - `Lệch phụ trội: 1` $\rightarrow$ Thẻ vàng cam (`type="warning"`)
+    - `Mã mồ côi (Chưa khai báo): 1` $\rightarrow$ Thẻ đỏ viền trơn (`effect="plain"`)
+    - `Lệch ghi chú (Remark): N` $\rightarrow$ Thẻ xanh dương (`type="info"`).
 
 ---
 
 ### 3.3. Tab 1: Danh Sách Lỗi (Errors Table)
 
-Bảng hiển thị danh sách chi tiết các điểm sai lệch (`currentDetail.errors`):
+Bảng hiển thị danh sách chi tiết toàn diện các điểm sai lệch (`currentDetail.errors`) sau khi đã phân loại đa điều kiện:
 
 | STT | Phân Loại Lỗi | Bản Vẽ | Mã SDAC | Tên Vật Tư | ĐVT | SL Dự Toán | SL Bản Vẽ (AI) | Chênh Lệch | Chi Tiết Đối Chiếu |
 | :---: | :---: | :---: | :---: | :--- | :---: | :---: | :---: | :---: | :--- |
-| **1** | `Lệch khối lượng` | **0405** | `M02-00728171` | `BEAM_CLAMP` | each | **59.0** | **58.0** *(Tooltip)* | `Thiếu 1.0` | `Lệch BV 0405 (AI:58.0 \| Ven:59.0)` |
+| **1** | `Lệch khối lượng` | **0405** | `M02-00728171` | `BEAM_CLAMP` | each | **59** | **58** *(Tooltip)* | `Thiếu 1` | `Lệch BV 0405 (AI:58.0 \| Ven:59.0)` |
 | **2** | `Lệch khối lượng` | **0205** | `M02-21514325` | `U_SUPPORT_HANGER` | m | **1.8** | **1.4** *(Tooltip)* | `Thiếu 0.4` | `Lệch BV 0205 (AI:1.4 \| Ven:1.8)` |
+| **3** | `Mã mồ côi (Chưa khai báo)` | **Chung** | `M03-00727548` | `POWER_CABLE` | m | **107.0** | **107** | `Mã mồ côi` | `Mã mồ côi (Chỉ có ở bản vẽ)` |
+| **4** | `Lệch khối lượng` | **0305** | `M03-07190434` | `RECEPTACLE` | each | **5** | **4** | `Thiếu 1` | `Lệch BV 0305 (AI:4.0 \| Ven:5.0)` |
+| **5** | `Lệch khối lượng` | **0405** | `M03-07190434` | `RECEPTACLE` | each | **17** | **18** | `Thừa 1` | `Lệch BV 0405 (AI:18.0 \| Ven:17.0)` |
+| **6** | `Lệch khối lượng` | **0505** | `M03-07190434` | `RECEPTACLE` | each | **15** | **9** | `Thiếu 6` | `Lệch BV 0505 (AI:9.0 \| Ven:15.0)` |
+| **7** | `Lệch phụ trội` | **0205** | `M03-07798376` | `CABLE_DUCT_FITTING_JOINT_CONNECTOR` | each | **4** | **4** | `Lệch PT (30% vs 20%)` | `Lệch BV 0205: AI [PT:30%, RM:Trống]=4.0 \| Vendor [PT:20%, RM:Trống]=4.0` |
 
 #### Cơ chế code bóc tách chi tiết từng cột:
-1. **Bản vẽ (`row.dwg` = `0405`, `0205`):**
+1. **Phân loại lỗi (`row.type`):**
+   - Không còn bị mặc định thô sơ là "Lệch khối lượng".
+   - Được phân loại qua hàm `classify_reconcile_error`: Nhận diện rõ ràng `Lệch phụ trội`, `Lệch ghi chú (Remark)`, `Mã mồ côi (Chưa khai báo)`, `Lệch khối lượng`.
+2. **Bản vẽ (`row.dwg` = `0405`, `0205`, `Chung`):**
    - Hàm `parse_dwg_segments` quét cột `Note` bằng regex: `re.search(r'Lệch BV\s+([\w\-\.]+)', seg)` $\rightarrow$ Trích xuất ra đúng bản vẽ phát sinh sai lệch (`0405`).
-2. **Mã SDAC & Tên vật tư (`row.code`, `row.name`):**
+3. **Mã SDAC & Tên vật tư (`row.code`, `row.name`):**
    - Đọc từ cột `SDAC Code` và `Description` của dòng bị lỗi trong Sheet 1.
-3. **ĐVT (`row.unit`):**
+4. **ĐVT (`row.unit`):**
    - Đọc từ cột `Unit` (Đơn vị tính: `each`, `m`, `set`).
-4. **SL Dự toán (`row.vendor_qty` = `59.0`, `1.8`):**
-   - Regex quét trực tiếp từ phân đoạn lỗi: `re.search(r'Ven(?:dor)?.*?([\d\.]+)', seg)` $\rightarrow$ Lấy ra con số **59.0** mà nhà thầu kê khai riêng cho bản vẽ `0405` (thay vì lấy số tổng cả hồ sơ 101).
-5. **SL Bản vẽ (AI) (`row.ai_qty` = `58.0`, `1.4`):**
-   - Regex quét từ phân đoạn lỗi: `re.search(r'AI.*?([\d\.]+)', seg)` $\rightarrow$ Lấy ra con số **58.0** mà AI đếm được trên bản vẽ `0405`.
+5. **SL Dự toán (`row.vendor_qty`) & SL Bản vẽ (AI) (`row.ai_qty`):**
+   - Trích xuất chuẩn xác số lượng cục bộ tại bản vẽ tương ứng của cả hai bên.
    - **Tooltip icon (i):** Khi rê chuột vào, hiển thị phân rã tất cả các bản vẽ:
      `Bóc tách từ: BV 0305: 10, BV 0405: 58, BV 0505: 33 (Tổng hồ sơ: Dự toán 101.0 | AI 101)`.
-6. **Chênh lệch (`row.diff` = `Thiếu 1.0`, `Thiếu 0.4`):**
-   - Tính toán trực tiếp bằng công thức toán học: $\Delta = \text{AI} - \text{Vendor} = 58.0 - 59.0 = -1.0 \rightarrow$ Ghi nhãn `Thiếu 1.0` (in màu đỏ đậm).
+6. **Chênh lệch (`row.diff`):**
+   - **Khi $\Delta \neq 0$ (Lệch số lượng):** Hiển thị `Thiếu X` (nền đỏ `<el-tag type="danger">`, icon mũi tên xuống) hoặc `Thừa X` (nền cam `<el-tag type="warning">`, icon mũi tên lên).
+   - **Khi $\Delta = 0$ nhưng khác % phụ trội:** Hiển thị thẻ vàng `Lệch PT (30% vs 20%)` (nền nhạt `<el-tag type="warning" effect="plain">`, icon `%`). **Xóa bỏ hoàn toàn lỗi in chữ đỏ "Khớp" ở phiên bản cũ!**
+   - **Khi $\Delta = 0$ nhưng khác ghi chú (Remark):** Hiển thị thẻ xanh `Lệch RM (SDV vs Trống)` (nền nhạt `<el-tag type="info" effect="plain">`, icon tag).
+   - **Khi là Mã mồ côi:** Hiển thị thẻ đỏ trơn `Mã mồ côi (Chỉ có ở bản vẽ)`.
 7. **Chi tiết đối chiếu (`row.msg`):**
    - Ghi nguyên văn nội dung kiểm toán kỹ thuật từ thuật toán reconciler để kỹ sư dễ tra cứu.
 

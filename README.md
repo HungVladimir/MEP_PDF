@@ -144,9 +144,9 @@ Tạo file `backend/.env` với các thông số mẫu:
 # ====================================================================
 # 1. TÀI KHOẢN ORACLE DATABASE (LOCAL_AI.MEP_PAYMENT_ANALYSIS)
 # ====================================================================
-DB_USER_YMS_AI=LOCAL_AI
-DB_PASSWORD_YMS_AI=WKEHDGHK1!
-DB_SERVICE=MBLDB_SVC
+DB_USER_YMS_AI=********
+DB_PASSWORD_YMS_AI==********
+DB_SERVICE==********
 ORACLE_CLIENT_LIB_DIR=C:\oracle_client
 
 # ====================================================================
@@ -159,18 +159,18 @@ WORKER_PORT=8000
 # 3. CẤU HÌNH MINIO OBJECT STORAGE (DUAL-MODE)
 # ====================================================================
 USE_MINIO=true
-ONEAI_MINIO_ENDPOINT=107.126.11.129:31800
+ONEAI_MINIO_ENDPOINT==********
 ONEAI_MINIO_ACCESS=your_access_key
 ONEAI_MINIO_SECRET=your_secret_key
-ONEAI_MINIO_BUCKETNAME=oneai
-MINIO_PREFIX=mep_payment
+ONEAI_MINIO_BUCKETNAME==********
+MINIO_PREFIX==********
 
 # ====================================================================
 # 4. CẤU HÌNH AI MODEL SERVER (QWEN VISION)
 # ====================================================================
-MEP_API_URL=http://107.126.11.129:32200/api/v1/chat/completions
-MEP_API_KEY=sk-pEqadpi8UZjOr2RWUTdXliuxXcTFVc-dezojIsgbJ0Y
-MEP_MODEL_NAME=NextAI-SDV
+MEP_API_URL==********
+MEP_API_KEY==********
+MEP_MODEL_NAME==********
 ```
 
 ---
@@ -194,7 +194,7 @@ python main.py
 ```
 🚀 [FastAPI] Khởi động Worker tại http://0.0.0.0:8000 ...
 ✅ Service đã sẵn sàng tiếp nhận yêu cầu từ OneAI Portal...
-📦 [MinIO] Đã kết nối MinIO Server (107.126.11.129:31800, Bucket: oneai)
+📦 [MinIO] Đã kết nối MinIO Server (=********, Bucket: oneai)
 ```
 
 ### 3. Tích hợp OneAI Portal

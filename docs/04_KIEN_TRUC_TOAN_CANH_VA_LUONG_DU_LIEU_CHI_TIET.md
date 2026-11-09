@@ -357,9 +357,12 @@ while True:
 ### 3.5b. File [`backend/detail_builder.py`](file:///d:/Project/Payment_PDF/MEP_OneAI_System/backend/detail_builder.py) - Bộ Trích Xuất & Điều Phối Dữ Liệu Chi Tiết 4 Tab
 
 Module độc lập chuyên trách chuẩn bị dữ liệu chi tiết cho Hộp thoại Đối Soát theo chuẩn Sếp:
-* **Hàm `parse_excel_report_to_detail(excel_path, keyid, session_dir)`:** Đọc trực tiếp file Excel báo cáo 2 sheet (`Consolidated_Report.xlsx`), quét sheet 1 ("1. Đối Soát Bản Vẽ") và sheet 2 ("2. Đối Soát Gate Pass"), phân loại lỗi (Lệch khối lượng, Mã mồ côi, Thiếu/Thừa vật tư), gom nhóm theo từng bản vẽ kỹ thuật, thu thập ảnh bản vẽ và tổng hợp nhật ký xử lý.
+* **Hàm `parse_excel_report_to_detail(excel_path, keyid, session_dir)`:** Đọc trực tiếp file Excel báo cáo 2 sheet (`Consolidated_Report.xlsx`), quét sheet 1 ("1. Đối Soát Bản Vẽ") và sheet 2 ("2. Đối Soát Gate Pass"). Tích hợp module phân loại đa điều kiện `classify_reconcile_error`:
+  - Phân loại chuẩn xác: `Lệch phụ trội`, `Lệch ghi chú (Remark/SDV)`, `Mã mồ côi (Chưa khai báo)`, `Lệch khối lượng`.
+  - Hiển thị badge Chênh lệch trực quan `Lệch PT (30% vs 20%)` hoặc `Lệch RM (SDV vs Trống)` (xóa bỏ hoàn toàn lỗi in chữ đỏ "Khớp" khi khối lượng bằng nhau nhưng khác điều kiện).
+  - Gom nhóm theo từng bản vẽ kỹ thuật (Accordion), thu thập danh sách ảnh bằng chứng và tổng hợp nhật ký xử lý pipeline.
 * **Hàm `build_or_load_task_detail(keyid, final_report_dir, storage_dir, fallback_info)` (3-Tier Fallback Engine):**
-  1. *Tầng 1 (Cache JSON):* Kiểm tra cache `{KEYID}_detail.json` nạp siêu tốc < 10ms.
+  1. *Tầng 1 (MinIO / Local Cache JSON):* Kiểm tra cache `{KEYID}/cache/detail.json` nạp siêu tốc < 50ms. Tự động kiểm tra chữ ký cache cũ để tự động rebuild sang chuẩn mới nếu cần.
   2. *Tầng 2 (Excel Parsing):* Nếu chưa có cache JSON, tự động tìm và bóc tách file Excel kết quả.
   3. *Tầng 3 (Fallback An Toàn):* Nếu hồ sơ đang chờ chạy hoặc chưa có file, tự sinh dữ liệu dự phòng an toàn từ Oracle DB, đảm bảo modal giao diện luôn hiển thị mượt mà, không bao giờ bị crash trắng trang.
 

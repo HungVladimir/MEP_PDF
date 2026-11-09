@@ -1,7 +1,7 @@
 """
 Module xây dựng và phân tích chi tiết kết quả đối soát (Task Detail Builder).
 Trích xuất danh sách lỗi, thống kê từng bản vẽ, ảnh bằng chứng và log xử lý
-tương tự phong cách hệ thống của Sếp gửi, phục vụ hiển thị trực quan trên OneAI Dialog.
+tương tự phong cách hệ thống, phục vụ hiển thị trực quan trên OneAI Dialog.
 """
 import os
 import json

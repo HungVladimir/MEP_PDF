@@ -1,6 +1,6 @@
 <template>
   <div class="mep-container" :class="{ 'theme-dark': isDarkMode, 'theme-light': !isDarkMode }">
-    <!-- 1. KHỐI THẺ KPI THỐNG KÊ 5 THẺ TƯƠNG TÁC (CLICK-TO-FILTER THEO PHONG CÁCH SẾP GỬI) -->
+    <!-- 1. KHỐI THẺ KPI THỐNG KÊ 5 THẺ TƯƠNG TÁC -->
     <div class="kpi-cards-grid">
       <div class="kpi-card" :class="{ active: activeKpiFilter === 'ALL' }" @click="handleKpiFilter('ALL')">
         <div class="kpi-icon total"><i class="bi bi-stack"></i></div>
@@ -271,7 +271,7 @@
       </div>
     </div>
 
-    <!-- 6. DIALOG CHI TIẾT ĐỐI SOÁT (XEM LỖI, BẢN VẼ, SOI ẢNH, LOG VÀ DUYỆT THEO CHUẨN SẾP) -->
+    <!-- 6. DIALOG CHI TIẾT ĐỐI SOÁT (XEM LỖI, BẢN VẼ, SOI ẢNH, LOG VÀ DUYỆT -->
     <el-dialog v-model="showDetailDialog" :title="`📋 Chi Tiết Đối Soát Hồ Sơ: ${currentTask?.KEYID || ''}`" width="85%"
       top="4vh" :before-close="handleCloseDetailDialog" destroy-on-close
       :custom-class="isDarkMode ? 'mep-detail-dialog theme-dark' : 'mep-detail-dialog theme-light'"
@@ -376,14 +376,14 @@
               <el-table-column prop="unit" label="ĐVT" width="65" align="center" />
               <el-table-column prop="vendor_qty" label="SL Dự toán" width="100" align="center" />
               <el-table-column prop="ai_qty" label="SL Bản vẽ (AI)" width="125" align="center">
-                <template #default="{ row }">
+                <!-- <template #default="{ row }">
                   <el-tooltip v-if="row.ai_breakdown" :content="`Bóc tách từ: ${row.ai_breakdown}`" placement="top">
                     <span class="font-bold text-primary cursor-pointer">
                       {{ row.ai_qty }} <i class="bi bi-info-circle ms-1" style="font-size: 11px;"></i>
                     </span>
                   </el-tooltip>
                   <span v-else class="font-bold">{{ row.ai_qty }}</span>
-                </template>
+                </template> -->
               </el-table-column>
               <el-table-column prop="diff" label="Chênh lệch" width="165" align="center">
                 <template #default="{ row }">
@@ -552,7 +552,7 @@
                 :show-file-list="false" 
                 :auto-upload="false" 
                 accept=".xlsx,.xlsm"
-                :on-change="(file) => handleUploadExcel(file, currentTask)" 
+                :on-change="(file) => handleUploadExcel(file, currentTask)"
                 :disabled="currentTask?.STATUS === 'RUNNING'"
                 style="display: inline-block;"
               >
@@ -751,7 +751,7 @@ const total = ref(0)
 const isSaving = ref(false)
 const isLoading = ref(false)
 
-// State cho Dialog Chi tiết đối soát & Rerun (Theo phong cách Sếp)
+// State cho Dialog Chi tiết đối soát & Rerun 
 const showDetailDialog = ref(false)
 const detailLoading = ref(false)
 const currentTask = ref(null)

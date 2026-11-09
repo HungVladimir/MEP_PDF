@@ -745,6 +745,14 @@ Sau khi tính toán dữ liệu bằng Pandas, file Excel được mở lại b�
    - Lỗi Mã mồ côi: Tô đỏ toàn bộ hàng ngang (`#FFC7CE`).
    - Lỗi Lệch khối lượng ở bản vẽ nào: Tô đỏ chính xác ô bản vẽ đó và ô cột `Note` ở cuối dòng.
    - Sheet 2: Tô đỏ toàn bộ dòng nếu Vendor mang thiếu vật tư qua cổng. Dòng hợp lệ được tô màu xanh lá nhạt (`#E2EFDA`) ở cột Kết luận.
+6. **Tự Động Căn Chỉnh Độ Rộng Cột & Chiều Cao Dòng Compact (`auto_fit_columns_and_rows`):**
+   - **Vấn đề thực tế:** Mặc định khi OpenPyXL bật `wrap_text=True`, nếu không thiết lập chiều rộng cột và chiều cao dòng, Excel sẽ tự co cụm các cột lại làm văn bản bị ép xuống dòng nhiều lần, khiến chiều cao dòng bị phình to lên tới 60–80pt rất xấu (tình trạng file `excel1`). Người dùng luôn phải thực hiện thủ công thao tác `Ctrl+A` $\rightarrow$ kéo dài cột Specification $\rightarrow$ double click thanh ngang/dọc để thu được layout compact (ảnh `excel2`).
+   - **Giải pháp tự động hóa bằng code:**
+     - Cột `Specification` (Quy cách kỹ thuật): Cố định độ rộng chuẩn **50 ký tự** để tên vật tư hiển thị trọn vẹn, dễ đọc.
+     - Các cột mã số, đơn vị, bản vẽ: Tính tự động theo công thức:
+       $$\text{width} = \min(\max(\max(\text{len}(cell)) + 3, 10), 30)$$
+     - Chiều cao dòng (Row Height): Chuẩn hóa dòng tiêu đề Header = **28pt**, tất cả các dòng dữ liệu = **24pt**.
+     - Kết quả: File Excel xuất ra tự động đạt layout **chuẩn compact như `excel2` ngay từ đầu**, kỹ sư không cần kéo chuột căn chỉnh bất kỳ ô nào!
 
 ---
 
