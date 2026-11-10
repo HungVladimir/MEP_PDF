@@ -328,9 +328,11 @@
             <b>{{ currentDetail.total_items }}</b>
             <span>Dòng vật tư kiểm tra</span>
           </div>
-          <div class="m-stat">
-            <b style="font-size: 15px; color: #409EFF;">{{ currentDetail.sheet }}</b>
-            <span>Bảng danh mục nguồn</span>
+          <div class="m-stat" :class="matchRate.isOk ? 'border-ok' : (matchRate.isWarn ? 'border-warn' : 'border-err')">
+            <b :class="matchRate.isOk ? 'text-success' : (matchRate.isWarn ? 'text-warning' : 'text-danger')">
+              {{ matchRate.text }}
+            </b>
+            <span :title="`Khớp ${matchRate.countText} dòng vật tư`">Tỷ lệ đạt chuẩn ({{ matchRate.countText }})</span>
           </div>
         </div>
 
@@ -1010,6 +1012,8 @@ const openDetailModal = async (row) => {
       error_types: (data.error_types && typeof data.error_types === 'object') ? data.error_types : {},
       drawings_count: Number(data.drawings_count ?? 1),
       total_items: Number(data.total_items ?? 0),
+      matched_items: Number(data.matched_items ?? (Math.max(0, Number(data.total_items ?? 0) - Number(data.error_count ?? row.ERROR_COUNT ?? 0)))),
+      match_rate: data.match_rate || '',
       sheet: data.sheet || '1. Đối Soát Bản Vẽ',
       errors: Array.isArray(data.errors) ? data.errors : [],
       groups: Array.isArray(data.groups) ? data.groups : [],
@@ -1018,13 +1022,17 @@ const openDetailModal = async (row) => {
     }
   } catch (err) {
     console.warn("Không thể tải chi tiết từ API Worker, dùng dữ liệu fallback:", err)
+    const totalItm = 12
+    const errCnt = Number(row.ERROR_COUNT || 0)
     currentDetail.value = {
       keyid: row.KEYID,
       mode: 'MEP AI Vision (Qwen)',
-      error_count: row.ERROR_COUNT || 0,
-      error_types: row.ERROR_COUNT > 0 ? { 'Lệch số lượng đối soát': row.ERROR_COUNT } : {},
+      error_count: errCnt,
+      error_types: errCnt > 0 ? { 'Lệch số lượng đối soát': errCnt } : {},
       drawings_count: 1,
-      total_items: 12,
+      total_items: totalItm,
+      matched_items: Math.max(0, totalItm - errCnt),
+      match_rate: `${Math.round(Math.max(0, totalItm - errCnt) / totalItm * 1000) / 10}%`,
       sheet: '1. Đối Soát Bản Vẽ',
       errors: row.ERROR_COUNT > 0 ? [{
         id: 1,
@@ -1061,6 +1069,36 @@ const errorTypeEntries = computed(() => {
     return Object.entries(et)
   }
   return []
+})
+
+// Tỷ lệ chuẩn xác (% Khớp) của toàn bộ hồ sơ nghiệm thu
+const matchRate = computed(() => {
+  const total = Number(currentDetail.value?.total_items || 0)
+  const errs = Number(currentDetail.value?.error_count || 0)
+  if (total <= 0) {
+    return {
+      percent: 100,
+      text: '100%',
+      countText: '0/0',
+      isOk: true,
+      isWarn: false,
+      isErr: false
+    }
+  }
+  const matched = Math.max(0, total - errs)
+  const pct = Math.max(0, Math.min(100, Math.round((matched / total) * 1000) / 10))
+  const isOk = pct >= 100
+  const isWarn = pct >= 80 && pct < 100
+  const isErr = pct < 80
+
+  return {
+    percent: pct,
+    text: `${pct}%`,
+    countText: `${matched}/${total}`,
+    isOk,
+    isWarn,
+    isErr
+  }
 })
 
 const getImgUrl = (url) => {

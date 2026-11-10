@@ -197,9 +197,10 @@ Khi người dùng click vào badge **`❌ Lệch 2 lỗi`** trên bảng chính
 * **Thẻ 3 (Dòng vật tư kiểm tra - 34):**
   - Code: `currentDetail.total_items`.
   - Nguồn sinh ra: Tổng số dòng (`len(df_s1)`) trong bảng vật tư Sheet 1 của file Excel.
-* **Thẻ 4 (Bảng danh mục nguồn - 1. Đối Soát Bản Vẽ):**
-  - Code: `currentDetail.sheet`.
-  - Nguồn sinh ra: Tên Sheet đối soát chính trong file Excel báo cáo đầu ra.
+* **Thẻ 4 (Tỷ lệ đạt chuẩn - % Khớp):**
+  - Code: `matchRate.text` và `matchRate.countText` (hoặc `currentDetail.match_rate`).
+  - Nguồn sinh ra: Tỷ lệ phần trăm giữa số dòng vật tư khớp hoàn hảo và tổng số dòng kiểm tra toàn diện cả 2 Vòng (Bản vẽ CAD + Gate Pass), kèm viền trạng thái động (Xanh/Vàng/Đỏ).
+  - Giá trị: Ví dụ `94.1%` (Khớp 32/34 dòng), mang giá trị nghiệp vụ quản trị trực quan cao.
 * **Badge phân loại sai lệch (Dynamic Categorized Badges):**
   - Code: `v-for="[type, count] in errorTypeEntries"` với `:type="type.includes('Phụ trội') ? 'warning' : (type.includes('Ghi chú') ? 'info' : 'danger')"`.
   - Nguồn sinh ra: Từ dictionary `currentDetail.error_types` được phân loại chính xác bằng module `classify_reconcile_error`:

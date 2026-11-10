@@ -708,6 +708,23 @@
   background: linear-gradient(135deg, rgba(103, 194, 58, 0.08) 0%, var(--mep-bg-card) 100%);
 }
 
+.m-stat.border-warn {
+  border-left: 4px solid var(--mep-status-warn);
+  background: linear-gradient(135deg, rgba(230, 162, 60, 0.08) 0%, var(--mep-bg-card) 100%);
+}
+
+.text-success {
+  color: var(--mep-status-ok) !important;
+}
+
+.text-danger {
+  color: var(--mep-status-err) !important;
+}
+
+.text-warning {
+  color: var(--mep-status-warn) !important;
+}
+
 .m-stat b {
   font-size: 22px;
   font-weight: 700;

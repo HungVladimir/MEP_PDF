@@ -344,9 +344,11 @@
             <b>{{ currentDetail.total_items }}</b>
             <span>Dòng vật tư kiểm tra</span>
           </div>
-          <div class="m-stat">
-            <b style="font-size: 15px; color: #409EFF;">{{ currentDetail.sheet }}</b>
-            <span>Bảng danh mục nguồn</span>
+          <div class="m-stat" :class="matchRate.isOk ? 'border-ok' : (matchRate.isWarn ? 'border-warn' : 'border-err')">
+            <b :class="matchRate.isOk ? 'text-success' : (matchRate.isWarn ? 'text-warning' : 'text-danger')">
+              {{ matchRate.text }}
+            </b>
+            <span :title="`Khớp ${matchRate.countText} dòng vật tư`">Tỷ lệ đạt chuẩn ({{ matchRate.countText }})</span>
           </div>
         </div>
 
@@ -1155,6 +1157,29 @@ const previewImageList = computed(() => {
 const errorTypeEntries = computed(() => {
   if (!currentDetail.value?.error_types) return []
   return Object.entries(currentDetail.value.error_types)
+})
+
+// Dòng 1161-1185: Tỷ lệ chuẩn xác (% Khớp) của toàn bộ hồ sơ nghiệm thu
+const matchRate = computed(() => {
+  const total = Number(currentDetail.value?.total_items || 0)
+  const errs = Number(currentDetail.value?.error_count || 0)
+  if (total <= 0) {
+    return { percent: 100, text: '100%', countText: '0/0', isOk: true, isWarn: false, isErr: false }
+  }
+  const matched = Math.max(0, total - errs)
+  const pct = Math.max(0, Math.min(100, Math.round((matched / total) * 1000) / 10))
+  const isOk = pct >= 100
+  const isWarn = pct >= 80 && pct < 100
+  const isErr = pct < 80
+
+  return {
+    percent: pct,
+    text: `${pct}%`,
+    countText: `${matched}/${total}`,
+    isOk,
+    isWarn,
+    isErr
+  }
 })
 
 // Theo dõi thay đổi của Bộ lọc

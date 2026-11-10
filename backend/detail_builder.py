@@ -387,14 +387,39 @@ def parse_excel_report_to_detail(excel_path: Path, keyid: str, session_dir: Path
         target_s2 = next((s for s in sheet_names if "gate pass" in s.lower() or "gatepass" in s.lower()), None)
         if target_s2:
             df_s2 = xl.parse(target_s2)
-            # Kiểm tra chênh lệch Gate Pass
-            diff_col = next((c for c in df_s2.columns if 'chênh lệch' in str(c).lower() or 'thiếu' in str(c).lower()), None)
-            if diff_col:
+            total_items += len(df_s2)
+
+            # Tìm các cột dữ liệu theo từ khóa linh hoạt
+            def find_s2_col(keywords):
+                for c in df_s2.columns:
+                    c_clean = str(c).strip().lower()
+                    if any(kw in c_clean for kw in keywords):
+                        return c
+                return None
+
+            col_code = find_s2_col(['sdac', 'mã vật tư', 'ma vat tu', 'code', 'item code'])
+            col_desc = find_s2_col(['description', 'tên vật tư', 'ten vat tu', 'diễn giải', 'vật tư'])
+            col_spec = find_s2_col(['specification', 'quy cách', 'quy cach'])
+            col_unit = find_s2_col(['unit', 'đvt', 'dvt', 'đơn vị'])
+            col_req = find_s2_col(['cần mang', 'can mang', 'bản vẽ', 'ban ve', 'yêu cầu', 'tổng kl'])
+            col_actual = find_s2_col(['thực tế', 'thuc te', 'gate pass', 'gatepass', 'thực mang'])
+            col_diff = find_s2_col(['chênh lệch', 'chenh lech', 'thiếu', 'thieu', 'diff'])
+
+            if col_diff:
                 for idx, row in df_s2.iterrows():
-                    diff_val = row.get(diff_col)
+                    diff_val = row.get(col_diff)
                     try:
                         if pd.notna(diff_val) and float(diff_val) < 0:
-                            c_code = str(row.get(df_s2.columns[0], f"GP-{idx+1}"))
+                            diff_num = abs(float(diff_val))
+                            c_code = str(row.get(col_code, f"GP-{idx+1}")).strip() if col_code else f"GP-{idx+1}"
+                            desc_val = str(row.get(col_desc, '')).strip() if col_desc else ''
+                            spec_val = str(row.get(col_spec, '')).strip() if col_spec else ''
+                            full_name = f"{desc_val} ({spec_val})" if desc_val and spec_val else (desc_val or spec_val or "Vật tư đối soát Gate Pass")
+                            unit_val = str(row.get(col_unit, '')).strip() if col_unit else ''
+
+                            req_qty = row.get(col_req, '—') if col_req else '—'
+                            actual_qty = row.get(col_actual, '—') if col_actual else '—'
+
                             err_t = "Gate Pass mang thiếu vật tư"
                             error_type_counts[err_t] = error_type_counts.get(err_t, 0) + 1
                             error_items.append({
@@ -402,15 +427,20 @@ def parse_excel_report_to_detail(excel_path: Path, keyid: str, session_dir: Path
                                 "type": err_t,
                                 "dwg": "Cổng bảo vệ (Gate Pass)",
                                 "code": c_code,
-                                "name": "Vật tư đối soát Vòng 2",
-                                "vendor_qty": row.get('KL Bản vẽ', '—'),
-                                "ai_qty": row.get('KL Gate Pass', '—'),
-                                "diff": f"Thiếu {abs(float(diff_val))}",
+                                "name": full_name,
+                                "unit": unit_val,
+                                "vendor_qty": str(round(float(req_qty), 2)) if isinstance(req_qty, (int, float)) and pd.notna(req_qty) else str(req_qty),
+                                "ai_qty": str(round(float(actual_qty), 2)) if isinstance(actual_qty, (int, float)) and pd.notna(actual_qty) else str(actual_qty),
+                                "diff": f"Thiếu {diff_num:g}",
                                 "cell": f"Sheet 2, Row {idx + 2}",
-                                "msg": f"Khối lượng thực mang vào xưởng nhỏ hơn khối lượng thiết kế nghiệm thu: Thiếu {abs(float(diff_val))}"
+                                "msg": f"Khối lượng thực mang vào xưởng nhỏ hơn khối lượng thiết kế nghiệm thu: Thiếu {diff_num:g} {unit_val}".strip()
                             })
                     except Exception:
                         pass
+        try:
+            xl.close()
+        except Exception:
+            pass
 
     except Exception as e:
         print(f"⚠️ [DetailBuilder Warning] Lỗi đọc excel report: {e}")
@@ -469,6 +499,9 @@ def parse_excel_report_to_detail(excel_path: Path, keyid: str, session_dir: Path
             f"Xuất file báo cáo hoàn tất: {excel_path.name}"
         ]
 
+    matched_items = max(0, total_items - len(error_items))
+    match_rate_pct = round((matched_items / total_items) * 100, 1) if total_items > 0 else 100.0
+
     detail = {
         "keyid": keyid,
         "mode": "MEP AI Vision (Qwen) + 2-Stage Reconciler",
@@ -476,6 +509,8 @@ def parse_excel_report_to_detail(excel_path: Path, keyid: str, session_dir: Path
         "error_types": error_type_counts,
         "drawings_count": len(drawing_names) or 1,
         "total_items": total_items,
+        "matched_items": matched_items,
+        "match_rate": f"{match_rate_pct}%",
         "sheet": target_s1 or "1. Đối Soát Bản Vẽ",
         "errors": error_items,
         "groups": drawing_groups,
@@ -541,9 +576,9 @@ def build_or_load_task_detail(keyid: str, final_report_dir: Path, storage_dir: P
 
     # 3. Fallback mềm mại cho các bản ghi demo/mock hoặc đang chờ chạy
     fallback_info = fallback_info or {}
-    err_count = fallback_info.get("error_count", 0)
-    reason = fallback_info.get("reason", "Chưa có báo cáo chi tiết")
-    status = fallback_info.get("status", "WAITING")
+    err_count = int(fallback_info.get("error_count") or fallback_info.get("ERROR_COUNT") or 0)
+    reason = fallback_info.get("reason") or fallback_info.get("REASON") or "Chưa có báo cáo chi tiết"
+    status = fallback_info.get("status") or fallback_info.get("STATUS") or "WAITING"
 
     sample_errors = []
     sample_types = {}
@@ -576,13 +611,19 @@ def build_or_load_task_detail(keyid: str, final_report_dir: Path, storage_dir: P
                 "msg": "Mã vật tư có trong bảng kê dự toán thanh toán nhưng không tìm thấy vị trí thể hiện trên bản vẽ"
             })
 
+    total_items = 15
+    matched_items = max(0, total_items - err_count)
+    match_rate_pct = round((matched_items / total_items) * 100, 1) if total_items > 0 else 100.0
+
     return {
         "keyid": keyid,
         "mode": "MEP AI Vision (NextAI Qwen)",
         "error_count": err_count,
         "error_types": sample_types,
         "drawings_count": 2 if err_count > 0 else 1,
-        "total_items": 15,
+        "total_items": total_items,
+        "matched_items": matched_items,
+        "match_rate": f"{match_rate_pct}%",
         "sheet": "1. Đối Soát Bản Vẽ",
         "errors": sample_errors,
         "groups": [
