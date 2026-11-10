@@ -401,8 +401,10 @@ def format_master_report(df_pivot, drawing_columns, master_data_path):
     df_report['Note'] = ""
     df_report['No (STT)'] = range(1, len(df_report) + 1)
 
-    final_columns = base_cols + drawing_columns + \
-        ["Khối lượng tổng", "Phụ trội", "Remark", "Note"]
+    # Đổi vị trí 4 cột: Đưa các cột Khối lượng tổng, Phụ trội, Remark, Note lên trước,
+    # toàn bộ các cột bản vẽ CAD (0105, 0205...) sẽ để ở cuối cùng theo đúng yêu cầu
+    summary_cols = ["Khối lượng tổng", "Phụ trội", "Remark", "Note"]
+    final_columns = base_cols + summary_cols + drawing_columns
     return df_report[final_columns].copy()
 
 # ==========================================
@@ -708,7 +710,7 @@ def reconcile_and_highlight(df_ai, df_vendor, output_excel_path, drawing_columns
         reconcile_logs = []
 
         if code not in vendor_code_details:
-            reconcile_logs.append("Mã mồ côi (Chỉ có ở bản vẽ)")
+            reconcile_logs.append("Chỉ có ở bản vẽ")
             error_cells.append(f"ROW:{index + 2}")
         else:
             vendor_row_data = vendor_dict.get(
@@ -832,7 +834,8 @@ def reconcile_and_highlight(df_ai, df_vendor, output_excel_path, drawing_columns
         else:
             r_idx, c_idx = err
             ws1.cell(row=r_idx, column=c_idx).fill = red_fill
-            ws1.cell(row=r_idx, column=len(df_ai.columns)).fill = red_fill
+            note_col_idx = df_ai.columns.get_loc('Note') + 1 if 'Note' in df_ai.columns else len(df_ai.columns)
+            ws1.cell(row=r_idx, column=note_col_idx).fill = red_fill
 
     # Tự động căn chỉnh độ rộng cột và chiều cao hàng (Auto-fit chuẩn layout excel2)
     auto_fit_columns_and_rows(ws1)

@@ -13,7 +13,11 @@ import pandas as pd
 from typing import Optional
 import config
 from engine import run_mep_pipeline
-from sql import update_task_status, update_review_decision, batch_upsert_tasks, delete_tasks, check_keyid_exists, get_task_payment_month, cache_task_month
+from sql import (
+    update_task_status, update_review_decision, batch_upsert_tasks,
+    delete_tasks, check_keyid_exists, get_task_payment_month, cache_task_month,
+    get_task_status
+)
 from minio_storage import minio_storage, MINIO_PREFIX
 from detail_builder import safe_id
 
@@ -179,7 +183,7 @@ def run_ai_task_background(keyid: str, session_dir: Path, excel_path: str, payme
                 final_excel_path, sheet_name="1. Đối Soát Bản Vẽ")
             if 'Note' in df_check.columns:
                 error_count = int(df_check['Note'].astype(
-                    str).str.contains('Lệch|Mã mồ côi', na=False).sum())
+                    str).str.contains('Lệch|Mã mồ côi|Chỉ có ở bản vẽ', na=False).sum())
         except Exception as e:
             print(f"⚠️ Cảnh báo đọc lỗi: {e}")
 
@@ -310,10 +314,19 @@ async def upload_excel_task(
     background_tasks: BackgroundTasks,
     file: UploadFile = File(...),
     KEYID: str = Form(...),
-    payment_month: Optional[str] = Form(None)
+    payment_month: Optional[str] = Form(None),
+    uploader_name: Optional[str] = Form(None)
 ):
     """Tiếp nhận file Excel từ OneAI Portal và kích hoạt Background Task."""
     try:
+        # Chống xung đột đồng thời (Concurrency check): Nếu task đang RUNNING thì chặn upload đè
+        current_status = get_task_status(KEYID)
+        if current_status == "RUNNING":
+            raise HTTPException(
+                status_code=409,
+                detail=f"Hồ sơ [{KEYID}] đang được chạy đối soát bởi hệ thống! Vui lòng đợi hoàn tất."
+            )
+
         if not file.filename.endswith(('.xlsx', '.xlsm')):
             raise HTTPException(
                 status_code=400, detail="Chỉ chấp nhận file Excel (.xlsx / .xlsm)")
@@ -359,8 +372,13 @@ async def upload_excel_task(
             except Exception:
                 pass
 
-        update_task_status(keyid=KEYID, status="RUNNING",
-                           reason="Đã nhận file, AI đang bóc tách ngầm...", progress=5)
+        update_task_status(
+            keyid=KEYID,
+            status="RUNNING",
+            reason="Đã nhận file, AI đang bóc tách ngầm...",
+            progress=5,
+            pic=uploader_name
+        )
         background_tasks.add_task(
             run_ai_task_background, KEYID, project_session_dir, str(excel_path), actual_month)
 
@@ -467,6 +485,14 @@ async def save_rows(req: SaveRowsRequest):
                 raise HTTPException(
                     status_code=400,
                     detail=f"Số công việc (KEYID) '{keyid}' đã tồn tại trong Database! Không thể thêm trùng."
+                )
+        elif r.get("OLD_KEYID"):
+            old_k = str(r.get("OLD_KEYID")).strip()
+            new_k = str(r.get("KEYID", "")).strip()
+            if old_k and new_k and old_k != new_k and check_keyid_exists(new_k):
+                raise HTTPException(
+                    status_code=400,
+                    detail=f"Số công việc mới '{new_k}' đã tồn tại trong Database! Không thể đổi sang mã này."
                 )
 
     try:
@@ -678,12 +704,19 @@ async def get_task_image(keyid: str, filename: str, month: Optional[str] = None)
 
 
 @app.post("/mep_payment/rerun/{keyid}")
-async def rerun_task_endpoint(keyid: str, background_tasks: BackgroundTasks):
+async def rerun_task_endpoint(keyid: str, background_tasks: BackgroundTasks, uploader_name: Optional[str] = None):
     """
     Chạy lại tác vụ AI đối soát (Rerun) cho hồ sơ đã có file Excel trong session cũ.
     Giúp xử lý lại ngay lập tức khi mạng lag hoặc AI bị timeout mà không cần upload lại.
     """
     try:
+        current_status = get_task_status(keyid)
+        if current_status == "RUNNING":
+            raise HTTPException(
+                status_code=409,
+                detail=f"Hồ sơ [{keyid}] đang chạy đối soát! Vui lòng không kích hoạt chạy lại."
+            )
+
         from detail_builder import safe_id
         safe_key = safe_id(keyid)
 
@@ -721,7 +754,8 @@ async def rerun_task_endpoint(keyid: str, background_tasks: BackgroundTasks):
             keyid=keyid,
             status="RUNNING",
             reason="Đang chạy lại AI đối soát...",
-            progress=5
+            progress=5,
+            pic=uploader_name
         )
         task_month = get_task_payment_month(keyid) or time.strftime("%Y-%m")
         background_tasks.add_task(

@@ -603,9 +603,17 @@
         <option value="CANCEL">Thất bại (CANCEL)</option>
       </select>
 
-      <input type="month" id="sel-month" onchange="renderTable()" style="width:160px">
+      <input type="month" id="sel-month" onchange="renderTable()" style="width:150px" title="Chọn Tháng Kiểm Tra (Tháng KT)">
 
-      <input type="text" id="sel-search" placeholder="Nhập số WO hoặc tên công việc..." style="width:260px" oninput="renderTable()">
+      <select id="sel-pic" onchange="renderTable()" style="width:160px" title="Lọc theo Người phụ trách">
+        <option value="ALL">👤 Tất cả Người phụ trách</option>
+      </select>
+
+      <select id="sel-dept" onchange="renderTable()" style="width:160px" title="Lọc theo Bộ phận (Part/Group)">
+        <option value="ALL">🏢 Tất cả Bộ phận</option>
+      </select>
+
+      <input type="text" id="sel-search" placeholder="Nhập số WO hoặc tên công việc..." style="width:220px" oninput="renderTable()">
       
       <div class="spacer"></div>
       <button class="btn" onclick="resetFilters()">↺ Xóa bộ lọc</button>
@@ -635,16 +643,16 @@
           <tr>
             <th width="40" class="text-center"><input type="checkbox" id="check-all" onchange="toggleSelectAll(this.checked)"></th>
             <th width="50" class="text-center">STT</th>
-            <th width="150" class="text-center">SỐ CÔNG VIỆC (WO)</th>
+            <th width="160" class="text-center">SỐ CÔNG VIỆC (WO)</th>
             <th width="320" style="min-width:280px">TÊN CÔNG VIỆC</th>
-            <th width="100" class="text-center">THÁNG TT</th>
-            <th width="120" class="text-center">NGƯỜI PHỤ TRÁCH</th>
+            <th width="105" class="text-center">THÁNG KT</th>
+            <th width="130" class="text-center">NGƯỜI PHỤ TRÁCH</th>
             <th width="100" class="text-center">PART</th>
             <th width="110" class="text-center">GROUP</th>
             <th width="140" class="text-center">TRẠNG THÁI</th>
             <th width="120" class="text-center">TÀI LIỆU ĐÍNH KÈM</th>
             <th width="160" class="text-center">KẾT QUẢ KIỂM TRA</th>
-            <th width="170" class="text-center">CHI TIẾT BÁO CÁO</th>
+            <th width="150" class="text-center">CHI TIẾT BÁO CÁO</th>
           </tr>
         </thead>
         <tbody id="table-body">
@@ -674,13 +682,12 @@
             <span><b>Mã WO:</b> <span id="dt-keyid" class="font-mono">WOR2510150002M</span></span>
             <span><b>PIC:</b> <span id="dt-pic">Tran Van B</span></span>
             <span><b>Phần việc:</b> <span id="dt-part-group">MEP Part / Infra Group</span></span>
-            <span><b>Tháng:</b> <span id="dt-month">2026-10</span></span>
+            <span><b>Tháng KT:</b> <span id="dt-month">2026-10</span></span>
             <span><b>Công nghệ:</b> <span id="dt-tech">MEP AI Vision (NextAI Qwen) + 2-Stage Reconciler</span></span>
           </div>
         </div>
         <div style="display:flex;gap:6px;align-items:center">
           <span id="dt-status-tag" class="tag tag-success">COMPLETED</span>
-          <span id="dt-review-tag" class="tag tag-warning">CHỜ DUYỆT</span>
           <button class="btn sm" onclick="closeDetailModal()" style="margin-left:8px">✕ Đóng</button>
         </div>
       </div>
@@ -709,7 +716,7 @@
       <div id="dt-breakdown-row" style="margin-bottom:12px;display:flex;align-items:center;gap:8px;flex-wrap:wrap">
         <span style="font-size:12px;color:var(--text-muted)">Phân loại sai lệch:</span>
         <span class="tag tag-danger">Lệch khối lượng: 1</span>
-        <span class="tag tag-danger">Mã mồ côi (Chưa khai báo): 1</span>
+        <span class="tag tag-danger">Chỉ có ở bản vẽ: 1</span>
       </div>
 
       <!-- 4 TABS -->
@@ -731,7 +738,7 @@
                 <th width="130" class="text-center">Bản vẽ</th>
                 <th width="140" class="text-center">Mã SDAC</th>
                 <th width="200">Tên vật tư</th>
-                <th width="90" class="text-center">SL Dự toán</th>
+                <th width="95" class="text-center">KL thanh toán</th>
                 <th width="90" class="text-center">SL Bản vẽ</th>
                 <th width="120" class="text-center">Chênh lệch</th>
                 <th width="220">Chi tiết đối chiếu</th>
@@ -765,21 +772,13 @@
         </div>
       </div>
 
-      <!-- FOOTER REVIEW & ACTIONS -->
-      <div class="detail-review-card">
-        <h4 style="margin:0 0 10px 0;color:#FFF">✍️ Phê Duyệt & Thao Tác Hồ Sơ</h4>
-        <div class="review-inputs-row">
-          <input type="text" id="dt-review-note" placeholder="Nhập ghi chú duyệt (VD: Đã xác nhận lại với bộ phận thi công, chấp nhận sai số...)" style="flex:1">
-          <button class="btn" style="background:#2E7D32;color:#FFF;border-color:#2E7D32" onclick="submitReviewAction('APPROVED')">✓ Duyệt (Approve)</button>
-          <button class="btn danger" onclick="submitReviewAction('REJECTED')">✕ Từ Chối (Reject)</button>
-        </div>
-        <div style="display:flex;gap:8px;align-items:center">
-          <button class="btn" style="border-color:#409EFF;color:#409EFF" onclick="simulateUploadInModal()">☁️ Upload File Excel</button>
-          <button class="btn primary" onclick="toast('Đang tải file báo cáo .zip đối soát 2 sheet...')">📥 Tải Báo Cáo (.zip)</button>
-          <button class="btn" style="border-color:var(--warn);color:var(--warn)" onclick="simulateRerunInModal()">🔄 Chạy Lại AI (Rerun)</button>
-          <div class="spacer"></div>
-          <button class="btn" onclick="closeDetailModal()">Đóng</button>
-        </div>
+      <!-- FOOTER ACTIONS (ĐÃ BỎ PHẦN PHÊ DUYỆT THEO GÓP Ý CỦA VENDOR) -->
+      <div class="detail-actions-card" style="margin-top:16px;padding:12px 16px;background:var(--bg-card);border:1px solid var(--border);border-radius:8px;display:flex;gap:10px;align-items:center">
+        <button class="btn" style="border-color:#409EFF;color:#409EFF" onclick="simulateUploadInModal()">☁️ Upload File Excel</button>
+        <button class="btn primary" onclick="toast('Đang tải file báo cáo .zip đối soát 2 sheet...')">📥 Tải Báo Cáo (.zip)</button>
+        <button class="btn" style="border-color:var(--warn);color:var(--warn)" onclick="simulateRerunInModal()">🔄 Chạy Lại AI (Rerun)</button>
+        <div class="spacer"></div>
+        <button class="btn" onclick="closeDetailModal()">Đóng</button>
       </div>
     </div>
   </div>
@@ -1317,10 +1316,31 @@
       renderTable();
     }
 
+    function populateFilterDropdowns() {
+      const selPic = document.getElementById("sel-pic");
+      const selDept = document.getElementById("sel-dept");
+      if (!selPic || !selDept) return;
+
+      const currentPicVal = selPic.value;
+      const currentDeptVal = selDept.value;
+
+      // Danh sách Người phụ trách (PIC) duy nhất
+      const pics = Array.from(new Set(tasks.map(t => t.PIC).filter(Boolean))).sort();
+      selPic.innerHTML = `<option value="ALL">👤 Tất cả Người phụ trách (${pics.length})</option>` +
+        pics.map(p => `<option value="${p}" ${p === currentPicVal ? 'selected' : ''}>${p}</option>`).join('');
+
+      // Danh sách Bộ phận (Part/Group) duy nhất
+      const depts = Array.from(new Set(tasks.flatMap(t => [t.PART_NAME, t.GROUP_NAME]).filter(Boolean))).sort();
+      selDept.innerHTML = `<option value="ALL">🏢 Tất cả Bộ phận (${depts.length})</option>` +
+        depts.map(d => `<option value="${d}" ${d === currentDeptVal ? 'selected' : ''}>${d}</option>`).join('');
+    }
+
     function resetFilters() {
       currentFilterKpi = "ALL";
       document.getElementById("sel-status").value = "ALL";
       document.getElementById("sel-month").value = "";
+      if (document.getElementById("sel-pic")) document.getElementById("sel-pic").value = "ALL";
+      if (document.getElementById("sel-dept")) document.getElementById("sel-dept").value = "ALL";
       document.getElementById("sel-search").value = "";
       document.getElementById("active-filter-badge").style.display = "none";
       updateKpiCards();
@@ -1342,6 +1362,8 @@
       const q = document.getElementById("sel-search").value.toLowerCase().trim();
       const month = document.getElementById("sel-month").value;
       const status = document.getElementById("sel-status").value;
+      const picFilter = document.getElementById("sel-pic") ? document.getElementById("sel-pic").value : "ALL";
+      const deptFilter = document.getElementById("sel-dept") ? document.getElementById("sel-dept").value : "ALL";
 
       const tbody = document.getElementById("table-body");
       tbody.innerHTML = "";
@@ -1349,6 +1371,8 @@
       const filtered = tasks.filter(t => {
         const matchQ = !q || t.KEYID.toLowerCase().includes(q) || t.TASK_NAME.toLowerCase().includes(q) || t.PIC.toLowerCase().includes(q);
         const matchM = !month || t.PAYMENT_MONTH === month;
+        const matchPic = picFilter === "ALL" || t.PIC === picFilter;
+        const matchDept = deptFilter === "ALL" || t.GROUP_NAME === deptFilter || t.PART_NAME === deptFilter;
         let matchS = true;
 
         if (currentFilterKpi === 'OK' || status === 'OK') {
@@ -1358,7 +1382,7 @@
         } else if (status !== 'ALL') {
           matchS = (t.STATUS === status);
         }
-        return matchQ && matchM && matchS;
+        return matchQ && matchM && matchPic && matchDept && matchS;
       });
 
       totalPages = Math.max(1, Math.ceil(filtered.length / pageSize));
@@ -1376,7 +1400,6 @@
         t.STT = globalStt;
         const tr = document.createElement("tr");
         tr.className = "table-row";
-        // Row dblclick disabled to prevent conflict with cell editing
 
         const isChecked = selectedRowKeyids.has(t.KEYID);
 
@@ -1419,16 +1442,9 @@
 
         let reportHtml = "";
         if (t.STATUS === "COMPLETED") {
-          let reviewBadge = `<span class="tag tag-warning">Chờ Duyệt</span>`;
-          if (t.REVIEW_DECISION === "APPROVED") reviewBadge = `<span class="tag tag-success">Đã Duyệt</span>`;
-          else if (t.REVIEW_DECISION === "REJECTED") reviewBadge = `<span class="tag tag-danger">Từ Chối</span>`;
-
           reportHtml = `
             <div>
-              <div style="margin-bottom:4px">
-                <a href="#" style="color:var(--ok);font-weight:600;font-size:12px;text-decoration:none" onclick="toast('Đang tải file báo cáo .zip của ' + '${t.KEYID}');return false">📥 Tải Báo Cáo (.zip)</a>
-              </div>
-              <div>${reviewBadge}</div>
+              <a href="#" style="color:var(--ok);font-weight:600;font-size:12px;text-decoration:none" onclick="toast('Đang tải file báo cáo .zip của ' + '${t.KEYID}');return false">📥 Tải Báo Cáo (.zip)</a>
             </div>
           `;
         } else if (t.STATUS === "CANCEL") {
@@ -1445,10 +1461,18 @@
         tr.innerHTML = `
           <td class="text-center"><input type="checkbox" ${isChecked ? 'checked' : ''} onchange="toggleSelectRow('${t.KEYID}', this.checked)"></td>
           <td class="text-center">${globalStt}</td>
-          <td class="text-center"><span class="wo-key-pill" title="Bấm để xem chi tiết đối soát ${t.KEYID}" onclick="openDetailModalByKey('${t.KEYID}')">${t.KEYID}</span></td>
-          <td><b>${t.TASK_NAME}</b></td>
-          <td class="text-center">${t.PAYMENT_MONTH}</td>
-          <td class="text-center">${t.PIC}</td>
+          <td class="text-center" title="Bấm đúp (Double-click) để sửa số WO" ondblclick="startEditKeyid('${t.KEYID}', this)">
+            <span class="wo-key-pill" title="Bấm để xem chi tiết đối soát ${t.KEYID}" onclick="openDetailModalByKey('${t.KEYID}')">${t.KEYID}</span>
+          </td>
+          <td title="Bấm đúp (Double-click) để sửa tên công việc" ondblclick="startEditTaskName('${t.KEYID}', this)">
+            <b>${t.TASK_NAME}</b>
+          </td>
+          <td class="text-center" title="Bấm đúp (Double-click) để chọn Tháng KT" ondblclick="startEditMonth('${t.KEYID}', this)">
+            <span style="cursor:pointer;font-weight:600">${t.PAYMENT_MONTH}</span>
+          </td>
+          <td class="text-center" title="Bấm đúp (Double-click) để sửa người phụ trách" ondblclick="startEditPic('${t.KEYID}', this)">
+            ${t.PIC}
+          </td>
           <td class="text-center">${t.PART_NAME}</td>
           <td class="text-center">${t.GROUP_NAME}</td>
           <td class="text-center">${statusHtml}</td>
@@ -1463,6 +1487,99 @@
 
         tbody.appendChild(tr);
       });
+    }
+
+    // --- CÁC HÀM DOUBLE-CLICK INLINE EDIT TRỰC TIẾP TRÊN BẢNG ---
+    function startEditKeyid(keyid, tdEl) {
+      if (tdEl.querySelector("input")) return;
+      tdEl.innerHTML = `<input type="text" value="${keyid}" style="width:130px;padding:3px 6px;font-size:12px;background:#1E293B;color:#FFF;border:1px solid #38BDF8;border-radius:4px" onkeydown="handleInlineKeydown(event, this)" onblur="finishEditKeyid('${keyid}', this)">`;
+      const input = tdEl.querySelector("input");
+      input.focus();
+      input.select();
+    }
+
+    function handleInlineKeydown(event, inputEl) {
+      if (event.key === "Enter") inputEl.blur();
+      else if (event.key === "Escape") renderTable();
+    }
+
+    function finishEditKeyid(oldKeyid, inputEl) {
+      const newVal = inputEl.value.trim();
+      if (!newVal) {
+        toast("⚠️ Số WO không được để trống!");
+        renderTable();
+        return;
+      }
+      if (newVal !== oldKeyid) {
+        const isDuplicate = tasks.some(t => t.KEYID === newVal);
+        if (isDuplicate) {
+          toast(`❌ Số WO '${newVal}' đã tồn tại trong danh sách! Không thể đặt trùng.`);
+          renderTable();
+          return;
+        }
+        const t = tasks.find(x => x.KEYID === oldKeyid);
+        if (t) {
+          t.OLD_KEYID = t.OLD_KEYID || oldKeyid;
+          t.KEYID = newVal;
+          toast(`✏️ Đã đổi số WO từ '${oldKeyid}' ➔ '${newVal}'. Nhấn 💾 Save để lưu xuống DB.`);
+        }
+      }
+      renderTable();
+    }
+
+    function startEditMonth(keyid, tdEl) {
+      if (tdEl.querySelector("input")) return;
+      const t = tasks.find(x => x.KEYID === keyid);
+      if (!t) return;
+      tdEl.innerHTML = `<input type="month" value="${t.PAYMENT_MONTH}" style="width:130px;padding:2px 4px;font-size:12px;background:#1E293B;color:#FFF;border:1px solid #38BDF8;border-radius:4px" onchange="finishEditMonth('${keyid}', this.value)" onblur="renderTable()">`;
+      const input = tdEl.querySelector("input");
+      input.focus();
+    }
+
+    function finishEditMonth(keyid, newMonth) {
+      const t = tasks.find(x => x.KEYID === keyid);
+      if (t && newMonth && newMonth !== t.PAYMENT_MONTH) {
+        t.PAYMENT_MONTH = newMonth;
+        toast(`📅 Đã cập nhật Tháng KT của [${keyid}]: ${newMonth}`);
+      }
+      renderTable();
+    }
+
+    function startEditTaskName(keyid, tdEl) {
+      if (tdEl.querySelector("input")) return;
+      const t = tasks.find(x => x.KEYID === keyid);
+      if (!t) return;
+      tdEl.innerHTML = `<input type="text" value="${t.TASK_NAME.replace(/"/g, '&quot;')}" style="width:95%;padding:3px 6px;font-size:12px;background:#1E293B;color:#FFF;border:1px solid #38BDF8;border-radius:4px" onkeydown="handleInlineKeydown(event, this)" onblur="finishEditTaskName('${keyid}', this.value)">`;
+      const input = tdEl.querySelector("input");
+      input.focus();
+    }
+
+    function finishEditTaskName(keyid, newName) {
+      const t = tasks.find(x => x.KEYID === keyid);
+      if (t && newName.trim() && newName.trim() !== t.TASK_NAME) {
+        t.TASK_NAME = newName.trim();
+        toast(`✏️ Đã đổi Tên công việc của [${keyid}]`);
+      }
+      renderTable();
+    }
+
+    function startEditPic(keyid, tdEl) {
+      if (tdEl.querySelector("input")) return;
+      const t = tasks.find(x => x.KEYID === keyid);
+      if (!t) return;
+      tdEl.innerHTML = `<input type="text" value="${t.PIC}" style="width:110px;padding:3px 6px;font-size:12px;background:#1E293B;color:#FFF;border:1px solid #38BDF8;border-radius:4px" onkeydown="handleInlineKeydown(event, this)" onblur="finishEditPic('${keyid}', this.value)">`;
+      const input = tdEl.querySelector("input");
+      input.focus();
+    }
+
+    function finishEditPic(keyid, newPic) {
+      const t = tasks.find(x => x.KEYID === keyid);
+      if (t && newPic.trim() && newPic.trim() !== t.PIC) {
+        t.PIC = newPic.trim();
+        toast(`👤 Đã đổi Người phụ trách của [${keyid}]: ${t.PIC}`);
+        populateFilterDropdowns();
+      }
+      renderTable();
     }
 
     function toggleSelectRow(keyid, checked) {
@@ -1509,12 +1626,17 @@
       // Thêm dòng mới vào danh sách
       tasks.push(newTask);
       toast(`🎉 Đã thêm dòng mới thành công! STT: #${nextStt} (Mã: ${newKey})`);
+      populateFilterDropdowns();
       updateKpiCards();
       renderTable();
     }
 
     function handleSave() {
-      toast("💾 Đã lưu dữ liệu thành công xuống cơ sở dữ liệu!");
+      toast("💾 Đang đồng bộ và lưu toàn bộ thay đổi xuống Oracle DB...");
+      setTimeout(() => {
+        tasks.forEach(t => { delete t.OLD_KEYID; });
+        toast("🎉 Đã lưu thành công dữ liệu xuống Oracle DB (LOCAL_AI.MEP_PAYMENT_ANALYSIS)!");
+      }, 500);
     }
 
     function handleDelete() {
@@ -1548,12 +1670,20 @@
     function simulateUpload(keyid) {
       const t = tasks.find(x => x.KEYID === keyid);
       if (!t) return;
-      toast(`Đã nạp file Excel cho ${keyid}. AI đang bóc tách ngầm...`);
+      if (t.STATUS === "RUNNING") {
+        toast(`⚠️ Hồ sơ [${keyid}] đang được chạy đối soát bởi ${t.PIC}! Vui lòng đợi.`);
+        return;
+      }
+      const currentUser = localStorage.getItem("oneai_user_name") || "Nguyễn Văn Hùng";
+      t.PIC = currentUser;
+      t.REVIEW_BY = currentUser;
+      toast(`☁️ [${keyid}] Đã nhận file Excel & kích hoạt chạy AI bởi ${currentUser}...`);
       t.STATUS = "RUNNING";
       t.PROGRESS = 20;
-      t.REASON = "AI đang khởi động mô hình bóc tách bản vẽ...";
+      t.REASON = `AI đang khởi động mô hình bóc tách bản vẽ (bởi ${currentUser})...`;
       renderTable();
       updateKpiCards();
+      populateFilterDropdowns();
 
       const timer = setInterval(() => {
         t.PROGRESS += 25;
@@ -1577,10 +1707,19 @@
     function triggerRerun(keyid) {
       const t = tasks.find(x => x.KEYID === keyid);
       if (!t) return;
-      toast(`🔄 Đang kích hoạt chạy lại AI cho hồ sơ ${keyid}...`);
+      if (t.STATUS === "RUNNING") {
+        toast(`⚠️ Hồ sơ [${keyid}] đang chạy đối soát! Vui lòng không kích hoạt lại.`);
+        return;
+      }
+      const currentUser = localStorage.getItem("oneai_user_name") || "Nguyễn Văn Hùng";
+      t.PIC = currentUser;
+      t.REVIEW_BY = currentUser;
+      toast(`🔄 Đang kích hoạt chạy lại AI cho hồ sơ ${keyid} bởi ${currentUser}...`);
       t.STATUS = "RUNNING";
       t.PROGRESS = 15;
       t.REASON = "Đang chạy lại AI đối soát từ phiên làm việc cũ...";
+      renderTable();
+      updateKpiCards();
       renderTable();
       updateKpiCards();
 
@@ -1846,6 +1985,7 @@
     }
 
     // Init first load
+    populateFilterDropdowns();
     updateKpiCards();
     renderTable();
   </script>

@@ -45,11 +45,12 @@
         <el-option v-for="item in statusOptions" :key="item.value" :label="item.label" :value="item.value" />
       </el-select>
 
-      <el-date-picker v-model="selectedMonth" type="month" placeholder="Chọn Tháng Thanh Toán" value-format="YYYY-MM"
+      <el-date-picker v-model="selectedMonth" type="month" placeholder="Chọn Tháng Kiểm Tra" value-format="YYYY-MM"
         class="toolbar-date" />
 
-      <el-input v-model="searchKeyword" placeholder="Nhập số WO hoặc tên công việc..." clearable class="toolbar-search"
-        @keyup.enter="handleReload" />
+      <!-- THANH TÌM KIẾM ĐA NĂNG MỤC 8 (OMNI SEARCH: WO, TÊN CV, PIC, BỘ PHẬN) -->
+      <el-input v-model="searchKeyword" placeholder="Tìm theo số WO, tên công việc, người phụ trách, bộ phận..." clearable class="toolbar-search" style="width: 380px;"
+        @keyup.enter="handleReload" @clear="handleReload" />
     </div>
 
     <!-- 3. THANH CÔNG CỤ QUẢN TRỊ BẢNG (ACTION BAR THEO THỨ TỰ & MÀU SẮC UX CHUẨN) -->
@@ -100,12 +101,14 @@
         <!-- CỘT STT (STICKY LEFT) -->
         <el-table-column prop="STT" label="STT" width="55" align="center" fixed="left" />
 
-        <!-- CỘT: SỐ CÔNG VIỆC (SỐ WO) - STICKY LEFT GIÚP KỸ SƯ LUÔN THEO DÕI ĐƯỢC MÃ WO KHI CUỘN NGANG -->
+        <!-- CỘT: SỐ CÔNG VIỆC (SỐ WO) - DOUBLE-CLICK CHỈNH SỬA TRỰC TIẾP TRÊN Ô -->
         <el-table-column prop="KEYID" label="SỐ CÔNG VIỆC (WO)" width="165" sortable align="center" fixed="left">
           <template #default="{ row }">
-            <el-input v-if="row.isNew" v-model="row.KEYID" placeholder="Nhập số WO..." size="mini"
-              class="inline-input" />
-            <span v-else class="font-bold font-mono text-wo-code">{{ row.KEYID }}</span>
+            <el-input v-if="row.isNew || row.isEditing" v-model="row.KEYID" placeholder="Nhập số WO..." size="mini"
+              class="inline-input" @focus="if (!row.old_keyid && !row.isNew) row.old_keyid = row.KEYID" />
+            <span v-else class="font-bold font-mono text-wo-code cursor-pointer"
+              @dblclick="startEditKeyid(row)"
+              :title="row.STATUS === 'RUNNING' ? 'Không thể sửa khi đang chạy' : 'Bấm đúp chuột để chỉnh sửa số WO'">{{ row.KEYID }}</span>
           </template>
         </el-table-column>
 
@@ -119,11 +122,12 @@
           </template>
         </el-table-column>
 
-        <!-- CỘT: THÁNG THANH TOÁN -->
-        <el-table-column prop="PAYMENT_MONTH" label="THÁNG TT" width="115" align="center" sortable>
+        <!-- CỘT: THÁNG KIỂM TRA (THÁNG KT - HỖ TRỢ CHỌN LỊCH TYPE=MONTH) -->
+        <el-table-column prop="PAYMENT_MONTH" label="THÁNG KT" width="125" align="center" sortable>
           <template #default="{ row }">
-            <el-input v-if="row.isNew || row.isEditing" v-model="row.PAYMENT_MONTH" placeholder="YYYY-MM" size="mini"
-              :disabled="row.STATUS === 'RUNNING'" class="inline-input" />
+            <el-date-picker v-if="row.isNew || row.isEditing" v-model="row.PAYMENT_MONTH" type="month"
+              placeholder="YYYY-MM" value-format="YYYY-MM" size="mini" :disabled="row.STATUS === 'RUNNING'"
+              class="inline-input" style="width: 100%" />
             <span v-else class="cell-text" :class="{ 'cursor-not-allowed': row.STATUS === 'RUNNING' }"
               @dblclick="row.STATUS !== 'RUNNING' && (row.isEditing = true)"
               :title="row.STATUS === 'RUNNING' ? 'Không thể đổi tháng khi AI đang chạy' : 'Bấm đúp chuột để chỉnh sửa'">
@@ -290,8 +294,7 @@
               <span><b>Mã WO:</b> <span class="font-mono text-cyan">{{ currentTask?.KEYID }}</span></span>
               <span><b>PIC:</b> {{ currentTask?.PIC || '—' }}</span>
               <span><b>Phần việc:</b> {{ currentTask?.PART_NAME }} / {{ currentTask?.GROUP_NAME }}</span>
-              <span><b>Tháng TT:</b> {{ currentTask?.PAYMENT_MONTH }}</span>
-              <span><b>Công nghệ:</b> {{ currentDetail.mode }}</span>
+              <span><b>Tháng Kiểm Tra:</b> {{ currentTask?.PAYMENT_MONTH }}</span>
             </div>
           </div>
           <div class="dh-badges">
@@ -366,7 +369,7 @@
                 <template #default="{ row }">
                   <el-tag v-if="row.type.includes('Phụ trội')" type="warning" size="mini">{{ row.type }}</el-tag>
                   <el-tag v-else-if="row.type.includes('Ghi chú')" type="info" size="mini">{{ row.type }}</el-tag>
-                  <el-tag v-else-if="row.type.includes('mồ côi')" type="danger" effect="plain" size="mini">{{ row.type }}</el-tag>
+                  <el-tag v-else-if="row.type.includes('Chỉ có ở bản vẽ') || row.type.includes('mồ côi')" type="danger" effect="plain" size="mini">{{ row.type }}</el-tag>
                   <el-tag v-else type="danger" size="mini">{{ row.type }}</el-tag>
                 </template>
               </el-table-column>
@@ -376,7 +379,7 @@
               </el-table-column>
               <el-table-column prop="name" label="Tên vật tư" min-width="180" show-overflow-tooltip />
               <el-table-column prop="unit" label="ĐVT" width="65" align="center" />
-              <el-table-column prop="vendor_qty" label="SL Dự toán" width="100" align="center" />
+              <el-table-column prop="vendor_qty" label="KL thanh toán" width="115" align="center" />
               <el-table-column prop="ai_qty" label="SL Bản vẽ (AI)" width="125" align="center">
                 <!-- <template #default="{ row }">
                   <el-tooltip v-if="row.ai_breakdown" :content="`Bóc tách từ: ${row.ai_breakdown}`" placement="top">
@@ -401,7 +404,7 @@
                   <el-tag v-else-if="String(row.diff).includes('Lệch RM') || String(row.diff).includes('Ghi chú')" type="info" size="mini" effect="plain" style="font-weight: 700; border-radius: 4px;">
                     <i class="bi bi-tag me-1"></i>{{ row.diff }}
                   </el-tag>
-                  <el-tag v-else-if="String(row.diff).includes('mồ côi')" type="danger" size="mini" effect="plain" style="font-weight: 700; border-radius: 4px;">
+                  <el-tag v-else-if="String(row.diff).includes('Chỉ có ở bản vẽ') || String(row.diff).includes('mồ côi')" type="danger" size="mini" effect="plain" style="font-weight: 700; border-radius: 4px;">
                     <i class="bi bi-exclamation-circle me-1"></i>{{ row.diff }}
                   </el-tag>
                   <el-tag v-else-if="String(row.diff).includes('Lệch')" type="danger" size="mini" effect="dark" style="font-weight: 700; border-radius: 4px;">
@@ -444,7 +447,7 @@
                   </el-table-column>
                   <el-table-column prop="name" label="Tên vật tư" min-width="180" show-overflow-tooltip />
                   <el-table-column prop="unit" label="ĐVT" width="65" align="center" />
-                  <el-table-column prop="vendor_qty" label="SL Dự toán" width="100" align="center" />
+                  <el-table-column prop="vendor_qty" label="KL thanh toán" width="115" align="center" />
                   <el-table-column prop="qty" label="SL Bản vẽ này" width="120" align="center">
                     <template #default="{ row }"><b class="text-primary">{{ row.qty
                         }}</b></template>
@@ -496,95 +499,43 @@
           </el-tab-pane>
         </el-tabs>
 
-        <!-- KHỐI PHÊ DUYỆT & THAO TÁC HỒ SƠ -->
-        <div class="detail-review-card">
-          <div class="review-card-header">
-            <h4 class="review-title">
-              ✍️ Phê Duyệt & Thao Tác Hồ Sơ
-            </h4>
-            <div v-if="currentTask?.REVIEW_DECISION" style="font-size: 12px;">
-              <span v-if="currentTask.REVIEW_DECISION === 'APPROVED'" class="badge-approved">
-                <i class="bi bi-check-circle-fill me-1"></i> Đã duyệt bởi: <b>{{ currentTask.REVIEW_BY }}</b>
-                <span v-if="currentTask.REVIEW_NOTE" class="review-note-preview">— "{{ currentTask.REVIEW_NOTE }}"</span>
-              </span>
-              <span v-else-if="currentTask.REVIEW_DECISION === 'REJECTED'" class="badge-rejected">
-                <i class="bi bi-x-circle-fill me-1"></i> Bị từ chối bởi: <b>{{ currentTask.REVIEW_BY }}</b>
-                <span v-if="currentTask.REVIEW_NOTE" class="review-note-preview">— "{{ currentTask.REVIEW_NOTE }}"</span>
-              </span>
-            </div>
-          </div>
-
-          <!-- GRID 2 CỘT: CỘT TRÁI NGƯỜI DUYỆT (TÊN + KNOX ID), CỘT PHẢI GHI CHÚ -->
-          <div class="review-grid-inputs">
-            <div class="review-col-user">
-              <label class="review-field-label">👤 Người phê duyệt:</label>
-              <el-input :model-value="loginUserDisplay || 'Kỹ sư MEP'" readonly class="readonly-input">
-                <template #prefix>
-                  <i class="bi bi-person-badge text-success"></i>
-                </template>
-              </el-input>
-            </div>
-            <div class="review-col-note">
-              <label class="review-field-label">📝 Ghi chú phê duyệt / giải trình:</label>
-              <el-input 
-                v-model="detailReviewNote"
-                placeholder="Nhập ghi chú duyệt (VD: Lỗi số 2 đã đối soát hiện trường, nghiệm thu đạt...)" 
-                clearable 
-              />
-            </div>
-          </div>
-
-          <!-- 1 HÀNG NÚT BẤM DUY NHẤT: BÊN TRÁI PHÊ DUYỆT, BÊN PHẢI THAO TÁC FILE -->
-          <div class="review-actions-bar">
-            <!-- Cụm hành động chính (Duyệt / Từ chối) -->
-            <div class="review-main-btns">
-              <el-button type="success" :size="buttonSize" @click="submitDetailReview('APPROVED')">
-                <i class="bi bi-check-lg me-1"></i> Duyệt (Approve)
+        <!-- KHỐI THAO TÁC HỒ SƠ (ĐÃ LƯỢC BỎ KHỐI PHÊ DUYỆT THEO GÓP Ý MỤC 5) -->
+        <div class="detail-review-card" style="padding: 12px 16px;">
+          <div class="review-actions-bar" style="justify-content: flex-end; gap: 8px;">
+            <el-upload 
+              :show-file-list="false" 
+              :auto-upload="false" 
+              accept=".xlsx,.xlsm"
+              :on-change="(file) => handleUploadExcel(file, currentTask)"
+              :disabled="currentTask?.STATUS === 'RUNNING'"
+              style="display: inline-block;"
+            >
+              <el-button :size="buttonSize" class="btn-upload-file" :loading="currentTask?.STATUS === 'RUNNING'">
+                <i v-if="currentTask?.STATUS !== 'RUNNING'" class="bi bi-cloud-arrow-up me-1"></i>
+                {{ currentTask?.STATUS === 'RUNNING' ? 'Đang chạy...' : 'Upload File Excel' }}
               </el-button>
-              <el-button type="danger" :size="buttonSize" @click="submitDetailReview('REJECTED')">
-                <i class="bi bi-x-lg me-1"></i> Từ Chối (Reject)
-              </el-button>
-            </div>
+            </el-upload>
 
-            <div class="spacer"></div>
+            <el-button 
+              v-if="currentTask?.RESULT_LINK" 
+              :size="buttonSize" 
+              type="primary" 
+              plain
+              @click="handleDownloadFile(currentTask)"
+            >
+              <i class="bi bi-cloud-arrow-down me-1"></i> Tải Báo Cáo (.zip)
+            </el-button>
 
-            <!-- Cụm thao tác file & đóng -->
-            <div class="review-sub-btns">
-              <el-upload 
-                :show-file-list="false" 
-                :auto-upload="false" 
-                accept=".xlsx,.xlsm"
-                :on-change="(file) => handleUploadExcel(file, currentTask)"
-                :disabled="currentTask?.STATUS === 'RUNNING'"
-                style="display: inline-block;"
-              >
-                <el-button :size="buttonSize" class="btn-upload-file" :loading="currentTask?.STATUS === 'RUNNING'">
-                  <i v-if="currentTask?.STATUS !== 'RUNNING'" class="bi bi-cloud-arrow-up me-1"></i>
-                  {{ currentTask?.STATUS === 'RUNNING' ? 'Đang chạy...' : 'Upload File Excel' }}
-                </el-button>
-              </el-upload>
+            <el-button 
+              :size="buttonSize" 
+              class="btn-rerun" 
+              :loading="isRerunning || currentTask?.STATUS === 'RUNNING'"
+              @click="handleRerun(currentTask)"
+            >
+              <i class="bi bi-arrow-clockwise me-1"></i> Chạy Lại AI
+            </el-button>
 
-              <el-button 
-                v-if="currentTask?.RESULT_LINK" 
-                :size="buttonSize" 
-                type="primary" 
-                plain
-                @click="handleDownloadFile(currentTask)"
-              >
-                <i class="bi bi-cloud-arrow-down me-1"></i> Tải Báo Cáo (.zip)
-              </el-button>
-
-              <el-button 
-                :size="buttonSize" 
-                class="btn-rerun" 
-                :loading="isRerunning || currentTask?.STATUS === 'RUNNING'"
-                @click="handleRerun(currentTask)"
-              >
-                <i class="bi bi-arrow-clockwise me-1"></i> Chạy Lại AI
-              </el-button>
-
-              <el-button :size="buttonSize" @click="handleCloseDetailDialog">Đóng</el-button>
-            </div>
+            <el-button :size="buttonSize" @click="handleCloseDetailDialog">Đóng</el-button>
           </div>
         </div>
       </div>
@@ -683,7 +634,7 @@ const loginUserDisplay = computed(() => {
 // Giữ lại loginUser tương thích cho các nhãn UI
 const loginUser = loginUserName
 
-// Bộ lọc
+// Bộ lọc (Tháng kiểm tra & Trạng thái & Từ khóa tìm kiếm đa năng)
 const selectedStatus = ref('')
 const selectedMonth = ref('')
 const searchKeyword = ref('')
@@ -763,6 +714,18 @@ const onGroupChange = (row) => {
 // Bảng dữ liệu & Phân trang
 const tableRef = ref(null)
 const tableData = ref([])
+
+// Bắt đầu sửa Số WO trực tiếp trên ô bảng (Mục 1)
+const startEditKeyid = (row) => {
+  if (row.STATUS === 'RUNNING') {
+    ElMessage.warning("Hồ sơ đang trong quá trình AI đối soát, không thể sửa số WO!")
+    return
+  }
+  if (!row.old_keyid && !row.isNew) {
+    row.old_keyid = row.KEYID
+  }
+  row.isEditing = true
+}
 const selectedRows = ref([])
 const page = ref(1)
 const pageSize = ref(20)
@@ -1127,8 +1090,12 @@ const handleRerun = async (row) => {
   }
 
   isRerunning.value = true
+  const uploader = loginUserDisplay.value || loginUserName.value || 'Kỹ sư MEP'
   try {
-    const res = await axios.post(`${FASTAPI_BASE_URL}/mep_payment/rerun/${encodeURIComponent(row.KEYID)}`)
+    const res = await axios.post(`${FASTAPI_BASE_URL}/mep_payment/rerun/${encodeURIComponent(row.KEYID)}`, null, {
+      params: { uploader_name: uploader }
+    })
+    row.PIC = uploader
     row.STATUS = 'RUNNING'
     row.PROGRESS = 5
     row.REASON = 'Đang chạy lại AI đối soát...'
@@ -1137,6 +1104,7 @@ const handleRerun = async (row) => {
     startSmartPollingIfNeeded()
     loadKpiSummary()
     if (showDetailDialog.value && currentTask.value?.KEYID === row.KEYID) {
+      currentTask.value.PIC = uploader
       currentTask.value.STATUS = 'RUNNING'
     }
   } catch (err) {
@@ -1203,6 +1171,14 @@ const handleSave = async () => {
         ElMessage.error(`Số công việc (KEYID) "${r.KEYID}" đã tồn tại! Vui lòng nhập mã khác.`)
         return
       }
+    } else if (r.old_keyid && String(r.old_keyid).trim().toUpperCase() !== String(r.KEYID).trim().toUpperCase()) {
+      const isDuplicate = tableData.value.some(
+        item => item !== r && String(item.KEYID).trim().toUpperCase() === String(r.KEYID).trim().toUpperCase()
+      )
+      if (isDuplicate) {
+        ElMessage.error(`Số công việc mới "${r.KEYID}" trùng với dòng khác trong bảng! Vui lòng nhập mã khác.`)
+        return
+      }
     }
   }
 
@@ -1211,6 +1187,7 @@ const handleSave = async () => {
     const payload = {
       rows: modifiedRows.map(r => ({
         KEYID: String(r.KEYID).trim(),
+        OLD_KEYID: (r.old_keyid && String(r.old_keyid).trim() !== String(r.KEYID).trim()) ? String(r.old_keyid).trim() : undefined,
         TASK_NAME: String(r.TASK_NAME || '').trim(),
         PAYMENT_MONTH: String(r.PAYMENT_MONTH || '').trim(),
         PIC: String(r.PIC || '').trim(),
@@ -1349,13 +1326,16 @@ const handleUploadExcel = async (file, row) => {
     return
   }
 
+  const uploader = loginUserDisplay.value || loginUserName.value || 'Kỹ sư MEP'
   const formData = new FormData()
   formData.append("file", file.raw)
   formData.append("KEYID", row.KEYID)
   if (row.PAYMENT_MONTH) {
     formData.append("payment_month", row.PAYMENT_MONTH)
   }
+  formData.append("uploader_name", uploader)
 
+  row.PIC = uploader
   row.STATUS = 'RUNNING'
   row.PROGRESS = 5
   row.REASON = 'Đang đẩy file lên AI Worker...'
@@ -1363,12 +1343,14 @@ const handleUploadExcel = async (file, row) => {
 
   // Đồng bộ cả đối tượng trong bảng và currentTask trong modal dialog nếu đang mở
   if (currentTask.value && currentTask.value.KEYID === row.KEYID) {
+    currentTask.value.PIC = uploader
     currentTask.value.STATUS = 'RUNNING'
     currentTask.value.PROGRESS = 5
     currentTask.value.REASON = 'Đang đẩy file lên AI Worker...'
   }
   const targetRow = tableData.value.find(r => r.KEYID === row.KEYID)
   if (targetRow && targetRow !== row) {
+    targetRow.PIC = uploader
     targetRow.STATUS = 'RUNNING'
     targetRow.PROGRESS = 5
     targetRow.REASON = 'Đang đẩy file lên AI Worker...'

@@ -32,8 +32,15 @@ searchTotalRow = QuerySettings(
         )
         -- Lọc theo tháng thanh toán (YYYY-MM): Nếu chọn 'ALL' thì bỏ qua
         AND (:PAYMENT_MONTH = 'ALL' OR PAYMENT_MONTH = :PAYMENT_MONTH)
-        -- Tìm kiếm gần đúng (LIKE) theo Mã số WO (KEYID) hoặc Tên công việc (TASK_NAME)
-        AND (:KEYID = 'ALL' OR KEYID LIKE '%' || :KEYID || '%' OR TASK_NAME LIKE '%' || :KEYID || '%')
+        -- Tìm kiếm đa năng (Omni Search): KEYID, TASK_NAME, PIC, PART_NAME, GROUP_NAME
+        AND (
+            :KEYID = 'ALL'
+            OR UPPER(KEYID) LIKE '%' || UPPER(:KEYID) || '%'
+            OR UPPER(TASK_NAME) LIKE '%' || UPPER(:KEYID) || '%'
+            OR UPPER(PIC) LIKE '%' || UPPER(:KEYID) || '%'
+            OR UPPER(PART_NAME) LIKE '%' || UPPER(:KEYID) || '%'
+            OR UPPER(GROUP_NAME) LIKE '%' || UPPER(:KEYID) || '%'
+        )
     """,
     dns="MBLDB",  # Tên Data Source Name (DNS) kết nối vào cụm Oracle DB MBLDB của công ty
     note="Đếm tổng số dòng quản lý thanh toán MEP"
@@ -76,7 +83,14 @@ getdata_page = QuerySettings(
             OR (STATUS = :STATUS)
         )
         AND (:PAYMENT_MONTH = 'ALL' OR PAYMENT_MONTH = :PAYMENT_MONTH)
-        AND (:KEYID = 'ALL' OR KEYID LIKE '%' || :KEYID || '%' OR TASK_NAME LIKE '%' || :KEYID || '%')
+        AND (
+            :KEYID = 'ALL'
+            OR UPPER(KEYID) LIKE '%' || UPPER(:KEYID) || '%'
+            OR UPPER(TASK_NAME) LIKE '%' || UPPER(:KEYID) || '%'
+            OR UPPER(PIC) LIKE '%' || UPPER(:KEYID) || '%'
+            OR UPPER(PART_NAME) LIKE '%' || UPPER(:KEYID) || '%'
+            OR UPPER(GROUP_NAME) LIKE '%' || UPPER(:KEYID) || '%'
+        )
     )
     -- Giới hạn dòng trả về theo phạm vi phân trang (ví dụ dòng 1 đến dòng 50)
     WHERE RN BETWEEN :start_row AND :end_row
@@ -106,7 +120,14 @@ searchKpiSummary = QuerySettings(
         FROM LOCAL_AI.MEP_PAYMENT_ANALYSIS
         WHERE 1 = 1
         AND (:PAYMENT_MONTH = 'ALL' OR PAYMENT_MONTH = :PAYMENT_MONTH)
-        AND (:KEYID = 'ALL' OR KEYID LIKE '%' || :KEYID || '%' OR TASK_NAME LIKE '%' || :KEYID || '%')
+        AND (
+            :KEYID = 'ALL'
+            OR UPPER(KEYID) LIKE '%' || UPPER(:KEYID) || '%'
+            OR UPPER(TASK_NAME) LIKE '%' || UPPER(:KEYID) || '%'
+            OR UPPER(PIC) LIKE '%' || UPPER(:KEYID) || '%'
+            OR UPPER(PART_NAME) LIKE '%' || UPPER(:KEYID) || '%'
+            OR UPPER(GROUP_NAME) LIKE '%' || UPPER(:KEYID) || '%'
+        )
     """,
     dns="MBLDB",
     note="Thống kê 5 chỉ số KPI toàn cục cố định MEP"

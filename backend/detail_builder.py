@@ -70,9 +70,9 @@ def classify_reconcile_error(raw_text: str, ai_val: float = None, ven_val: float
     """
     raw_lower = raw_text.lower() if raw_text else ""
 
-    # 1. Mã mồ côi
-    if "mồ côi" in raw_lower:
-        return "Mã mồ côi (Chưa khai báo)", "Mã mồ côi (Chỉ có ở bản vẽ)"
+    # 1. Chỉ có ở bản vẽ (Trước đây gọi là Mã mồ côi)
+    if "mồ côi" in raw_lower or "chỉ có ở bản vẽ" in raw_lower:
+        return "Chỉ có ở bản vẽ", "Chỉ có ở bản vẽ"
 
     # Trích xuất bổ sung nếu chưa có sẵn
     if ai_pt is None:
@@ -212,7 +212,7 @@ def parse_excel_report_to_detail(excel_path: Path, keyid: str, session_dir: Path
                     unit_val = ""
 
                 # Nhận diện lỗi từ cột Note
-                is_err = bool(re.search(r'(lệch|mồ côi|thiếu|thừa|không tìm thấy|sai)', note_val, re.IGNORECASE))
+                is_err = bool(re.search(r'(lệch|mồ côi|chỉ có ở bản vẽ|thiếu|thừa|không tìm thấy|sai)', note_val, re.IGNORECASE))
 
                 if is_err:
                     err_segments = parse_dwg_segments(note_val)
@@ -347,7 +347,7 @@ def parse_excel_report_to_detail(excel_path: Path, keyid: str, session_dir: Path
                                 break
 
                         is_this_dwg_err = (matched_seg is not None) or (
-                            (str(d).lower() in note_text.lower()) and bool(re.search(r'(lệch|mồ côi|thiếu|thừa|không tìm thấy|sai)', note_text, re.IGNORECASE))
+                            (str(d).lower() in note_text.lower()) and bool(re.search(r'(lệch|mồ côi|chỉ có ở bản vẽ|thiếu|thừa|không tìm thấy|sai)', note_text, re.IGNORECASE))
                         )
 
                         if is_this_dwg_err:
@@ -597,10 +597,10 @@ def build_or_load_task_detail(keyid: str, final_report_dir: Path, storage_dir: P
             "msg": reason or "Số lượng dự toán đề nghị thanh toán lớn hơn số lượng đo đạc trên bản vẽ thiết kế"
         })
         if err_count > 1:
-            sample_types["Mã mồ côi (Chưa khai báo)"] = err_count - 1
+            sample_types["Chỉ có ở bản vẽ"] = err_count - 1
             sample_errors.append({
                 "id": 2,
-                "type": "Mã mồ côi (Chưa khai báo)",
+                "type": "Chỉ có ở bản vẽ",
                 "dwg": "Bản vẽ 2",
                 "code": "CV-2.5MM2",
                 "name": "Dây đơn mềm ruột đồng cách điện PVC",

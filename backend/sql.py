@@ -85,6 +85,29 @@ def cache_task_month(keyid: str, month: Optional[str]):
         _TASK_MONTH_CACHE[str(keyid).strip()] = str(month).strip()
 
 
+def get_task_status(keyid: str) -> Optional[str]:
+    """Lấy trạng thái STATUS hiện tại của task trong DB."""
+    if not keyid:
+        return None
+    try:
+        sql = "SELECT STATUS FROM LOCAL_AI.MEP_PAYMENT_ANALYSIS WHERE KEYID = :KEYID"
+        cur = get_cur()
+        cursor = cur.cursor() if hasattr(cur, 'cursor') else cur
+        cursor.execute(sql, params={"KEYID": str(keyid).strip()})
+        res = cursor.fetchall() if hasattr(cursor, 'fetchall') else None
+        if hasattr(cursor, 'close') and cursor != cur:
+            try:
+                cursor.close()
+            except Exception:
+                pass
+        if res and res[0] and res[0][0]:
+            return str(res[0][0]).strip().upper()
+        return None
+    except Exception as e:
+        print(f"[Oracle DB Warning] get_task_status: {e}")
+        return None
+
+
 def get_task_payment_month(keyid: str) -> Optional[str]:
     """Lấy PAYMENT_MONTH (Tháng thanh toán) từ RAM Cache trước, nếu chưa có mới hỏi Oracle DB."""
     if not keyid or not str(keyid).strip():
@@ -138,18 +161,22 @@ def insert_task(cur, r: dict):
 
 
 def update_task(cur, r: dict):
-    """Cập nhật thông tin các cột của dòng đã có trong DB (Chỉ UPDATE theo KEYID)."""
+    """Cập nhật thông tin các cột của dòng đã có trong DB (Hỗ trợ đổi cả KEYID nếu có OLD_KEYID)."""
+    old_key = str(r.get("OLD_KEYID") or r.get("old_keyid") or r.get("KEYID", "")).strip()
+    new_key = str(r.get("KEYID", "")).strip()
     sql = """
         UPDATE LOCAL_AI.MEP_PAYMENT_ANALYSIS
-        SET TASK_NAME     = :TASK_NAME,
+        SET KEYID         = :NEW_KEYID,
+            TASK_NAME     = :TASK_NAME,
             PAYMENT_MONTH = :PAYMENT_MONTH,
             PIC           = :PIC,
             PART_NAME     = :PART_NAME,
             GROUP_NAME    = :GROUP_NAME
-        WHERE KEYID = :KEYID
+        WHERE KEYID = :OLD_KEYID
     """
     params = {
-        "KEYID": str(r.get("KEYID", "")).strip(),
+        "NEW_KEYID": new_key,
+        "OLD_KEYID": old_key,
         "TASK_NAME": str(r.get("TASK_NAME", "")).strip(),
         "PAYMENT_MONTH": str(r.get("PAYMENT_MONTH", "")).strip(),
         "PIC": str(r.get("PIC", "")).strip(),
@@ -229,14 +256,16 @@ def delete_tasks(keyids: list) -> int:
         raise
 
 
-def update_task_status(keyid: str, status: str, error_count: int = 0, result_link: str = None, reason: str = "", progress: int = None):
-    """Cập nhật trạng thái tiến độ vào bảng LOCAL_AI.MEP_PAYMENT_ANALYSIS."""
+def update_task_status(keyid: str, status: str, error_count: int = 0, result_link: str = None, reason: str = "", progress: int = None, pic: str = None):
+    """Cập nhật trạng thái tiến độ vào bảng LOCAL_AI.MEP_PAYMENT_ANALYSIS (Hỗ trợ tự động cập nhật PIC/Người upload)."""
     try:
         progress_sql = "PROGRESS = :PROGRESS," if progress is not None else ""
+        pic_sql = "PIC = :PIC, REVIEW_BY = :PIC," if pic else ""
         sql = f"""
             UPDATE LOCAL_AI.MEP_PAYMENT_ANALYSIS
             SET STATUS       = :STATUS,
                 {progress_sql}
+                {pic_sql}
                 ERROR_COUNT  = :ERROR_COUNT,
                 RESULT_LINK  = :RESULT_LINK,
                 REASON       = :REASON,
@@ -253,6 +282,8 @@ def update_task_status(keyid: str, status: str, error_count: int = 0, result_lin
         }
         if progress is not None:
             params["PROGRESS"] = int(progress)
+        if pic:
+            params["PIC"] = str(pic).strip()
         cur = get_cur()
         cur.execute(sql, params=params)
         if hasattr(cur, 'commit'):
@@ -317,7 +348,14 @@ def get_kpi_summary(payment_month: str = "ALL", keyword: str = "ALL") -> dict:
         FROM LOCAL_AI.MEP_PAYMENT_ANALYSIS
         WHERE 1 = 1
         AND (:PAYMENT_MONTH = 'ALL' OR PAYMENT_MONTH = :PAYMENT_MONTH)
-        AND (:KEYID = 'ALL' OR KEYID LIKE '%' || :KEYID || '%' OR TASK_NAME LIKE '%' || :KEYID || '%')
+        AND (
+            :KEYID = 'ALL'
+            OR UPPER(KEYID) LIKE '%' || UPPER(:KEYID) || '%'
+            OR UPPER(TASK_NAME) LIKE '%' || UPPER(:KEYID) || '%'
+            OR UPPER(PIC) LIKE '%' || UPPER(:KEYID) || '%'
+            OR UPPER(PART_NAME) LIKE '%' || UPPER(:KEYID) || '%'
+            OR UPPER(GROUP_NAME) LIKE '%' || UPPER(:KEYID) || '%'
+        )
     """
     params = {
         "PAYMENT_MONTH": str(payment_month or "ALL").strip(),
