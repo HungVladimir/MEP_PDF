@@ -176,20 +176,8 @@ def run_ai_task_background(keyid: str, session_dir: Path, excel_path: str, payme
             evidence_dir=str(evidence_dir)
         )
 
-        # ĐẾM SỐ LỖI THỰC TẾ TRONG SHEET 1 ĐỂ BÁO LÊN GIAO DIỆN
-        error_count = 0
-        try:
-            df_check = pd.read_excel(
-                final_excel_path, sheet_name="1. Đối Soát Bản Vẽ")
-            if 'Note' in df_check.columns:
-                error_count = int(df_check['Note'].astype(
-                    str).str.contains('Lệch|Mã mồ côi|Chỉ có ở bản vẽ', na=False).sum())
-        except Exception as e:
-            print(f"⚠️ Cảnh báo đọc lỗi: {e}")
-
-        file_name = os.path.basename(final_excel_path)
-
         # ĐÓNG GÓI .ZIP ĐỂ LÁCH BẢO MẬT HỆ THỐNG / DLP (THEO REFER_SAVE.PY)
+        file_name = os.path.basename(final_excel_path)
         zip_name = f"{Path(file_name).stem}.zip"
         zip_path = FINAL_REPORT_DIR / zip_name
         try:
@@ -202,36 +190,47 @@ def run_ai_task_background(keyid: str, session_dir: Path, excel_path: str, payme
             download_link = f"/mep_payment/files/{file_name}"
 
         # TRÍCH XUẤT VÀ LƯU CHI TIẾT ĐỐI SOÁT (JSON CACHE CHO MODAL DIALOG)
+        error_count = 0
+        detail_data = None
         try:
             from detail_builder import parse_excel_report_to_detail, safe_id
             import json
 
             tee.flush()
+            detail_data = parse_excel_report_to_detail(
+                Path(final_excel_path), keyid, session_dir, logs=list(tee.log_lines))
+
+            # ĐỒNG BỘ CHUẨN XÁC: Lấy tổng số lỗi thực tế bóc tách theo từng bản vẽ thay vì đếm số dòng thô
+            if detail_data and "error_count" in detail_data and detail_data["error_count"] is not None:
+                error_count = int(detail_data["error_count"])
+            else:
+                try:
+                    df_check = pd.read_excel(final_excel_path, sheet_name="1. Đối Soát Bản Vẽ")
+                    if 'Note' in df_check.columns:
+                        error_count = int(df_check['Note'].astype(str).str.contains('Lệch|Mã mồ côi|Chỉ có ở bản vẽ', na=False).sum())
+                except Exception as e:
+                    print(f"⚠️ Cảnh báo đọc lỗi fallback: {e}")
+
             conclusion_logs = [
-                f"[KẾT LUẬN] Đã đối soát xong: Phát hiện {error_count} sai lệch.",
+                f"[KẾT LUẬN] Đã đối soát xong: Phát hiện {error_count} sai lệch chi tiết.",
                 f"[BÁO CÁO] File Excel kết quả: {os.path.basename(final_excel_path)}",
                 f"[LƯU TRỮ] File nén phục vụ tải về: {zip_name}"
             ]
             full_logs = list(tee.log_lines) + conclusion_logs
-
-            detail_data = parse_excel_report_to_detail(
-                Path(final_excel_path), keyid, session_dir, logs=full_logs)
             if detail_data:
+                detail_data["logs"] = full_logs
                 json_name = f"{safe_id(keyid)}_detail.json"
                 try:
                     with open(FINAL_REPORT_DIR / json_name, "w", encoding="utf-8") as jf:
-                        json.dump(detail_data, jf,
-                                  ensure_ascii=False, indent=2)
+                        json.dump(detail_data, jf, ensure_ascii=False, indent=2)
                 except Exception:
                     pass
                 try:
                     with open(session_dir / json_name, "w", encoding="utf-8") as jf:
-                        json.dump(detail_data, jf,
-                                  ensure_ascii=False, indent=2)
+                        json.dump(detail_data, jf, ensure_ascii=False, indent=2)
                 except Exception:
                     pass
-                print(
-                    f"💾 [Detail Cache] Đã lưu chi tiết đối soát: {json_name}")
+                print(f"💾 [Detail Cache] Đã lưu chi tiết đối soát: {json_name} (Tổng lỗi: {error_count})")
         except Exception as det_err:
             print(f"⚠️ [Detail Cache Warning] {det_err}")
 
@@ -622,12 +621,26 @@ async def get_task_detail(
         if month:
             cache_task_month(keyid, month)
 
+        # Tự động đồng bộ số lỗi vào Oracle DB nếu có sự lệch số giữa DB và chi tiết bóc tách
+        def _check_and_sync_db(detail_obj):
+            if detail_obj and "error_count" in detail_obj:
+                try:
+                    true_cnt = int(detail_obj["error_count"])
+                    if error_count is not None and int(error_count or 0) != true_cnt:
+                        from sql import update_task_status
+                        update_task_status(keyid=keyid, status=status or "COMPLETED", error_count=true_cnt)
+                        print(f"🔄 [Auto-sync Error Count] Đã tự động đồng bộ ERROR_COUNT {error_count} -> {true_cnt} cho {keyid}")
+                except Exception as sync_e:
+                    print(f"⚠️ [Auto-sync Warning] {sync_e}")
+
         # 2. Ưu tiên kiểm tra nhanh file cache JSON trên Local Disk (0.5ms)
         cache_json_path = FINAL_REPORT_DIR / f"{safe_key}_detail.json"
         if cache_json_path.exists():
             try:
                 with open(cache_json_path, "r", encoding="utf-8") as f:
-                    return json.load(f)
+                    cached_data = json.load(f)
+                    _check_and_sync_db(cached_data)
+                    return cached_data
             except Exception:
                 pass
 
@@ -639,7 +652,9 @@ async def get_task_detail(
                 data_bytes = minio_storage.download_bytes(detail_key)
                 if data_bytes:
                     try:
-                        return json.loads(data_bytes.decode('utf-8'))
+                        cached_data = json.loads(data_bytes.decode('utf-8'))
+                        _check_and_sync_db(cached_data)
+                        return cached_data
                     except Exception as e:
                         print(f"⚠️ [MinIO Cache] Lỗi đọc JSON cache cho KEYID={keyid}: {e}")
 
@@ -652,6 +667,7 @@ async def get_task_detail(
         detail = build_or_load_task_detail(
             keyid, FINAL_REPORT_DIR, PROJECT_STORAGE_DIR, fallback_info)
 
+        _check_and_sync_db(detail)
         return detail
     except Exception as e:
         print(f"❌ [FastAPI Error] get_task_detail: {e}")

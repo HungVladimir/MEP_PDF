@@ -983,6 +983,10 @@ const openDetailModal = async (row) => {
       images: Array.isArray(data.images) ? data.images : [],
       logs: Array.isArray(data.logs) ? data.logs : []
     }
+    // Tự động đồng bộ số lỗi chi tiết vào dòng hiện tại trên bảng
+    if (currentDetail.value && currentDetail.value.error_count !== undefined) {
+      row.ERROR_COUNT = currentDetail.value.error_count
+    }
   } catch (err) {
     console.warn("Không thể tải chi tiết từ API Worker, dùng dữ liệu fallback:", err)
     const totalItm = 12
