@@ -100,3 +100,4 @@ def convert_month_to_excel2_header(month_str: str) -> str:
         return dt.strftime("%b-%y")  # 'Oct-26'
     except Exception:
         return month_str
+

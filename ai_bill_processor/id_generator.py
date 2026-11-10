@@ -29,3 +29,4 @@ if __name__ == "__main__":
     print("Mẫu 5 ID ngẫu nhiên được sinh:")
     for i in range(5):
         print(f"  {i+1}: {generate_invoice_id(10)}")
+

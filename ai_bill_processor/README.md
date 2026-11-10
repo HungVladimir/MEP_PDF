@@ -72,3 +72,4 @@ Khi chạy xong, hệ thống sẽ:
 1. Upload toàn bộ ảnh vào MinIO bucket `aibill/{YYYY-MM}/{ID}.png`.
 2. Insert toàn bộ bản ghi vào bảng `LOCAL_AI.AI_INVOICE_CHECK`.
 3. Xuất file báo cáo kiểm toán chi tiết tại `output_debug/audit_report_{YYYY-MM}.csv`.
+
