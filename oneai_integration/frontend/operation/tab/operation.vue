@@ -57,6 +57,11 @@
     <div class="table-action-bar">
       <div class="total-count">
         <i class="bi bi-layers text-primary me-1"></i> Total: <span class="count-number">{{ total }} rows</span>
+        <!-- Hiển thị badge phân quyền: Admin vs Người xem -->
+        <el-tag :type="isAdmin ? 'success' : 'info'" size="small" class="ms-3 permission-tag" effect="plain" style="font-weight: 600;">
+          <i :class="isAdmin ? 'bi bi-shield-check text-success' : 'bi bi-eye text-secondary'" class="me-1"></i>
+          {{ userPermissions.role_name || (isAdmin ? 'Quản trị viên (Admin)' : 'Người xem (Viewer)') }}
+        </el-tag>
       </div>
 
       <div class="action-buttons">
@@ -65,13 +70,13 @@
           <i class="bi bi-arrow-repeat me-1"></i> Reload
         </el-button>
 
-        <!-- 2. NÚT INSERT (THÊM DÒNG MỚI VÀO CUỐI BẢNG) -->
-        <el-button :size="buttonSize" class="btn-insert" @click="handleInsert">
+        <!-- 2. NÚT INSERT (THÊM DÒNG MỚI VÀO CUỐI BẢNG - CHỈ HIỂN THỊ KHI CÓ QUYỀN SỬA) -->
+        <el-button v-if="canEdit" :size="buttonSize" class="btn-insert" @click="handleInsert">
           <i class="bi bi-plus-circle me-1"></i> Insert
         </el-button>
 
-        <!-- 3. NÚT SAVE (LƯU VÀO DB - NÚT CHÍNH NỔI BẬT NHẤT) -->
-        <el-button type="primary" :size="buttonSize" class="btn-save" :loading="isSaving" @click="handleSave">
+        <!-- 3. NÚT SAVE (LƯU VÀO DB - CHỈ HIỂN THỊ KHI CÓ QUYỀN SỬA) -->
+        <el-button v-if="canEdit" type="primary" :size="buttonSize" class="btn-save" :loading="isSaving" @click="handleSave">
           <i class="bi bi-floppy me-1"></i> Save
         </el-button>
 
@@ -81,10 +86,10 @@
         </el-button>
 
         <!-- VẠCH NGĂN CÁCH NHẸ TRÁNH BẤM NHẦM NÚT XÓA -->
-        <span class="btn-divider"></span>
+        <span v-if="canDelete" class="btn-divider"></span>
 
-        <!-- 5. NÚT DELETE (XÓA DÒNG - ĐẶT Ở CUỐI CÙNG, MÀU ĐỎ CẢNH BÁO) -->
-        <el-button type="danger" :size="buttonSize" class="btn-delete" :disabled="selectedRows.length === 0"
+        <!-- 5. NÚT DELETE (XÓA DÒNG - CHỈ HIỂN THỊ KHI CÓ QUYỀN XÓA) -->
+        <el-button v-if="canDelete" type="danger" :size="buttonSize" class="btn-delete" :disabled="selectedRows.length === 0"
           @click="handleDelete">
           <i class="bi bi-dash-circle me-1"></i> Delete
         </el-button>
@@ -117,7 +122,7 @@
           <template #default="{ row }">
             <el-input v-if="row.isNew || row.isEditing" v-model="row.TASK_NAME" placeholder="Tên công việc..."
               size="mini" class="inline-input" />
-            <span v-else class="cell-text" @dblclick="row.isEditing = true" title="Bấm đúp chuột để chỉnh sửa">{{
+            <span v-else class="cell-text" @dblclick="handleRowDoubleClick(row)" title="Bấm đúp chuột để chỉnh sửa">{{
               row.TASK_NAME || '-' }}</span>
           </template>
         </el-table-column>
@@ -129,7 +134,7 @@
               placeholder="YYYY-MM" value-format="YYYY-MM" size="mini" :disabled="row.STATUS === 'RUNNING'"
               class="inline-input" style="width: 100%" />
             <span v-else class="cell-text" :class="{ 'cursor-not-allowed': row.STATUS === 'RUNNING' }"
-              @dblclick="row.STATUS !== 'RUNNING' && (row.isEditing = true)"
+              @dblclick="handleMonthDoubleClick(row)"
               :title="row.STATUS === 'RUNNING' ? 'Không thể đổi tháng khi AI đang chạy' : 'Bấm đúp chuột để chỉnh sửa'">
               {{ row.PAYMENT_MONTH || '-' }}
             </span>
@@ -141,7 +146,7 @@
           <template #default="{ row }">
             <el-input v-if="row.isNew || row.isEditing" v-model="row.PIC" placeholder="PIC..." size="mini"
               class="inline-input" />
-            <span v-else class="cell-text" @dblclick="row.isEditing = true" title="Bấm đúp chuột để chỉnh sửa">{{
+            <span v-else class="cell-text" @dblclick="handleRowDoubleClick(row)" title="Bấm đúp chuột để chỉnh sửa">{{
               row.PIC || '-' }}</span>
           </template>
         </el-table-column>
@@ -153,7 +158,7 @@
               size="mini" filterable clearable @change="onGroupChange(row)">
               <el-option v-for="g in groupOptions" :key="g.value" :label="g.label" :value="g.value" />
             </el-select>
-            <span v-else class="cell-text" @dblclick="row.isEditing = true" title="Bấm đúp chuột để chỉnh sửa">
+            <span v-else class="cell-text" @dblclick="handleRowDoubleClick(row)" title="Bấm đúp chuột để chỉnh sửa">
               {{ row.GROUP_NAME || '-' }}
             </span>
           </template>
@@ -167,7 +172,7 @@
               <el-option v-for="p in getPartsByGroup(row.GROUP_NAME)" :key="p.value" :label="p.label"
                 :value="p.value" />
             </el-select>
-            <span v-else class="cell-text" @dblclick="row.isEditing = true" title="Bấm đúp chuột để chỉnh sửa">
+            <span v-else class="cell-text" @dblclick="handleRowDoubleClick(row)" title="Bấm đúp chuột để chỉnh sửa">
               {{ row.PART_NAME || '-' }}
             </span>
           </template>
@@ -192,9 +197,10 @@
         <el-table-column label="TÀI LIỆU ĐÍNH KÈM" width="135" align="center">
           <template #default="{ row }">
             <el-upload :show-file-list="false" :auto-upload="false" accept=".xlsx,.xlsm"
-              :on-change="(file) => handleUploadExcel(file, row)" :disabled="row.STATUS === 'RUNNING' || row.isNew">
+              :on-change="(file) => handleUploadExcel(file, row)" :disabled="!canUpload || row.STATUS === 'RUNNING' || row.isNew">
               <el-button class="btn-upload-file" :size="buttonSize" :loading="row.STATUS === 'RUNNING'"
-                :disabled="row.STATUS === 'RUNNING' || row.isNew">
+                :disabled="!canUpload || row.STATUS === 'RUNNING' || row.isNew"
+                :title="!canUpload ? 'Tài khoản Viewer không có quyền tải file' : ''">
                 <i v-if="row?.STATUS !== 'RUNNING'" class="bi bi-cloud-arrow-up me-1"></i>
                 {{ row.STATUS === 'RUNNING' ? 'Đang chạy...' : 'Upload' }}
               </el-button>
@@ -480,10 +486,12 @@
               :auto-upload="false" 
               accept=".xlsx,.xlsm"
               :on-change="(file) => handleUploadExcel(file, currentTask)"
-              :disabled="currentTask?.STATUS === 'RUNNING'"
+              :disabled="!canUpload || currentTask?.STATUS === 'RUNNING'"
               style="display: inline-block;"
             >
-              <el-button :size="buttonSize" class="btn-upload-file" :loading="currentTask?.STATUS === 'RUNNING'">
+              <el-button :size="buttonSize" class="btn-upload-file" :loading="currentTask?.STATUS === 'RUNNING'"
+                :disabled="!canUpload || currentTask?.STATUS === 'RUNNING'"
+                :title="!canUpload ? 'Tài khoản Viewer không có quyền tải file' : ''">
                 <i v-if="currentTask?.STATUS !== 'RUNNING'" class="bi bi-cloud-arrow-up me-1"></i>
                 {{ currentTask?.STATUS === 'RUNNING' ? 'Đang chạy...' : 'Upload File Excel' }}
               </el-button>
@@ -503,6 +511,8 @@
               :size="buttonSize" 
               class="btn-rerun" 
               :loading="isRerunning || currentTask?.STATUS === 'RUNNING'"
+              :disabled="!canUpload || isRerunning || currentTask?.STATUS === 'RUNNING'"
+              :title="!canUpload ? 'Tài khoản Viewer không có quyền chạy lại AI' : ''"
               @click="handleRerun(currentTask)"
             >
               <i class="bi bi-arrow-clockwise me-1"></i> Chạy Lại AI
@@ -607,6 +617,48 @@ const loginUserDisplay = computed(() => {
 // Giữ lại loginUser tương thích cho các nhãn UI
 const loginUser = loginUserName
 
+// ====================================================================
+// QUẢN LÝ PHÂN QUYỀN (AUTHORIZATION: ADMIN VS VIEWER / READONLY)
+// ====================================================================
+const userPermissions = ref({
+  is_admin: true,
+  can_edit: true,
+  can_delete: true,
+  can_upload: true,
+  role_name: 'Admin'
+})
+
+const canEdit = computed(() => !!userPermissions.value.can_edit)
+const canDelete = computed(() => !!userPermissions.value.can_delete)
+const canUpload = computed(() => !!userPermissions.value.can_upload)
+const isAdmin = computed(() => !!userPermissions.value.is_admin)
+
+const userRoles = computed(() => {
+  const r = _userInfo.value?.roles || _userInfo.value?.role || []
+  if (Array.isArray(r)) return r
+  if (typeof r === 'string') return r.split(',').map(s => s.trim()).filter(Boolean)
+  return []
+})
+
+const loadUserPermissions = async () => {
+  try {
+    const knox = loginKnoxId.value || ''
+    const roles = userRoles.value || []
+    const res = await axios.get(`${FASTAPI_BASE_URL}/mep_payment/permissions`, {
+      params: {
+        user_id: knox,
+        roles: roles.join(',')
+      }
+    })
+    if (res.data?.status === 'ok' && res.data?.data) {
+      userPermissions.value = res.data.data
+      console.log('🔒 [Auth Permissions loaded]:', userPermissions.value)
+    }
+  } catch (err) {
+    console.warn('⚠️ [Permissions Error] Không thể tải phân quyền từ server:', err)
+  }
+}
+
 // Bộ lọc (Tháng kiểm tra & Trạng thái & Từ khóa tìm kiếm đa năng)
 const selectedStatus = ref('')
 const selectedMonth = ref('')
@@ -695,7 +747,31 @@ const handleKeyidFocus = (row) => {
   }
 }
 
+const handleRowDoubleClick = (row) => {
+  if (!canEdit.value) {
+    ElMessage.warning('Tài khoản chỉ có quyền xem (Viewer), không được phép chỉnh sửa dữ liệu.')
+    return
+  }
+  row.isEditing = true
+}
+
+const handleMonthDoubleClick = (row) => {
+  if (!canEdit.value) {
+    ElMessage.warning('Tài khoản chỉ có quyền xem (Viewer), không được phép chỉnh sửa dữ liệu.')
+    return
+  }
+  if (row.STATUS === 'RUNNING') {
+    ElMessage.warning('Không thể đổi tháng khi AI đang chạy!')
+    return
+  }
+  row.isEditing = true
+}
+
 const startEditKeyid = (row) => {
+  if (!canEdit.value) {
+    ElMessage.warning('Tài khoản chỉ có quyền xem (Viewer), không được phép chỉnh sửa số WO!')
+    return
+  }
   if (row.STATUS === 'RUNNING') {
     ElMessage.warning("Hồ sơ đang trong quá trình AI đối soát, không thể sửa số WO!")
     return
@@ -1067,6 +1143,10 @@ const submitDetailReview = async (decision) => {
 // 4. CHẠY LẠI AI (RERUN AI TASK)
 const handleRerun = async (row) => {
   if (!row || !row.KEYID) return
+  if (!canUpload.value) {
+    ElMessage.warning("Tài khoản chỉ có quyền xem (Viewer), không có quyền kích hoạt chạy lại AI đối soát!")
+    return
+  }
   if (row.STATUS === 'RUNNING') {
     ElMessage.warning("Hồ sơ đang trong quá trình xử lý AI, vui lòng đợi hoàn tất!")
     return
@@ -1076,7 +1156,11 @@ const handleRerun = async (row) => {
   const uploader = loginUserDisplay.value || loginUserName.value || 'Kỹ sư MEP'
   try {
     const res = await axios.post(`${FASTAPI_BASE_URL}/mep_payment/rerun/${encodeURIComponent(row.KEYID)}`, null, {
-      params: { uploader_name: uploader }
+      params: {
+        uploader_name: uploader,
+        user_id: loginKnoxId.value || '',
+        roles: (userRoles.value || []).join(',')
+      }
     })
     row.PIC = uploader
     row.STATUS = 'RUNNING'
@@ -1105,6 +1189,11 @@ const handleSelectionChange = (selection) => {
 
 // 6. THAO TÁC INSERT (THÊM DÒNG MỚI VÀO CUỐI BẢNG)
 const handleInsert = () => {
+  if (!canEdit.value) {
+    ElMessage.warning('Tài khoản chỉ có quyền xem (Viewer), không được phép thêm dòng mới.')
+    return
+  }
+
   // Tính toán STT chuẩn toàn cục (Global STT) dựa trên tổng số dòng và số STT lớn nhất hiện có
   // Khắc phục triệt để lỗi: trên page 1 hiện 21 thay vì 23, trên page 2 hiện 4 thay vì 24
   const currentMaxStt = tableData.value.reduce((max, r) => Math.max(max, Number(r.STT) || 0), 0)
@@ -1130,6 +1219,11 @@ const handleInsert = () => {
 
 // 7. THAO TÁC SAVE (LƯU CÁC DÒNG MỚI HOẶC SỬA XUỐNG DB)
 const handleSave = async () => {
+  if (!canEdit.value) {
+    ElMessage.error('Tài khoản chỉ có quyền xem (Viewer), không được phép lưu chỉnh sửa.')
+    return
+  }
+
   const modifiedRows = tableData.value.filter(r => r.isNew || r.isEditing)
   if (modifiedRows.length === 0) {
     ElMessage.info("Không có dòng nào thay đổi để lưu.")
@@ -1168,6 +1262,8 @@ const handleSave = async () => {
   isSaving.value = true
   try {
     const payload = {
+      user_id: loginKnoxId.value || '',
+      roles: userRoles.value || [],
       rows: modifiedRows.map(r => ({
         KEYID: String(r.KEYID).trim(),
         OLD_KEYID: (r.old_keyid && String(r.old_keyid).trim() !== String(r.KEYID).trim()) ? String(r.old_keyid).trim() : undefined,
@@ -1193,6 +1289,11 @@ const handleSave = async () => {
 
 // 8. THAO TÁC DELETE (XÓA CÁC DÒNG ĐƯỢC CHỌN)
 const handleDelete = async () => {
+  if (!canDelete.value) {
+    ElMessage.error('Tài khoản chỉ có quyền xem (Viewer), không được phép xóa dữ liệu.')
+    return
+  }
+
   if (selectedRows.value.length === 0) {
     ElMessage.warning("Vui lòng chọn ít nhất 1 dòng để xóa.")
     return
@@ -1214,7 +1315,11 @@ const handleDelete = async () => {
     }
 
     if (dbKeys.length > 0) {
-      const res = await axios.post(`${FASTAPI_BASE_URL}/mep_payment/delete_rows`, { keyids: dbKeys })
+      const res = await axios.post(`${FASTAPI_BASE_URL}/mep_payment/delete_rows`, {
+        keyids: dbKeys,
+        user_id: loginKnoxId.value || '',
+        roles: userRoles.value || []
+      })
       ElMessage.success(res.data?.message || `Đã xóa ${dbKeys.length} dòng thành công!`)
       await handleReload()
     } else {
@@ -1294,6 +1399,11 @@ const handleExportCsv = () => {
 
 // 11. TIẾP NHẬN UPLOAD FILE EXCEL
 const handleUploadExcel = async (file, row) => {
+  if (!canUpload.value) {
+    ElMessage.warning("Tài khoản chỉ có quyền xem (Viewer), không có quyền tải file để AI đối soát.")
+    return
+  }
+
   if (!row || !row.KEYID) {
     ElMessage.warning("Vui lòng lưu thông tin Số Công Việc (KEYID) trước khi tải file!")
     return
@@ -1317,6 +1427,10 @@ const handleUploadExcel = async (file, row) => {
     formData.append("payment_month", row.PAYMENT_MONTH)
   }
   formData.append("uploader_name", uploader)
+  formData.append("user_id", loginKnoxId.value || '')
+  if (userRoles.value && userRoles.value.length > 0) {
+    formData.append("roles", userRoles.value.join(','))
+  }
 
   row.PIC = uploader
   row.STATUS = 'RUNNING'
@@ -1371,6 +1485,11 @@ const handleUploadExcel = async (file, row) => {
 
 // 12. DUYỆT / TỪ CHỐI (REVIEW WORKFLOW - LƯU CỘT REVIEW_BY BẰNG KNOX_ID)
 const handleReview = async (row, decision, note = '') => {
+  if (!canEdit.value) {
+    ElMessage.error("Tài khoản chỉ có quyền xem (Viewer), không được phép phê duyệt hồ sơ.")
+    return
+  }
+
   try {
     // Lưu vào Database bằng Knox ID (ví dụ: vhung99.nguyen), nếu chưa có Knox ID thì fallback sang PIC / Engineer
     const reviewerKnoxId = loginKnoxId.value || row.PIC || 'Engineer'
@@ -1379,7 +1498,9 @@ const handleReview = async (row, decision, note = '') => {
       keyid: row.KEYID,
       decision: decision,
       note: reviewNote,
-      reviewer: reviewerKnoxId
+      reviewer: reviewerKnoxId,
+      user_id: loginKnoxId.value || '',
+      roles: userRoles.value || []
     })
     row.REVIEW_DECISION = decision
     row.REVIEW_BY = reviewerKnoxId
@@ -1387,7 +1508,7 @@ const handleReview = async (row, decision, note = '') => {
     const displayName = loginUserName.value ? `${loginUserName.value} (${reviewerKnoxId})` : reviewerKnoxId
     ElMessage.success(`Đã lưu quyết định: ${decision} (Người duyệt: ${displayName})`)
   } catch (err) {
-    ElMessage.error("Lỗi lưu quyết định duyệt: " + err.message)
+    ElMessage.error("Lỗi lưu quyết định duyệt: " + (err.response?.data?.detail || err.message))
   }
 }
 
@@ -1415,6 +1536,7 @@ const checkTheme = () => {
 onMounted(() => {
   _userInfo.value = getUserInfo()
   checkTheme()
+  loadUserPermissions()
 
   // Lắng nghe thay đổi theme từ hệ điều hành / trình duyệt máy tính (Computer OS Mode)
   if (window.matchMedia) {

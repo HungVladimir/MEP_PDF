@@ -109,3 +109,13 @@ SHEET_KEYWORDS_GATEPASS = ['bbgn', 'gate', 'mang vào', 'biên bản']
 SKIP_EXTRACTED_CSV = False
 # Giới hạn dung lượng file Excel upload tối đa (MB)
 MAX_UPLOAD_SIZE_MB = int(os.getenv("MAX_UPLOAD_SIZE_MB", 50))
+
+# ==========================================
+# 7. CẤU HÌNH PHÂN QUYỀN HỆ THỐNG (AUTHORIZATION)
+# ==========================================
+# Danh sách KnoxID có quyền Quản trị / Sửa / Xóa (ngăn cách bởi dấu phẩy)
+MEP_ADMIN_USERS = os.getenv("MEP_ADMIN_USERS", "vhung99.nguyen,admin,mep_admin,dong.nh")
+# Danh sách Role OneAI được phép sửa/xóa (Admin, Manager, Leader, v.v.)
+MEP_ADMIN_ROLES = os.getenv("MEP_ADMIN_ROLES", "ADMIN,MANAGER,MEP_ADMIN,LEADER")
+# Cờ bật kiểm tra phân quyền nghiêm ngặt (True: Chặn khi không có quyền; False: Mở toàn quyền cho Dev/Test)
+MEP_ENABLE_AUTH = os.getenv("MEP_ENABLE_AUTH", "false").lower() in ("true", "1", "yes")

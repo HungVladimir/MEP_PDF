@@ -62,15 +62,74 @@ class ReviewRequest(BaseModel):
     decision: str  # APPROVED hoặc REJECTED
     note: str = ""
     reviewer: str = "Engineer"
+    user_id: Optional[str] = None
+    roles: Optional[list] = None
 
 
 class SaveRowsRequest(BaseModel):
     rows: list
+    user_id: Optional[str] = None
+    reviewer: Optional[str] = None
+    roles: Optional[list] = None
 
 
 class DeleteRowsRequest(BaseModel):
     keyids: list
     reviewer: str = "PIC"
+    user_id: Optional[str] = None
+    roles: Optional[list] = None
+
+
+def check_user_permission(user_id: Optional[str] = None, roles: Optional[list] = None) -> dict:
+    """
+    Kiểm tra quyền hạn của người dùng (Admin/Editor vs Viewer/ReadOnly).
+    - MEP_ENABLE_AUTH = False (mặc định môi trường dev/local): Mở toàn quyền cho tất cả.
+    - MEP_ENABLE_AUTH = True:
+        + Admin/Editor: nếu user_id nằm trong MEP_ADMIN_USERS hoặc roles chứa MEP_ADMIN_ROLES.
+        + Viewer: các user còn lại (chỉ xem, không được sửa/xóa/upload).
+    """
+    if not getattr(config, "MEP_ENABLE_AUTH", False):
+        return {
+            "is_admin": True,
+            "can_edit": True,
+            "can_delete": True,
+            "can_upload": True,
+            "auth_enabled": False,
+            "role": "ADMIN",
+            "message": "Chế độ mở quyền (Auth Disabled)"
+        }
+
+    admin_users = [u.strip().lower() for u in getattr(config, "MEP_ADMIN_USERS", "").split(",") if u.strip()]
+    admin_roles = [r.strip().upper() for r in getattr(config, "MEP_ADMIN_ROLES", "").split(",") if r.strip()]
+
+    uid_clean = str(user_id or "").strip().lower()
+    user_roles = [str(r).strip().upper() for r in (roles or []) if str(r).strip()]
+
+    is_user_admin = (uid_clean in admin_users) if uid_clean else False
+    is_role_admin = any(r in admin_roles for r in user_roles) if user_roles else False
+
+    has_full_rights = is_user_admin or is_role_admin
+
+    return {
+        "is_admin": has_full_rights,
+        "can_edit": has_full_rights,
+        "can_delete": has_full_rights,
+        "can_upload": has_full_rights,
+        "auth_enabled": True,
+        "role": "ADMIN" if has_full_rights else "VIEWER",
+        "message": "Có quyền Quản trị viên (Admin)" if has_full_rights else "Chế độ Chỉ xem (Viewer)"
+    }
+
+
+@app.get("/mep_payment/permissions")
+async def get_permissions_endpoint(user_id: Optional[str] = None, roles: Optional[str] = None):
+    """
+    API kiểm tra và đồng bộ quyền hạn người dùng với Frontend OneAI.
+    Trả về cờ is_admin, can_edit, can_delete, can_upload.
+    """
+    role_list = [r.strip() for r in roles.split(",")] if roles else []
+    perm = check_user_permission(user_id=user_id, roles=role_list)
+    return {"status": "ok", "data": perm}
 
 # 3. TIẾN TRÌNH XỬ LÝ CHẠY NGẦM (BACKGROUND TASK) VÀ LỚP BẮT FULL LOG
 
@@ -310,10 +369,20 @@ async def upload_excel_task(
     file: UploadFile = File(...),
     KEYID: str = Form(...),
     payment_month: Optional[str] = Form(None),
-    uploader_name: Optional[str] = Form(None)
+    uploader_name: Optional[str] = Form(None),
+    user_id: Optional[str] = Form(None)
 ):
     """Tiếp nhận file Excel từ OneAI Portal và kích hoạt Background Task."""
     try:
+        # Kiểm tra quyền hạn upload & chạy AI
+        uid = user_id or uploader_name
+        perm = check_user_permission(user_id=uid)
+        if not perm["can_upload"]:
+            raise HTTPException(
+                status_code=403,
+                detail="Bạn không có quyền tải lên file và chạy AI bóc tách MEP. Vui lòng liên hệ Quản trị viên."
+            )
+
         # Chống xung đột đồng thời (Concurrency check): Nếu task đang RUNNING thì chặn upload đè
         current_status = get_task_status(KEYID)
         if current_status == "RUNNING":
@@ -472,6 +541,15 @@ async def save_rows(req: SaveRowsRequest):
     if not req.rows:
         raise HTTPException(status_code=400, detail="Danh sách dòng rỗng.")
 
+    # 0. Kiểm tra quyền hạn chỉnh sửa / lưu
+    uid = req.user_id or req.reviewer
+    perm = check_user_permission(user_id=uid, roles=req.roles)
+    if not perm["can_edit"]:
+        raise HTTPException(
+            status_code=403,
+            detail="Bạn không có quyền chỉnh sửa hoặc lưu dữ liệu MEP. Vui lòng liên hệ Quản trị viên."
+        )
+
     # Kiểm tra nếu là dòng mới thêm (isNew) mà KEYID đã tồn tại trong DB -> Báo lỗi trùng
     for r in req.rows:
         if r.get("isNew"):
@@ -532,6 +610,16 @@ async def delete_rows_endpoint(req: DeleteRowsRequest):
     if not req.keyids:
         raise HTTPException(
             status_code=400, detail="Vui lòng chọn ít nhất 1 dòng để xóa.")
+
+    # 0. Kiểm tra quyền hạn xóa dòng
+    uid = req.user_id or req.reviewer
+    perm = check_user_permission(user_id=uid, roles=req.roles)
+    if not perm["can_delete"]:
+        raise HTTPException(
+            status_code=403,
+            detail="Bạn không có quyền xóa dữ liệu MEP. Vui lòng liên hệ Quản trị viên."
+        )
+
     try:
         # 1. Thu thập tháng của từng task trước khi xóa khỏi DB
         task_months = {}
@@ -586,6 +674,14 @@ async def delete_rows_endpoint(req: DeleteRowsRequest):
 @app.post("/mep_payment/review")
 async def submit_review(req: ReviewRequest):
     """Tiếp nhận quyết định phê duyệt (Approve / Reject) từ Kỹ sư."""
+    uid = req.user_id or req.reviewer
+    perm = check_user_permission(user_id=uid, roles=req.roles)
+    if not perm["can_edit"]:
+        raise HTTPException(
+            status_code=403,
+            detail="Bạn không có quyền phê duyệt hồ sơ MEP. Vui lòng liên hệ Quản trị viên."
+        )
+
     try:
         update_review_decision(req.keyid, req.decision, req.note, req.reviewer)
         return {"status": "ok", "message": f"Đã lưu quyết định: {req.decision}"}
@@ -716,11 +812,26 @@ async def get_task_image(keyid: str, filename: str, month: Optional[str] = None)
 
 
 @app.post("/mep_payment/rerun/{keyid}")
-async def rerun_task_endpoint(keyid: str, background_tasks: BackgroundTasks, uploader_name: Optional[str] = None):
+async def rerun_task_endpoint(
+    keyid: str,
+    background_tasks: BackgroundTasks,
+    uploader_name: Optional[str] = None,
+    user_id: Optional[str] = None,
+    roles: Optional[str] = None
+):
     """
     Chạy lại tác vụ AI đối soát (Rerun) cho hồ sơ đã có file Excel trong session cũ.
     Giúp xử lý lại ngay lập tức khi mạng lag hoặc AI bị timeout mà không cần upload lại.
     """
+    uid = user_id or uploader_name
+    role_list = [r.strip() for r in roles.split(",")] if roles else []
+    perm = check_user_permission(user_id=uid, roles=role_list)
+    if not perm["can_upload"]:
+        raise HTTPException(
+            status_code=403,
+            detail="Bạn không có quyền kích hoạt chạy lại AI đối soát. Vui lòng liên hệ Quản trị viên."
+        )
+
     try:
         current_status = get_task_status(keyid)
         if current_status == "RUNNING":
