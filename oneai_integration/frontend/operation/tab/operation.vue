@@ -105,7 +105,7 @@
         <el-table-column prop="KEYID" label="SỐ CÔNG VIỆC (WO)" width="165" sortable align="center" fixed="left">
           <template #default="{ row }">
             <el-input v-if="row.isNew || row.isEditing" v-model="row.KEYID" placeholder="Nhập số WO..." size="mini"
-              class="inline-input" @focus="if (!row.old_keyid && !row.isNew) row.old_keyid = row.KEYID" />
+              class="inline-input" @focus="handleKeyidFocus(row)" />
             <span v-else class="font-bold font-mono text-wo-code cursor-pointer"
               @dblclick="startEditKeyid(row)"
               :title="row.STATUS === 'RUNNING' ? 'Không thể sửa khi đang chạy' : 'Bấm đúp chuột để chỉnh sửa số WO'">{{ row.KEYID }}</span>
@@ -228,30 +228,12 @@
         <el-table-column label="CHI TIẾT BÁO CÁO" width="180" align="center" fixed="right">
           <template #default="{ row }">
             <div v-if="row.STATUS === 'COMPLETED'">
-
-              <!-- Trạng thái duyệt / Nút duyệt -->
-              <div>
-                <el-tag v-if="row.REVIEW_DECISION === 'APPROVED'" type="success" size="mini"
-                  :title="row.REVIEW_BY ? `Duyệt bởi: ${row.REVIEW_BY}` : ''">
-                  Đã Duyệt
-                </el-tag>
-                <el-tag v-else-if="row.REVIEW_DECISION === 'REJECTED'" type="danger" size="mini"
-                  :title="row.REVIEW_BY ? `Từ chối bởi: ${row.REVIEW_BY}` : ''">
-                  Từ Chối
-                </el-tag>
-                <div v-else style="display: inline-flex; gap: 4px;">
-                  <el-button type="success" size="mini" @click="handleReview(row, 'APPROVED')">Duyệt</el-button>
-                  <el-button type="danger" size="mini" @click="handleReview(row, 'REJECTED')">Hủy</el-button>
-                </div>
-              </div>
-
               <!-- Nút tải file báo cáo -->
               <div v-if="row.RESULT_LINK" style="margin-bottom: 3px;">
                 <el-button type="text" size="small" class="download-btn" @click="handleDownloadFile(row)">
                   📥 Tải Báo Cáo (.zip)
                 </el-button>
               </div>
-
             </div>
             <div v-else-if="row.STATUS === 'CANCEL'" class="row-cancel-box">
               <span class="text-reason" :title="row.REASON">{{ row.REASON || 'Xử lý thất bại' }}</span>
@@ -380,16 +362,7 @@
               <el-table-column prop="name" label="Tên vật tư" min-width="180" show-overflow-tooltip />
               <el-table-column prop="unit" label="ĐVT" width="65" align="center" />
               <el-table-column prop="vendor_qty" label="KL thanh toán" width="115" align="center" />
-              <el-table-column prop="ai_qty" label="SL Bản vẽ (AI)" width="125" align="center">
-                <!-- <template #default="{ row }">
-                  <el-tooltip v-if="row.ai_breakdown" :content="`Bóc tách từ: ${row.ai_breakdown}`" placement="top">
-                    <span class="font-bold text-primary cursor-pointer">
-                      {{ row.ai_qty }} <i class="bi bi-info-circle ms-1" style="font-size: 11px;"></i>
-                    </span>
-                  </el-tooltip>
-                  <span v-else class="font-bold">{{ row.ai_qty }}</span>
-                </template> -->
-              </el-table-column>
+              <el-table-column prop="ai_qty" label="SL Bản vẽ (AI)" width="125" align="center" />
               <el-table-column prop="diff" label="Chênh lệch" width="165" align="center">
                 <template #default="{ row }">
                   <el-tag v-if="String(row.diff).includes('Thiếu')" type="danger" size="mini" effect="dark" style="font-weight: 700; border-radius: 4px;">
@@ -716,6 +689,12 @@ const tableRef = ref(null)
 const tableData = ref([])
 
 // Bắt đầu sửa Số WO trực tiếp trên ô bảng (Mục 1)
+const handleKeyidFocus = (row) => {
+  if (!row.old_keyid && !row.isNew) {
+    row.old_keyid = row.KEYID
+  }
+}
+
 const startEditKeyid = (row) => {
   if (row.STATUS === 'RUNNING') {
     ElMessage.warning("Hồ sơ đang trong quá trình AI đối soát, không thể sửa số WO!")

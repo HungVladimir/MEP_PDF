@@ -21,3 +21,5 @@ filequest/
 .gents/
 .gemini/
 
+
+quest*.py

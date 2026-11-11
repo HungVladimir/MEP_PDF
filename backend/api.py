@@ -33,28 +33,24 @@ app.add_middleware(
     expose_headers=["Content-Disposition"]
 )
 
-# 2. KHỞI TẠO THƯ MỤC LƯU TRỮ (TỰ THÍCH ỨNG LOCAL DLP HOẶC SERVER)
+# 2. KHỞI TẠO THƯ MỤC LƯU TRỮ (TỰ THÍCH ỨNG LOCAL HOẶC SERVER)
 BASE_DIR = Path(__file__).resolve().parent
 
-# Đường dẫn thư mục bảo mật máy Local công ty (DLP)
+# Đường dẫn thư mục máy Local
 COMPANY_PRIVATE_ROOT = Path(r"D:\Private_Documents\Doc\AI-Infra")
 
 if COMPANY_PRIVATE_ROOT.exists():
-    # 🏢 [MÔI TRƯỜNG LOCAL CÔNG TY - CÓ DLP CHẶN ẢNH]:
-    # - File Excel upload: lưu vào Private để tuân thủ DLP
-    # - File Excel kết quả & zip: lưu vào FinalReport trong Private
-    # - Toàn bộ Ảnh trích xuất, PDF, CSV, Log: lưu trong Project để không bị DLP chặn
+    # 🏢 [MÔI TRƯỜNG LOCAL]:
     PRIVATE_EXCEL_DIR = COMPANY_PRIVATE_ROOT / "sessions"
     FINAL_REPORT_DIR = COMPANY_PRIVATE_ROOT / "FinalReport"
     PROJECT_STORAGE_DIR = BASE_DIR / "sessions"
-    print("🏢 [Môi trường] Đang chạy trên Máy Local Công Ty (Bật chế độ DLP 2 vùng lưu trữ)")
+    print("🏢 [Môi trường] Đang chạy trên Máy Local")
 else:
-    # 🌐 [MÔI TRƯỜNG SERVER / LINUX / MÁY KHÔNG CÓ DLP]:
-    # Tự động gộp tất cả về 1 vùng duy nhất ngay trong Project
+    # 🌐 [MÔI TRƯỜNG SERVER / LINUX]:
     PRIVATE_EXCEL_DIR = BASE_DIR / "sessions"
     FINAL_REPORT_DIR = BASE_DIR / "final_reports"
     PROJECT_STORAGE_DIR = BASE_DIR / "sessions"
-    print("🌐 [Môi trường] Đang chạy trên Server (Bật chế độ Thống Nhất 1 vùng lưu trữ)")
+    print("🌐 [Môi trường] Đang chạy trên Server")
 
 PRIVATE_EXCEL_DIR.mkdir(parents=True, exist_ok=True)
 FINAL_REPORT_DIR.mkdir(parents=True, exist_ok=True)
@@ -176,7 +172,7 @@ def run_ai_task_background(keyid: str, session_dir: Path, excel_path: str, payme
             evidence_dir=str(evidence_dir)
         )
 
-        # ĐÓNG GÓI .ZIP ĐỂ LÁCH BẢO MẬT HỆ THỐNG / DLP (THEO REFER_SAVE.PY)
+        # ĐÓNG GÓI .ZIP ĐỂ LƯU TRỮ VÀ TẢI VỀ BÁO CÁO
         file_name = os.path.basename(final_excel_path)
         zip_name = f"{Path(file_name).stem}.zip"
         zip_path = FINAL_REPORT_DIR / zip_name
@@ -343,7 +339,7 @@ async def upload_excel_task(
         # Xác định tháng thanh toán để tổ chức thư mục MinIO
         actual_month = (payment_month or "").strip() or get_task_payment_month(KEYID) or time.strftime("%Y-%m")
 
-        # 1. Thư mục Private để lưu file Excel upload (tuân thủ DLP máy công ty)
+        # 1. Thư mục lưu file Excel upload
         private_session_dir = PRIVATE_EXCEL_DIR / session_name
         private_session_dir.mkdir(parents=True, exist_ok=True)
         excel_path = private_session_dir / file.filename
@@ -359,7 +355,7 @@ async def upload_excel_task(
                 status_code=413,
                 detail=f"Dung lượng file ({saved_file_size / (1024*1024):.1f}MB) vượt quá giới hạn ({config.MAX_UPLOAD_SIZE_MB}MB)!")
 
-        # 2. Thư mục Project để lưu toàn bộ ảnh evidence, PDF, CSV, pipeline.log (không bị DLP chặn)
+        # 2. Thư mục Project để lưu toàn bộ ảnh evidence, PDF, CSV, pipeline.log
         project_session_dir = PROJECT_STORAGE_DIR / session_name
         project_session_dir.mkdir(parents=True, exist_ok=True)
 
@@ -598,7 +594,7 @@ async def submit_review(req: ReviewRequest):
             status_code=500, detail=f"Lỗi khi lưu phê duyệt: {str(e)}")
 
 
-# 5. CÁC ENDPOINT MỚI: CHI TIẾT ĐỐI SOÁT, SOI ẢNH BẢN VẼ & CHẠY LẠI AI (THEO CHUẨN THIẾT KẾ CỦA SẾP)
+# 5. CÁC ENDPOINT: CHI TIẾT ĐỐI SOÁT, SOI ẢNH BẢN VẼ & CHẠY LẠI AI
 
 @app.get("/mep_payment/detail/{keyid}")
 async def get_task_detail(

@@ -14,31 +14,67 @@ load_dotenv(BASE_DIR / ".env")
 load_dotenv(BASE_DIR.parent / "backend" / ".env")
 load_dotenv(find_dotenv())
 
-# --- 0. CẤU HÌNH ĐƯỜNG DẪN DỮ LIỆU PRIVATE (LOCAL & TEST) ---
-# Thư mục gốc chứa dữ liệu thực tế trên máy cá nhân của bạn
+# --- 0. CẤU HÌNH ĐƯỜNG DẪN DỮ LIỆU PRIVATE (EXCEL) VÀ DỰ ÁN (IMAGES) ---
+# Thư mục Private: Nơi lưu và đọc các file Excel (đầu vào & báo cáo đầu ra)
 AI_BILL_PRIVATE_DIR = Path(
     os.getenv("AI_BILL_PRIVATE_DIR")
     or os.getenv("AI_BILL_DIR")
     or r"D:\Private_Documents\Doc\AI-Bill"
 )
 
-# Cấu trúc thư mục con phân loại rõ ràng (tùy chọn hoặc tự động nhận diện):
-DIR_EXCEL1 = AI_BILL_PRIVATE_DIR / "invoices_file1"       # File 1: Chứa ảnh hóa đơn các tháng
-DIR_EXCEL2 = AI_BILL_PRIVATE_DIR / "members_file2"        # File 2: Chứa danh sách member share, đơn giá
-DIR_OUTPUT = AI_BILL_PRIVATE_DIR / "output_reports"       # Thư mục xuất file Excel báo cáo & ảnh bóc tách
+# Thư mục con trong Private dành riêng cho các file Excel:
+DIR_EXCEL1 = AI_BILL_PRIVATE_DIR / "invoices_file1"        # File 1: Chứa ảnh hóa đơn các tháng
+DIR_EXCEL2 = AI_BILL_PRIVATE_DIR / "members_file2"         # File 2: Chứa danh sách member share, đơn giá
+DIR_EXCEL_OUTPUT = AI_BILL_PRIVATE_DIR / "output_reports"  # Nơi xuất file Excel báo cáo đối soát
+
+# Thư mục lưu ảnh trích xuất: LUÔN LƯU TRONG FOLDER DỰ ÁN (PROJECT)
+# (Lý do: Thư mục Private không hỗ trợ lưu file ảnh)
+DIR_PROJECT_IMAGES = BASE_DIR / "extracted_images"
+
+# Tên Sheet chuẩn theo quy ước nghiệp vụ:
+SHEET_NAME_FILE1 = "Tổng hợp hóa đơn"       # File 1: Sheet chứa danh sách và ảnh hóa đơn
+SHEET_NAME_FILE2 = "Thanh toán"             # File 2: Sheet chứa KnoxID, email và đơn giá các tháng
+SHEET_NAME_EMAIL_STANDARD = "Tiêu chuẩn email"  # File 2: Sheet chứa KnoxID, Name, AI_PROVIDER, AI_GEN, AI_TIER, EMAIL_PAYMENT
+
+# 22 Cột chuẩn Database LOCAL_AI.AI_INVOICE_CHECK:
+DB_COLUMNS = [
+    "ID",
+    "CREATED_AT",
+    "MONTH",
+    "SUBMITTER_NAME",
+    "SUBMITTER_EMAIL",
+    "FILE_NAME",
+    "FILE_PATH",
+    "MIME",
+    "DELETE_TOKEN",
+    "PROVIDER",
+    "INVOICE_NUMBER",
+    "INVOICE_DATE",
+    "BILLING_EMAIL",
+    "AMOUNT",
+    "PLAN",
+    "EMAIL_MATCH",
+    "WARNINGS",
+    "AI_RAW",
+    "STATUS",
+    "ADMIN_NOTE",
+    "REVIEWED_AT",
+    "USERID"
+]
 
 # --- 1. CẤU HÌNH NHÀ CUNG CẤP AI (CHATGPT, CLAUDE, GEMINI) ---
 PROVIDERS_CONFIG = {
     "chatgpt": {
         "name": "ChatGPT",
         "keywords_file1": [
-            "chatgpt", "chat gpt", "chat-gpt", "openai", "gpt", "gpt-4", "gpt4",
+            "chatgpt", "chat gpt", "chat-gpt", "chatcpt", "cpt", "openai", "gpt", "gpt-4", "gpt4",
             "hóa đơn chatgpt", "hoa don chatgpt", "hóa đơn chat gpt", "hoa don chat gpt",
-            "hóa đơn openai", "hoa don openai", "ảnh chatgpt", "minh chứng chatgpt",
-            "bill chatgpt", "receipt chatgpt", "chatgpt plus", "chatgpt 4"
+            "hóa đơn chatcpt", "hoa don chatcpt", "hóa đơn openai", "hoa don openai",
+            "ảnh chatgpt", "minh chứng chatgpt", "bill chatgpt", "receipt chatgpt",
+            "chatgpt plus", "chatgpt 4"
         ],
         "keywords_file2": [
-            "chatgpt plus", "chatgpt", "chat gpt", "chat-gpt", "gpt", "openai"
+            "chatgpt plus", "chatgpt", "chat gpt", "chat-gpt", "chatcpt", "gpt", "openai"
         ],
         "default_filename": "chatGpt.png",
         "plan": "ChatGPT Plus"
@@ -95,24 +131,50 @@ TABLE_NAME = "LOCAL_AI.AI_INVOICE_CHECK"
 def extract_month_from_filename(filename: str) -> str:
     """
     Tự động trích xuất tháng từ tên file dạng:
+    '(AI Crew) thanh toán hóa đơn tháng 2026.08.xlsx' -> '2026-08'
     '(AI Crew) thanh toán hóa đơn tháng 2026.10.xlsx' -> '2026-10'
-    '(AI Crew) thanh toán hóa đơn tháng 2026.09.xlsx' -> '2026-09'
-    '(AI Crew) thanh toán hóa đơn tháng 2026-08.xlsx' -> '2026-08'
+    '(AI Crew) thanh toán hóa đơn tháng 8.xlsx' -> '2026-08'
+    '(AI Crew) thanh toán hóa đơn tháng 8.2026.xlsx' -> '2026-08'
+    'Hoa don thang 8.2026.xlsx' -> '2026-08'
+    'Aug-26.xlsx' -> '2026-08'
+    'Oct-26.xlsx' -> '2026-10'
     """
-    clean_name = Path(filename).name
-    # Tìm mẫu 4 số năm . hoặc - 2 số tháng
-    match = re.search(r'(\d{4})[._](\d{1,2})', clean_name)
-    if match:
-        year = match.group(1)
-        month = match.group(2).zfill(2)
-        return f"{year}-{month}"
-    
-    # Dự phòng: tìm năm và tháng cách nhau bởi chữ
-    match_fallback = re.search(r'tháng\s*(\d{1,2})[._\-\s]+(\d{4})', clean_name, re.IGNORECASE)
-    if match_fallback:
-        month = match_fallback.group(1).zfill(2)
-        year = match_fallback.group(2)
-        return f"{year}-{month}"
+    clean_name = Path(filename).name.lower()
+
+    # 1. Mẫu YYYY.MM hoặc YYYY-MM hoặc YYYY_MM (e.g. 2026.08, 2026.8, 2026-10)
+    m = re.search(r'(20\d{2})[._\-](\d{1,2})', clean_name)
+    if m:
+        year = m.group(1)
+        month = m.group(2).zfill(2)
+        if 1 <= int(month) <= 12:
+            return f"{year}-{month}"
+
+    # 2. Mẫu MM.YYYY hoặc MM-YYYY hoặc MM_YYYY (e.g. 08.2026, 8.2026, 10-2026)
+    m = re.search(r'(?:^|[^\d])(\d{1,2})[._\-](20\d{2})', clean_name)
+    if m:
+        month = m.group(1).zfill(2)
+        year = m.group(2)
+        if 1 <= int(month) <= 12:
+            return f"{year}-{month}"
+
+    # 3. Mẫu tháng M.YYYY hoặc tháng M YYYY (e.g. tháng 8.2026, thang 8 2026, tháng 8)
+    m = re.search(r'th[aá]ng\s*(\d{1,2})(?:[._\-\s]*(20\d{2}))?', clean_name)
+    if m:
+        month = m.group(1).zfill(2)
+        year = m.group(2) or "2026"
+        if 1 <= int(month) <= 12:
+            return f"{year}-{month}"
+
+    # 4. Mẫu tên tháng tiếng Anh (e.g. aug-26, sep-26, oct-26)
+    eng_months = {
+        'jan': '01', 'feb': '02', 'mar': '03', 'apr': '04', 'may': '05', 'jun': '06',
+        'jul': '07', 'aug': '08', 'sep': '09', 'oct': '10', 'nov': '11', 'dec': '12'
+    }
+    for em, num in eng_months.items():
+        if em in clean_name:
+            m_yr = re.search(r'20\d{2}|\d{2}', clean_name)
+            yr = f"20{m_yr.group(0)}" if (m_yr and len(m_yr.group(0)) == 2) else (m_yr.group(0) if m_yr else "2026")
+            return f"{yr}-{num}"
 
     # Mặc định lấy tháng hiện tại nếu không nhận diện được
     return datetime.now().strftime("%Y-%m")
@@ -143,12 +205,13 @@ def locate_ai_bill_files(
     Hỗ trợ 2 mô hình lưu trữ:
       Mô hình A (Thư mục chung): Cả 2 file nằm ngay trong private_dir
       Mô hình B (Phân loại): File 1 nằm trong invoices_file1/, File 2 nằm trong members_file2/
-    Trả về: (file1_path, file2_path, output_reports_dir)
+    Trả về: (file1_path, file2_path, dir_excel_output, dir_project_images)
     """
     private_dir = Path(private_dir)
     dir_f1 = private_dir / "invoices_file1"
     dir_f2 = private_dir / "members_file2"
-    dir_out = private_dir / "output_reports"
+    dir_excel_out = private_dir / "output_reports"
+    dir_img_out = DIR_PROJECT_IMAGES
 
     # Tập hợp các thư mục có thể chứa File 1
     scan_dirs_f1 = [dir_f1] if dir_f1.exists() else []
@@ -191,6 +254,98 @@ def locate_ai_bill_files(
 
     selected_f2 = f2_candidates[0] if f2_candidates else None
 
-    return selected_f1, selected_f2, dir_out
+    return selected_f1, selected_f2, dir_excel_out, dir_img_out
+
+
+def locate_batch_ai_bill_files(
+    private_dir: Path = AI_BILL_PRIVATE_DIR,
+    folder1: Optional[Path] = None,
+    folder2: Optional[Path] = None,
+    target_month: Optional[str] = None
+) -> Tuple[List[Tuple[Path, str]], Optional[Path], Path, Path]:
+    """
+    Dò tìm toàn bộ các file Excel 1 theo từng tháng và File Excel 2:
+    - Folder 1: chứa các file excel1 của từng tháng (mặc định private_dir / 'invoices_file1')
+    - Folder 2: chứa file excel2 tổng hợp các tháng (mặc định private_dir / 'members_file2')
+    
+    Trả về:
+      - file1_list: Danh sách tuple [(file_path, month_str), ...] sắp xếp theo thứ tự tháng tăng dần
+      - file2_path: Đường dẫn file Excel 2 tổng hợp
+      - dir_excel_output: Thư mục xuất báo cáo (output_reports/)
+      - dir_project_images: Thư mục xuất ảnh trong project (extracted_images/)
+    """
+    private_dir = Path(private_dir)
+    dir_f1 = Path(folder1) if folder1 else (private_dir / "invoices_file1")
+    dir_f2 = Path(folder2) if folder2 else (private_dir / "members_file2")
+    dir_excel_out = private_dir / "output_reports"
+    dir_img_out = DIR_PROJECT_IMAGES
+
+    # Đảm bảo các thư mục tồn tại
+    try:
+        dir_f1.mkdir(parents=True, exist_ok=True)
+        dir_f2.mkdir(parents=True, exist_ok=True)
+        dir_excel_out.mkdir(parents=True, exist_ok=True)
+        dir_img_out.mkdir(parents=True, exist_ok=True)
+    except Exception:
+        pass
+
+    # 1. Tìm tất cả các file Excel 1 trong dir_f1 (hoặc private_dir)
+    scan_dirs_f1 = [dir_f1]
+    if private_dir != dir_f1 and private_dir.exists():
+        scan_dirs_f1.append(private_dir)
+
+    f1_candidates = []
+    seen_f1_names = set()
+    for sdir in scan_dirs_f1:
+        if sdir.exists():
+            for f in sorted(list(sdir.glob("*.xlsx")) + list(sdir.glob("*.xls"))):
+                if f.name.startswith("~$") or "bao_cao" in f.name.lower() or "report" in f.name.lower():
+                    continue
+                if f.name in seen_f1_names:
+                    continue
+                name_l = f.name.lower()
+                # Nếu file nằm trực tiếp trong invoices_file1 thì nhận mọi file excel (trừ báo cáo)
+                # Nếu nằm ở private_dir chung thì phải có từ khóa hóa đơn/crew/bill/tháng
+                if sdir == dir_f1 or any(k in name_l for k in ["thanh toán hóa đơn", "hóa đơn", "crew", "bill", "tháng", "thang"]):
+                    m_str = extract_month_from_filename(f.name)
+                    if target_month:
+                        m_clean = target_month.replace("-", "").replace(".", "")
+                        if target_month != m_str and m_clean not in f.name:
+                            continue
+                    seen_f1_names.add(f.name)
+                    f1_candidates.append((f, m_str))
+
+    # Sắp xếp theo thứ tự tháng tăng dần (ví dụ: 2026-08, 2026-09, 2026-10)
+    f1_candidates.sort(key=lambda item: item[1])
+
+    # 2. Tìm File 2 trong dir_f2 (hoặc private_dir)
+    scan_dirs_f2 = [dir_f2]
+    if private_dir != dir_f2 and private_dir.exists():
+        scan_dirs_f2.append(private_dir)
+
+    f2_candidates = []
+    for sdir in scan_dirs_f2:
+        if sdir.exists():
+            for f in sdir.glob("*.xlsx"):
+                if f.name.startswith("~$") or "bao_cao" in f.name.lower() or "report" in f.name.lower():
+                    continue
+                name_l = f.name.lower()
+                if sdir == dir_f2 or any(k in name_l for k in ["member", "share", "chi tiết", "payment", "knox", "boq"]):
+                    f2_candidates.append(f)
+
+    # Ưu tiên file có từ khóa 'chi tiết', 'thanh toán', 'member', 'share'
+    selected_f2 = None
+    if f2_candidates:
+        def f2_priority(p: Path):
+            nl = p.name.lower()
+            if "chi tiết" in nl or "chi tiet" in nl: return 0
+            if "thanh toán" in nl or "thanh toan" in nl: return 1
+            if "member" in nl or "share" in nl: return 2
+            return 3
+        f2_candidates.sort(key=f2_priority)
+        selected_f2 = f2_candidates[0]
+
+    return f1_candidates, selected_f2, dir_excel_out, dir_img_out
+
 
 
