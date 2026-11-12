@@ -1,13 +1,28 @@
-# Thư viện cho MEP AI Worker Backend
+# ====================================================================
+# MEP ONEAI SYSTEM - BACKEND PYTHON REQUIREMENTS
+# Python runtime tương thích: Python 3.10, 3.11, 3.12, 3.14
+# ====================================================================
+
+# 1. CORE API WEB FRAMEWORK & SERVER
 fastapi>=0.110.0
-uvicorn>=0.27.0
+uvicorn[standard]>=0.27.0
 python-multipart>=0.0.9
+pydantic>=2.6.0
+python-dotenv>=1.0.0
+
+# 2. DATABASE & CLOUD OBJECT STORAGE
 oracledb>=2.0.0
-openpyxl>=3.1.2
+minio>=7.2.0
+
+# 3. EXCEL & DATA PROCESSING
 pandas>=2.0.0
 numpy>=1.24.0
-opencv-python-headless>=4.8.0
-PyMuPDF>=1.23.0
-requests>=2.31.0
+openpyxl>=3.1.2
 python-calamine>=0.1.7
 
+# 4. PDF EXTRACTION & COMPUTER VISION
+PyMuPDF>=1.23.0
+opencv-python-headless>=4.8.0
+
+# 5. HTTP CLIENT & AI API INTEGRATION
+requests>=2.31.0

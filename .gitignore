@@ -1,25 +1,36 @@
+# Temporary & Debug scripts
 1.py
 2.py
 3.py
 4.py
+quest*.py
 quest.txt
 *.log
+
+# Runtime Storage & Intermediate Cache
 sessions/
 final_reports/
-__pycache__/
-*.pyc
-*.webp
+output/
+input_pdf/
+backend/sessions/
+backend/final_reports/
+backend/output/
+backend/input_pdf/
 *.png
 *.jpg
+*.jpeg
+*.webp
 
-# Thư mục dữ liệu & tài liệu tạm
+# Python Cache
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+
+# Private documents & temp folders
 Filequest/
 filequest/
-
-# Thư mục cấu hình / cache của Agent và Gemini
+wo_check_boss_project
 .agents/
 .gents/
 .gemini/
-
-wo_check_boss_project
-quest*.py
