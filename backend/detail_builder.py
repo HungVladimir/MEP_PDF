@@ -92,7 +92,17 @@ def classify_reconcile_error(raw_text: str, ai_val: float = None, ven_val: float
         if m:
             ven_rm = m.group(1).strip()
 
-    is_pt_diff = bool(ai_pt and ven_pt and ai_pt.upper() != ven_pt.upper())
+    def norm_pt_val(v):
+        if not v:
+            return ""
+        s = str(v).strip().upper().replace(" ", "").replace("_", "-")
+        if s in ['CR-A', 'CRA']:
+            return "20%"
+        if s in ['CR-B', 'CRB']:
+            return "30%"
+        return s
+
+    is_pt_diff = bool(ai_pt and ven_pt and norm_pt_val(ai_pt) != norm_pt_val(ven_pt))
     is_rm_diff = bool(ai_rm and ven_rm and ai_rm.upper() != ven_rm.upper())
 
     delta = None

@@ -23,6 +23,52 @@ def get_unique_path(base_path):
             return new_path
         counter += 1
 
+
+# ==========================================
+# 0. HÀM CHUẨN HÓA PHỤ TRỘI & GHI CHÚ TOÀN CỤC
+# ==========================================
+
+def norm_extra(val):
+    """
+    Chuẩn hóa giá trị cột Phụ trội:
+    - Rỗng / 0 / NaN / None -> ""
+    - Quy ước mã phân loại Vendor: CR-A / CRA -> "20%", CR-B / CRB -> "30%"
+    - Dạng phần trăm: "20%" -> "20%"
+    - Dạng số thực / số nguyên: 0.2 -> "20%", 20 -> "20%"
+    """
+    if pd.isna(val):
+        return ""
+    s = str(val).strip().replace(" ", "")
+    if s.lower() in ['nan', 'none', '', '-', '0', '0.0', '0%', '0.0%']:
+        return ""
+
+    # Quy đổi ký hiệu Vendor: CR-A -> 20%, CR-B -> 30%
+    s_upper = s.upper().replace("_", "-")
+    if s_upper in ['CR-A', 'CRA']:
+        return "20%"
+    if s_upper in ['CR-B', 'CRB']:
+        return "30%"
+
+    if s.endswith('%'):
+        try:
+            f = float(s[:-1])
+            if f == 0:
+                return ""
+            return f"{int(f)}%" if f.is_integer() else f"{f}%"
+        except:
+            return s.upper()
+    try:
+        f = float(s)
+        if f == 0:
+            return ""
+        if 0 < abs(f) <= 1.0:
+            pct = round(f * 100, 2)
+            return f"{int(pct)}%" if pct.is_integer() else f"{pct}%"
+        return f"{int(f)}%" if f.is_integer() else f"{f}%"
+    except:
+        return s.upper()
+
+
 # ==========================================
 # 1A. HÀM GOM NHÓM DỮ LIỆU BẢN VẼ TỪ NHIỀU FILE CSV (PIVOT)
 # ==========================================
@@ -68,6 +114,7 @@ def aggregate_ai_data(csv_dir):
                 df[col] = ""
             df[col] = df[col].fillna("").astype(str).str.strip()
             df.loc[df[col].str.lower().isin(['nan', 'none']), col] = ""
+        df['PHU_TROI'] = df['PHU_TROI'].apply(norm_extra)
 
         df_list.append(df)
 
@@ -626,31 +673,6 @@ def reconcile_and_highlight(df_ai, df_vendor, output_excel_path, drawing_columns
             return round(float(val), 2)
         except Exception:
             return 0.0
-
-    def norm_extra(val):
-        if pd.isna(val):
-            return ""
-        s = str(val).strip().replace(" ", "")
-        if s.lower() in ['nan', 'none', '', '-', '0', '0.0', '0%', '0.0%']:
-            return ""
-        if s.endswith('%'):
-            try:
-                f = float(s[:-1])
-                if f == 0:
-                    return ""
-                return f"{int(f)}%" if f.is_integer() else f"{f}%"
-            except:
-                return s.upper()
-        try:
-            f = float(s)
-            if f == 0:
-                return ""
-            if 0 < abs(f) <= 1.0:
-                pct = round(f * 100, 2)
-                return f"{int(pct)}%" if pct.is_integer() else f"{pct}%"
-            return f"{int(f)}%" if f.is_integer() else f"{f}%"
-        except:
-            return s.upper()
 
     def norm_remark(val):
         if pd.isna(val):

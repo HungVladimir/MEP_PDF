@@ -431,7 +431,7 @@ def call_ai_vision(task_data):
             - BẮT BUỘC BẠN PHẢI ĐẾM LẠI : Nếu AI đọc ra 13 ký tự -> Nhìn nhầm nét thừa, hãy đếm và cắt bỏ số rác để còn đúng 12.
             - ĐẶC BIỆT CHÚ Ý: Do nét vẽ CAD bị nhiễu, bạn rất dễ bị ảo giác nhìn 1 số thành 2 số (Ví dụ: 88 thành 888, 6 thành 66).
         2. "QTY": Nằm dưới cột có tiêu đề Q'TY hoặc Số Lượng. Đây là con số KHỐI LƯỢNG TỔNG CHỐT HẠ của dòng đó, KHÔNG bốc số ở các cột phụ kiện như Calculator, From, To.
-        3. "PHU_TROI": Nằm dưới tiêu đề Phụ Trội (chứa %, ví dụ 20%). Nếu ô trống để "".
+        3. "PHU_TROI": Nằm dưới tiêu đề Phụ Trội (chứa % như 20%, 30% hoặc ký hiệu phân loại CR-A, CR-B). Nếu ô trống để "".
         4. "REMARK": Chứa chữ "SDV" hoặc ô trống. TUYỆT ĐỐI CHỈ NHẬN CHỮ "SDV" hoặc để rỗng "".
 
         Chỉ trả về JSON.
