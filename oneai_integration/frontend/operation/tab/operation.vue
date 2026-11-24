@@ -50,7 +50,7 @@
 
       <!-- THANH TÌM KIẾM ĐA NĂNG MỤC 8 (OMNI SEARCH: WO, TÊN CV, PIC, BỘ PHẬN) -->
       <el-input v-model="searchKeyword" placeholder="Tìm theo số WO, tên công việc, người phụ trách, bộ phận..." clearable class="toolbar-search" style="width: 380px;"
-        @keyup.enter="handleReload" @clear="handleReload" />
+        @keydown.enter="handleSearchEnter" @clear="handleSearch" />
     </div>
 
     <!-- 3. THANH CÔNG CỤ QUẢN TRỊ BẢNG (ACTION BAR THEO THỨ TỰ & MÀU SẮC UX CHUẨN) -->
@@ -66,7 +66,7 @@
 
       <div class="action-buttons">
         <!-- 1. NÚT RELOAD (LÀM MỚI BẢNG) -->
-        <el-button :size="buttonSize" class="btn-reload" :loading="isLoading" @click="handleReload">
+        <el-button :size="buttonSize" class="btn-reload" :loading="isLoading" @click="handleSearch">
           <i class="bi bi-arrow-repeat me-1"></i> Reload
         </el-button>
 
@@ -533,7 +533,7 @@
 </template>
 
 <script setup>
-import { ref, computed, onMounted, onUnmounted, watch, getCurrentInstance } from 'vue'
+import { ref, computed, onMounted, onUnmounted, watch, getCurrentInstance, nextTick } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import axios from 'axios'
 import { get_total_row, get_data_page, save_mep_rows, delete_mep_rows, get_kpi_summary } from '../js/mepPayment'
@@ -663,6 +663,7 @@ const loadUserPermissions = async () => {
 const selectedStatus = ref('')
 const selectedMonth = ref('')
 const searchKeyword = ref('')
+const appliedSearchKeyword = ref('ALL')
 const statusOptions = [
   { label: 'Tất cả trạng thái', value: 'ALL' },
   { label: 'Chờ duyệt / Mới', value: 'WAITING' },
@@ -840,7 +841,7 @@ const startSmartPollingIfNeeded = () => {
         page.value, pageSize.value,
         selectedStatus.value || 'ALL',
         selectedMonth.value || 'ALL',
-        searchKeyword.value || 'ALL'
+        appliedSearchKeyword.value
       )
       if (Array.isArray(data)) {
         let processed = data
@@ -892,7 +893,7 @@ const loadData = async () => {
       page.value, pageSize.value,
       selectedStatus.value || 'ALL',
       selectedMonth.value || 'ALL',
-      searchKeyword.value || 'ALL'
+      appliedSearchKeyword.value
     )
     let processed = data || []
 
@@ -919,7 +920,7 @@ const loadTotal = async () => {
     const res = await get_total_row(
       selectedStatus.value || 'ALL',
       selectedMonth.value || 'ALL',
-      searchKeyword.value || 'ALL'
+      appliedSearchKeyword.value
     )
     total.value = res?.[0]?.TOTAL ?? 0
   } catch (err) {
@@ -941,7 +942,7 @@ const loadKpiSummary = async () => {
     if (typeof get_kpi_summary === 'function') {
       const res = await get_kpi_summary(
         selectedMonth.value || 'ALL',
-        searchKeyword.value || 'ALL'
+        appliedSearchKeyword.value
       )
       if (res && res[0]) {
         kpiStats.value = {
@@ -963,7 +964,7 @@ const loadKpiSummary = async () => {
     const resFast = await axios.get(`${FASTAPI_BASE_URL}/mep_payment/kpi_summary`, {
       params: {
         payment_month: selectedMonth.value || 'ALL',
-        keyword: searchKeyword.value || 'ALL'
+        keyword: appliedSearchKeyword.value
       }
     })
     if (resFast.data?.data) {
@@ -984,6 +985,19 @@ const handleReload = async () => {
   } finally {
     isLoading.value = false
   }
+}
+
+const handleSearch = async () => {
+  await nextTick()
+  appliedSearchKeyword.value = searchKeyword.value.trim() || 'ALL'
+  page.value = 1
+  await handleReload()
+}
+
+const handleSearchEnter = (event) => {
+  if (event.isComposing || event.keyCode === 229) return
+  event.preventDefault()
+  return handleSearch()
 }
 
 const handleKpiFilter = (statusKey) => {
@@ -1348,7 +1362,12 @@ const handleDownloadFile = async (row) => {
     const blob = new Blob([res.data], { type: contentType })
     const blobUrl = window.URL.createObjectURL(blob)
 
-    const filename = row.RESULT_LINK.split('/').pop() || `Bao_Cao_${row.KEYID}.zip`
+    const reportUrl = new URL(url, window.location.origin)
+    const storedName = reportUrl.pathname.split('/').pop() || ''
+    const displayName = reportUrl.searchParams.has('keyid')
+      ? decodeURIComponent(storedName).replace(/^[0-9a-f]{32}_/, '')
+      : row.RESULT_LINK.split('/').pop()
+    const filename = displayName || `Bao_Cao_${row.KEYID}.zip`
     const link = document.createElement('a')
     link.href = blobUrl
     link.download = filename

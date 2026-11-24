@@ -1,53 +1,25 @@
-
 import os
 import sys
 from pathlib import Path
 from typing import Optional
+from urllib.parse import quote
 from dotenv import load_dotenv, find_dotenv
-import oracledb
+from oneai_sdv import oracle_conn, result_type
+from task_files import REPORT_URL, report_variants
 
-# Đảm bảo console Windows chạy đúng UTF-8
-if sys.stdout and hasattr(sys.stdout, 'reconfigure'):
-    try:
-        sys.stdout.reconfigure(encoding='utf-8')
-        sys.stderr.reconfigure(encoding='utf-8')
-    except Exception:
-        pass
-
-# 1. NẠP CẤU HÌNH BIẾN MÔI TRƯỜNG TỪ .ENV (CHUẨN ĐỒNG BỘ K8S & LOCAL)
+#NẠP CẤU HÌNH BIẾN MÔI TRƯỜNG TỪ .ENV
 load_dotenv(find_dotenv())
 load_dotenv(Path(__file__).parent / ".env")
 
-# Quy tắc đặt tên biến mật khẩu Database đồng bộ K8s & Local (Chu Đức Hải):
-# Cú pháp: DB_[tên database]_[userName]__[mật khẩu] -> 2 dấu gạch dưới '__'
-pwd_mbldb = os.getenv("DB_MBLDB_LOCAL_AI__PASSWORD") or os.getenv("DB_MBLDB_LOCAL_AI_PASSWORD")
-oracle_client_path = os.getenv("ORACLE_CLIENT_LIB_DIR")
-
-# 2. KHỞI TẠO ORACLE THICK CLIENT (NẾU CÓ ĐƯỜNG DẪN CLIENT)
-if oracle_client_path and os.path.exists(oracle_client_path):
-    try:
-        oracledb.init_oracle_client(lib_dir=oracle_client_path)
-    except Exception:
-        pass
-
-# 3. KẾT NỐI QUA THƯ VIỆN NỘI BỘ ONEAI SDV
-try:
-    from oneai_sdv import oracle_conn, result_type
-except ImportError:
-    oracle_conn = None
-    result_type = None
-
+pwd_mbldb = os.getenv("DB_MBLDB_LOCAL_AI__PASSWORD")
 
 def get_cur():
     """Hàm lấy con trỏ kết nối OneAI Oracle (MBLDB)."""
-    # Khai báo trực tiếp userName dưới dạng string theo quy chuẩn K8s
     return oracle_conn(
         dns="MBLDB",
         user_name="LOCAL_AI",
-        password=pwd_mbldb,
-        oracle_client_dir=oracle_client_path,
+        password=pwd_mbldb
     )
-
 
 # ==============================================================================
 # CÁC HÀM NGHIỆP VỤ THAO TÁC VỚI BẢNG LOCAL_AI.MEP_PAYMENT_ANALYSIS
@@ -73,7 +45,6 @@ def check_keyid_exists(keyid: str) -> bool:
     except Exception as e:
         print(f"[Oracle DB Warning] check_keyid_exists: {e}")
         return False
-
 
 # Bộ nhớ đệm RAM lưu tháng thanh toán theo KEYID để tránh gọi Oracle DB liên tục (Giảm 2-3s delay)
 _TASK_MONTH_CACHE: dict = {}
@@ -137,6 +108,39 @@ def get_task_payment_month(keyid: str) -> Optional[str]:
     except Exception as e:
         print(f"[Oracle DB Warning] get_task_payment_month: {e}")
         return None
+
+
+def get_task_result_link(keyid: str) -> Optional[str]:
+    return _read_report_value(
+        "SELECT RESULT_LINK FROM LOCAL_AI.MEP_PAYMENT_ANALYSIS WHERE KEYID = :KEYID",
+        {"KEYID": keyid.strip()},
+    )
+
+
+def get_report_owner(filename: str) -> Optional[str]:
+    links = [
+        REPORT_URL + name
+        for variant in report_variants(filename)
+        for name in (variant, quote(variant, safe=""))
+    ]
+    return _read_report_value(
+        """
+        SELECT KEYID FROM LOCAL_AI.MEP_PAYMENT_ANALYSIS
+        WHERE LOWER(RESULT_LINK) IN (
+            LOWER(:RAW_NAME), LOWER(:ENCODED_NAME), LOWER(:RAW_ALT), LOWER(:ENCODED_ALT)
+        )
+        """,
+        dict(zip(("RAW_NAME", "ENCODED_NAME", "RAW_ALT", "ENCODED_ALT"), links)),
+    )
+
+
+def _read_report_value(query: str, params: dict) -> Optional[str]:
+    conn = get_cur()
+    try:
+        rows = conn.execute(sql=query, params=params, res=result_type.TUPLE, max_row=2)
+        return rows[0][0] if rows is not None and len(rows) == 1 else None
+    finally:
+        conn.close()
 
 
 def insert_task(cur, r: dict):
@@ -225,7 +229,7 @@ def save_tasks(rows: list) -> int:
         raise
 
 
-# Tương thích ngược với mã nguồn api.py hiện tại
+# Giữ tên hàm hiện có cho luồng lưu hồ sơ.
 batch_upsert_tasks = save_tasks
 
 
@@ -352,7 +356,8 @@ def get_kpi_summary(payment_month: str = "ALL", keyword: str = "ALL") -> dict:
             :KEYID = 'ALL'
             OR UPPER(KEYID) LIKE '%' || UPPER(:KEYID) || '%'
             OR UPPER(TASK_NAME) LIKE '%' || UPPER(:KEYID) || '%'
-            OR UPPER(PIC) LIKE '%' || UPPER(:KEYID) || '%'
+            OR UPPER(COMPOSE(DECOMPOSE(TO_NCHAR(PIC))))
+               LIKE '%' || UPPER(COMPOSE(DECOMPOSE(TO_NCHAR(:KEYID)))) || '%'
             OR UPPER(PART_NAME) LIKE '%' || UPPER(:KEYID) || '%'
             OR UPPER(GROUP_NAME) LIKE '%' || UPPER(:KEYID) || '%'
         )
@@ -365,8 +370,7 @@ def get_kpi_summary(payment_month: str = "ALL", keyword: str = "ALL") -> dict:
         cur = get_cur()
         if result_type and hasattr(result_type, 'DATAFRAME'):
             try:
-                df = cur.execute(sql=sql, params=params,
-                                 res=result_type.DATAFRAME)
+                df = cur.execute(sql=sql, params=params,res=result_type.DATAFRAME)
                 if df is not None and not df.empty:
                     r = df.iloc[0]
                     return {

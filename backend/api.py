@@ -3,6 +3,7 @@ import sys
 import shutil
 import time
 import zipfile
+from urllib.parse import quote
 from pathlib import Path
 from fastapi import FastAPI, UploadFile, File, Form, BackgroundTasks, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
@@ -16,10 +17,14 @@ from engine import run_mep_pipeline
 from sql import (
     update_task_status, update_review_decision, batch_upsert_tasks,
     delete_tasks, check_keyid_exists, get_task_payment_month, cache_task_month,
-    get_task_status
+    get_task_status, get_task_result_link, get_report_owner
 )
 from minio_storage import minio_storage, MINIO_PREFIX
-from detail_builder import safe_id
+from detail_builder import safe_id, load_task_detail_cache
+from task_files import (
+    file_in_directory, new_session_name, report_download_link, report_filename,
+    report_variants, task_sessions, valid_filename,
+)
 
 app = FastAPI(title="MEP Payment AI Worker Service", version="2.0")
 
@@ -218,12 +223,14 @@ def run_ai_task_background(keyid: str, session_dir: Path, excel_path: str, payme
         evidence_dir = session_dir / "evidence_images"
         evidence_dir.mkdir(parents=True, exist_ok=True)
 
+        report_dir = FINAL_REPORT_DIR / session_dir.name
+        report_dir.mkdir(exist_ok=False)
         final_excel_path = run_mep_pipeline(
             pdf_drawing_dir=str(pdf_drawings),
             pdf_gatepass_dir=str(pdf_gatepass),
             vendor_excel_path=excel_path,
             master_data_path=excel_path,
-            output_dir=str(FINAL_REPORT_DIR),
+            output_dir=str(report_dir),
             csv_drawing_dir=str(csv_drawings),
             csv_gatepass_dir=str(csv_gatepass),
             skip_existing=False,
@@ -232,23 +239,27 @@ def run_ai_task_background(keyid: str, session_dir: Path, excel_path: str, payme
         )
 
         # ĐÓNG GÓI .ZIP ĐỂ LƯU TRỮ VÀ TẢI VỀ BÁO CÁO
-        file_name = os.path.basename(final_excel_path)
-        zip_name = f"{Path(file_name).stem}.zip"
-        zip_path = FINAL_REPORT_DIR / zip_name
+        excel_report = Path(final_excel_path)
+        run_id = session_dir.name.rsplit("_", 1)[-1]
+        file_name = f"{run_id}_{excel_report.name}"
+        excel_report = excel_report.rename(report_dir / file_name)
+        final_excel_path = str(excel_report)
+        zip_name = excel_report.with_suffix(".zip").name
+        zip_path = report_dir / zip_name
         try:
             with zipfile.ZipFile(zip_path, 'w', zipfile.ZIP_DEFLATED) as zf:
                 zf.write(final_excel_path, arcname=file_name)
-            download_link = f"/mep_payment/files/{zip_name}"
+            download_link = report_download_link(keyid, zip_name)
             print(f"📦 [ZIP Archive] Đã nén báo cáo thành công: {zip_name}")
         except Exception as z_err:
             print(f"⚠️ [ZIP Warning] Lỗi nén zip, dùng link excel: {z_err}")
-            download_link = f"/mep_payment/files/{file_name}"
+            download_link = report_download_link(keyid, file_name)
 
         # TRÍCH XUẤT VÀ LƯU CHI TIẾT ĐỐI SOÁT (JSON CACHE CHO MODAL DIALOG)
         error_count = 0
         detail_data = None
         try:
-            from detail_builder import parse_excel_report_to_detail, safe_id
+            from detail_builder import parse_excel_report_to_detail
             import json
 
             tee.flush()
@@ -274,18 +285,9 @@ def run_ai_task_background(keyid: str, session_dir: Path, excel_path: str, payme
             full_logs = list(tee.log_lines) + conclusion_logs
             if detail_data:
                 detail_data["logs"] = full_logs
-                json_name = f"{safe_id(keyid)}_detail.json"
-                try:
-                    with open(FINAL_REPORT_DIR / json_name, "w", encoding="utf-8") as jf:
-                        json.dump(detail_data, jf, ensure_ascii=False, indent=2)
-                except Exception:
-                    pass
-                try:
-                    with open(session_dir / json_name, "w", encoding="utf-8") as jf:
-                        json.dump(detail_data, jf, ensure_ascii=False, indent=2)
-                except Exception:
-                    pass
-                print(f"💾 [Detail Cache] Đã lưu chi tiết đối soát: {json_name} (Tổng lỗi: {error_count})")
+                with (report_dir / "detail.json").open("w", encoding="utf-8") as jf:
+                    json.dump(detail_data, jf, ensure_ascii=False, indent=2)
+                print(f"💾 [Detail Cache] Đã lưu chi tiết đối soát (Tổng lỗi: {error_count})")
         except Exception as det_err:
             print(f"⚠️ [Detail Cache Warning] {det_err}")
 
@@ -391,7 +393,9 @@ async def upload_excel_task(
                 detail=f"Hồ sơ [{KEYID}] đang được chạy đối soát bởi hệ thống! Vui lòng đợi hoàn tất."
             )
 
-        if not file.filename.endswith(('.xlsx', '.xlsm')):
+        if not valid_filename(file.filename):
+            raise HTTPException(status_code=400, detail="Tên file tải lên không hợp lệ.")
+        if Path(file.filename).suffix.lower() not in (".xlsx", ".xlsm"):
             raise HTTPException(
                 status_code=400, detail="Chỉ chấp nhận file Excel (.xlsx / .xlsm)")
 
@@ -402,18 +406,20 @@ async def upload_excel_task(
                 status_code=413,
                 detail=f"Dung lượng file ({file.size / (1024*1024):.1f}MB) vượt quá giới hạn ({config.MAX_UPLOAD_SIZE_MB}MB)!")
 
-        safe_keyid = KEYID.replace('/', '_').replace('\\', '_')
-        session_name = f"session_{safe_keyid}_{int(time.time())}"
+        KEYID = KEYID.strip()
+        if not KEYID:
+            raise HTTPException(status_code=400, detail="Thiếu mã hồ sơ.")
+        session_name = new_session_name(KEYID)
 
         # Xác định tháng thanh toán để tổ chức thư mục MinIO
         actual_month = (payment_month or "").strip() or get_task_payment_month(KEYID) or time.strftime("%Y-%m")
 
         # 1. Thư mục lưu file Excel upload
         private_session_dir = PRIVATE_EXCEL_DIR / session_name
-        private_session_dir.mkdir(parents=True, exist_ok=True)
+        private_session_dir.mkdir(parents=True, exist_ok=False)
         excel_path = private_session_dir / file.filename
 
-        with open(excel_path, "wb") as buffer:
+        with excel_path.open("xb") as buffer:
             shutil.copyfileobj(file.file, buffer)
 
         # Kiểm tra lại dung lượng sau khi ghi đĩa
@@ -455,84 +461,58 @@ async def upload_excel_task(
 
 @app.get("/mep_payment/files/{keyid}/{filename}")
 async def download_task_report_file(keyid: str, filename: str):
-    """Phục vụ tải file Báo cáo theo mã WO (Hỗ trợ cấu trúc mep_payment/<month>/<keyid>/reports/)."""
+    if not valid_filename(filename) or Path(filename).suffix.lower() not in (".zip", ".xlsx"):
+        raise HTTPException(status_code=404, detail="File báo cáo không tồn tại.")
+
+    variants = report_variants(filename)
+    report_dirs = task_sessions(FINAL_REPORT_DIR, keyid, include_legacy=False)
+    for candidate in variants:
+        for directory in report_dirs:
+            path = directory / candidate
+            if file_in_directory(directory, path):
+                return FileResponse(path, filename=path.name)
+
     if minio_storage.is_available():
         month = get_task_payment_month(keyid)
-        m_key = minio_storage.find_task_object(keyid, "reports", filename, month=month)
-        if not m_key:
-            alt_fname = filename.replace('.zip', '.xlsx') if filename.endswith('.zip') else filename.replace('.xlsx', '.zip')
-            m_key = minio_storage.find_task_object(keyid, "reports", alt_fname, month=month)
-        if m_key:
-            minio_resp = minio_storage.open_object(m_key)
-            if minio_resp:
-                actual_fname = Path(m_key).name
-                is_zip = actual_fname.lower().endswith(".zip")
-                media_type = "application/zip" if is_zip else "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
-                return StreamingResponse(
-                    minio_storage.stream_object(minio_resp),
-                    media_type=media_type,
-                    headers={
-                        "Content-Disposition": f"attachment; filename={actual_fname}",
-                        "Access-Control-Expose-Headers": "Content-Disposition"
-                    }
-                )
+        for candidate in variants:
+            object_key = minio_storage.find_task_object(keyid, "reports", candidate, month=month)
+            if object_key:
+                response = minio_storage.open_object(object_key)
+                if response:
+                    return stream_report(response, candidate)
 
-    return await download_report_file(filename)
+    if get_report_owner(filename) == keyid.strip():
+        for candidate in variants:
+            path = FINAL_REPORT_DIR / candidate
+            if file_in_directory(FINAL_REPORT_DIR, path):
+                return FileResponse(path, filename=path.name)
+            if minio_storage.is_available():
+                response = minio_storage.open_object(f"{MINIO_PREFIX}/reports/{candidate}")
+                if response:
+                    return stream_report(response, candidate)
+
+    raise HTTPException(status_code=404, detail="File báo cáo không tồn tại.")
+
+
+def stream_report(response, filename: str):
+    media_type = (
+        "application/zip" if Path(filename).suffix.lower() == ".zip"
+        else "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+    )
+    return StreamingResponse(
+        minio_storage.stream_object(response),
+        media_type=media_type,
+        headers={"Content-Disposition": f"attachment; filename*=UTF-8''{quote(filename, safe='')}"},
+    )
 
 
 @app.get("/mep_payment/files/{filename}")
-async def download_report_file(filename: str):
-    """Phục vụ tải file Báo cáo 2 Sheet về máy (Hỗ trợ cả .zip và .xlsx từ MinIO hoặc Local Disk)."""
-    # 1. Kiểm tra ưu tiên trong MinIO Storage (Tìm kiếm thông minh trên MinIO)
-    if minio_storage.is_available():
-        m_key = minio_storage.find_report_file(filename)
-        if m_key:
-            minio_resp = minio_storage.open_object(m_key)
-            if minio_resp:
-                actual_fname = Path(m_key).name
-                is_zip = actual_fname.lower().endswith(".zip")
-                media_type = "application/zip" if is_zip else "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
-                return StreamingResponse(
-                    minio_storage.stream_object(minio_resp),
-                    media_type=media_type,
-                    headers={
-                        "Content-Disposition": f"attachment; filename={actual_fname}",
-                        "Access-Control-Expose-Headers": "Content-Disposition"
-                    }
-                )
-
-    # 2. Fallback sang Local Disk nếu MinIO không có hoặc offline
-    file_path = FINAL_REPORT_DIR / filename
-
-    # Cơ chế fallback tự tìm file tương ứng nếu khác đuôi
-    if not file_path.exists():
-        if filename.endswith(".zip"):
-            alt_path = FINAL_REPORT_DIR / filename.replace(".zip", ".xlsx")
-            if alt_path.exists():
-                file_path = alt_path
-                filename = alt_path.name
-        elif filename.endswith(".xlsx"):
-            alt_path = FINAL_REPORT_DIR / filename.replace(".xlsx", ".zip")
-            if alt_path.exists():
-                file_path = alt_path
-                filename = alt_path.name
-
-    if not file_path.exists():
-        raise HTTPException(
-            status_code=404, detail="File báo cáo không tồn tại.")
-
-    is_zip = filename.lower().endswith(".zip")
-    media_type = "application/zip" if is_zip else "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
-
-    return FileResponse(
-        path=str(file_path),
-        filename=filename,
-        media_type=media_type,
-        headers={
-            "Content-Disposition": f"attachment; filename={filename}",
-            "Access-Control-Expose-Headers": "Content-Disposition"
-        }
-    )
+async def download_report_file(filename: str, keyid: Optional[str] = None):
+    if valid_filename(filename) and Path(filename).suffix.lower() in (".zip", ".xlsx"):
+        owner = keyid or get_report_owner(filename)
+        if owner:
+            return await download_task_report_file(owner, filename)
+    raise HTTPException(status_code=404, detail="File báo cáo không tồn tại.")
 
 
 @app.post("/mep_payment/save_rows")
@@ -623,8 +603,10 @@ async def delete_rows_endpoint(req: DeleteRowsRequest):
     try:
         # 1. Thu thập tháng của từng task trước khi xóa khỏi DB
         task_months = {}
+        linked_reports = {}
         for kid in req.keyids:
             task_months[kid] = get_task_payment_month(kid)
+            linked_reports[kid] = verified_report_name(kid)
 
         # 2. Xóa bản ghi trong Database Oracle
         count = delete_tasks(req.keyids)
@@ -641,31 +623,27 @@ async def delete_rows_endpoint(req: DeleteRowsRequest):
                 except Exception as m_del_err:
                     print(f"⚠️ [MinIO Cleanup Warning] {m_del_err}")
 
-        # 4. Dọn dẹp triệt để trên đĩa cứng cục bộ (Local Disk)
         for kid in req.keyids:
-            safe_k = safe_id(kid)
-            # 4.1 Xóa file Excel / ZIP / JSON trong FINAL_REPORT_DIR
-            if FINAL_REPORT_DIR.exists():
-                for f in list(FINAL_REPORT_DIR.glob(f"*{safe_k}*")):
+            for root in {PROJECT_STORAGE_DIR, PRIVATE_EXCEL_DIR, FINAL_REPORT_DIR}:
+                for directory in task_sessions(root, kid, include_legacy=root != FINAL_REPORT_DIR):
                     try:
-                        if f.is_file():
-                            f.unlink(missing_ok=True)
-                            print(f"🗑️ [Disk Cleanup] Đã xóa file báo cáo local: {f.name}")
-                    except Exception:
-                        pass
+                        shutil.rmtree(directory)
+                    except OSError as error:
+                        print(f"⚠️ Không thể dọn thư mục của {kid}: {error}")
 
-            # 4.2 Xóa thư mục session trong PROJECT_STORAGE_DIR và PRIVATE_EXCEL_DIR
-            for root in [PROJECT_STORAGE_DIR, PRIVATE_EXCEL_DIR]:
-                if root.exists():
-                    for s_dir in list(root.glob(f"*session_{safe_k}*")):
-                        try:
-                            if s_dir.is_dir():
-                                shutil.rmtree(s_dir, ignore_errors=True)
-                                print(f"🗑️ [Disk Cleanup] Đã xóa thư mục session: {s_dir.name}")
-                        except Exception:
-                            pass
+            legacy_report = linked_reports[kid]
+            paths = [FINAL_REPORT_DIR / name for name in report_variants(legacy_report)] if legacy_report else []
+            legacy_cache = FINAL_REPORT_DIR / f"{safe_id(kid)}_detail.json"
+            if load_task_detail_cache(legacy_cache, FINAL_REPORT_DIR, kid) is not None:
+                paths.append(legacy_cache)
+            for path in paths:
+                try:
+                    if file_in_directory(FINAL_REPORT_DIR, path):
+                        path.unlink(missing_ok=True)
+                except OSError as error:
+                    print(f"⚠️ Không thể dọn file của {kid}: {error}")
 
-        return {"status": "ok", "message": f"Đã xóa thành công {count} bản ghi và toàn bộ file báo cáo liên quan."}
+        return {"status": "ok", "message": f"Đã xóa {count} bản ghi và dọn các file xác định được."}
     except Exception as e:
         raise HTTPException(
             status_code=500, detail=f"Lỗi khi xóa trong Database: {str(e)}")
@@ -692,6 +670,15 @@ async def submit_review(req: ReviewRequest):
 
 # 5. CÁC ENDPOINT: CHI TIẾT ĐỐI SOÁT, SOI ẢNH BẢN VẼ & CHẠY LẠI AI
 
+def verified_report_name(keyid: str) -> Optional[str]:
+    name = report_filename(get_task_result_link(keyid))
+    if name and get_report_owner(name) == keyid.strip():
+        return name
+    if name:
+        print(f"⚠️ Bỏ qua báo cáo chưa xác định được chủ sở hữu của {keyid}.")
+    return None
+
+
 @app.get("/mep_payment/detail/{keyid}")
 async def get_task_detail(
     keyid: str,
@@ -706,8 +693,7 @@ async def get_task_detail(
     """
     try:
         import json
-        from detail_builder import build_or_load_task_detail, safe_id
-        safe_key = safe_id(keyid)
+        from detail_builder import build_or_load_task_detail
 
         # 1. Nếu frontend truyền month, lưu ngay vào RAM cache để phục vụ các request ảnh tiếp theo
         if month:
@@ -725,16 +711,14 @@ async def get_task_detail(
                 except Exception as sync_e:
                     print(f"⚠️ [Auto-sync Warning] {sync_e}")
 
-        # 2. Ưu tiên kiểm tra nhanh file cache JSON trên Local Disk (0.5ms)
-        cache_json_path = FINAL_REPORT_DIR / f"{safe_key}_detail.json"
-        if cache_json_path.exists():
-            try:
-                with open(cache_json_path, "r", encoding="utf-8") as f:
-                    cached_data = json.load(f)
-                    _check_and_sync_db(cached_data)
-                    return cached_data
-            except Exception:
-                pass
+        report_dirs = task_sessions(FINAL_REPORT_DIR, keyid, include_legacy=False)
+        local_caches = [(directory, directory / "detail.json") for directory in report_dirs]
+        local_caches.append((FINAL_REPORT_DIR, FINAL_REPORT_DIR / f"{safe_id(keyid)}_detail.json"))
+        for directory, path in local_caches:
+            cached_data = load_task_detail_cache(path, directory, keyid)
+            if cached_data is not None:
+                _check_and_sync_db(cached_data)
+                return cached_data
 
         # 3. Đọc từ MinIO cache JSON (lấy month từ query param hoặc RAM cache, không kết nối DB)
         if minio_storage.is_available():
@@ -757,7 +741,9 @@ async def get_task_detail(
             "reason": reason or ""
         }
         detail = build_or_load_task_detail(
-            keyid, FINAL_REPORT_DIR, PROJECT_STORAGE_DIR, fallback_info)
+            keyid, FINAL_REPORT_DIR, PROJECT_STORAGE_DIR, fallback_info,
+            legacy_report=verified_report_name(keyid) if not report_dirs and status == "COMPLETED" else None,
+        )
 
         _check_and_sync_db(detail)
         return detail
@@ -771,21 +757,17 @@ async def get_task_detail(
 async def get_task_image(keyid: str, filename: str, month: Optional[str] = None):
     """Phục vụ ảnh bản vẽ / ảnh bằng chứng đối soát siêu tốc (Ưu tiên SSD Local < 1ms, MinIO O(1))."""
     try:
-        from detail_builder import safe_id
-        safe_key = safe_id(keyid)
+        if not valid_filename(filename):
+            raise HTTPException(status_code=404, detail="Không tìm thấy file ảnh bản vẽ.")
         ext = Path(filename).suffix.lower()
         media_type = "image/png" if ext == ".png" else "image/jpeg"
 
-        # 1. Ưu tiên kiểm tra nhanh trên Local Disk (cực nhanh, 0ms, không tốn tài nguyên mạng)
-        search_roots = [PROJECT_STORAGE_DIR, PRIVATE_EXCEL_DIR]
-        for root in search_roots:
-            if root.exists():
-                for s_dir in root.glob(f"*session_{safe_key}*"):
-                    for sub in ["", "evidence_images", "drawings", "pages"]:
-                        target = (s_dir / sub /
-                                  filename) if sub else (s_dir / filename)
-                        if target.exists() and target.is_file():
-                            return FileResponse(str(target), media_type=media_type)
+        for root in dict.fromkeys((PROJECT_STORAGE_DIR, PRIVATE_EXCEL_DIR)):
+            for directory in task_sessions(root, keyid):
+                for sub in ("", "evidence_images", "drawings", "pages"):
+                    target = directory / sub / filename
+                    if file_in_directory(directory, target):
+                        return FileResponse(target, media_type=media_type)
 
         # 2. Nếu local không có, tải từ MinIO Storage (lấy month từ RAM cache, tuyệt đối không kết nối Oracle DB)
         if minio_storage.is_available():
@@ -840,24 +822,16 @@ async def rerun_task_endpoint(
                 detail=f"Hồ sơ [{keyid}] đang chạy đối soát! Vui lòng không kích hoạt chạy lại."
             )
 
-        from detail_builder import safe_id
-        safe_key = safe_id(keyid)
-
-        # 1. Tìm file Excel trong các phiên làm việc cũ (tìm cả trong PRIVATE_EXCEL_DIR và PROJECT_STORAGE_DIR)
-        search_roots = [PRIVATE_EXCEL_DIR, PROJECT_STORAGE_DIR]
-        sess_candidates = []
-        for root in search_roots:
-            if root.exists():
-                sess_candidates.extend(root.glob(f"*session_{safe_key}*"))
-        sess_candidates = sorted(
-            sess_candidates, key=os.path.getmtime, reverse=True)
-
-        excel_path = None
-        for s_dir in sess_candidates:
-            excels = list(s_dir.glob("*.xlsx")) + list(s_dir.glob("*.xlsm"))
-            if excels:
-                excel_path = excels[0]
-                break
+        roots = dict.fromkeys((PRIVATE_EXCEL_DIR, PROJECT_STORAGE_DIR))
+        sessions = sorted(
+            (directory for root in roots for directory in task_sessions(root, keyid)),
+            key=lambda directory: directory.stat().st_mtime,
+            reverse=True,
+        )
+        excel_path = next((
+            path for directory in sessions for path in sorted(directory.iterdir())
+            if path.suffix.lower() in (".xlsx", ".xlsm") and file_in_directory(directory, path)
+        ), None)
 
         if not excel_path:
             raise HTTPException(
@@ -869,9 +843,8 @@ async def rerun_task_endpoint(
             f"🔄 [RERUN] Bắt đầu kích hoạt chạy lại AI cho KEYID={keyid} với file {excel_path.name}")
 
         # Tạo project_session_dir mới để lưu ảnh và log mới
-        new_session_name = f"session_{safe_key}_{int(time.time())}"
-        project_session_dir = PROJECT_STORAGE_DIR / new_session_name
-        project_session_dir.mkdir(parents=True, exist_ok=True)
+        project_session_dir = PROJECT_STORAGE_DIR / new_session_name(keyid)
+        project_session_dir.mkdir(parents=True, exist_ok=False)
 
         update_task_status(
             keyid=keyid,

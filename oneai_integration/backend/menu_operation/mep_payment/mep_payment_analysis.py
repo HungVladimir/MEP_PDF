@@ -19,7 +19,8 @@ searchTotalRow = QuerySettings(
             :KEYID = 'ALL'
             OR UPPER(KEYID) LIKE '%' || UPPER(:KEYID) || '%'
             OR UPPER(TASK_NAME) LIKE '%' || UPPER(:KEYID) || '%'
-            OR UPPER(PIC) LIKE '%' || UPPER(:KEYID) || '%'
+            OR UPPER(COMPOSE(DECOMPOSE(TO_NCHAR(PIC))))
+               LIKE '%' || UPPER(COMPOSE(DECOMPOSE(TO_NCHAR(:KEYID)))) || '%'
             OR UPPER(PART_NAME) LIKE '%' || UPPER(:KEYID) || '%'
             OR UPPER(GROUP_NAME) LIKE '%' || UPPER(:KEYID) || '%'
         )
@@ -65,7 +66,8 @@ getdata_page = QuerySettings(
             :KEYID = 'ALL'
             OR UPPER(KEYID) LIKE '%' || UPPER(:KEYID) || '%'
             OR UPPER(TASK_NAME) LIKE '%' || UPPER(:KEYID) || '%'
-            OR UPPER(PIC) LIKE '%' || UPPER(:KEYID) || '%'
+            OR UPPER(COMPOSE(DECOMPOSE(TO_NCHAR(PIC))))
+               LIKE '%' || UPPER(COMPOSE(DECOMPOSE(TO_NCHAR(:KEYID)))) || '%'
             OR UPPER(PART_NAME) LIKE '%' || UPPER(:KEYID) || '%'
             OR UPPER(GROUP_NAME) LIKE '%' || UPPER(:KEYID) || '%'
         )
@@ -93,7 +95,8 @@ searchKpiSummary = QuerySettings(
             :KEYID = 'ALL'
             OR UPPER(KEYID) LIKE '%' || UPPER(:KEYID) || '%'
             OR UPPER(TASK_NAME) LIKE '%' || UPPER(:KEYID) || '%'
-            OR UPPER(PIC) LIKE '%' || UPPER(:KEYID) || '%'
+            OR UPPER(COMPOSE(DECOMPOSE(TO_NCHAR(PIC))))
+               LIKE '%' || UPPER(COMPOSE(DECOMPOSE(TO_NCHAR(:KEYID)))) || '%'
             OR UPPER(PART_NAME) LIKE '%' || UPPER(:KEYID) || '%'
             OR UPPER(GROUP_NAME) LIKE '%' || UPPER(:KEYID) || '%'
         )

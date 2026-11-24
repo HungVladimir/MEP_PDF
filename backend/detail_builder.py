@@ -9,6 +9,7 @@ import re
 import glob
 from pathlib import Path
 import pandas as pd
+from task_files import file_in_directory, task_sessions
 
 
 def safe_id(keyid: str) -> str:
@@ -531,58 +532,46 @@ def parse_excel_report_to_detail(excel_path: Path, keyid: str, session_dir: Path
     return detail
 
 
-def build_or_load_task_detail(keyid: str, final_report_dir: Path, storage_dir: Path, fallback_info: dict = None) -> dict:
-    """
-    Hàm trung tâm lấy chi tiết task:
-    1. Ưu tiên đọc file cache JSON: final_reports/{KEYID}_detail.json (đọc trực tiếp, không rebuild)
-    2. Nếu chưa có, quét tìm file Excel báo cáo cụ thể của task và tự parse ra JSON
-    3. Nếu không có file Excel, tạo cấu trúc phản hồi an toàn dựa trên fallback_info (chống crash)
-    """
-    safe_key = safe_id(keyid)
-    cache_json_path = final_report_dir / f"{safe_key}_detail.json"
-
-    # 1. Đã có file cache JSON trong final_report_dir -> Trả về ngay
-    if cache_json_path.exists():
-        try:
-            with open(cache_json_path, "r", encoding="utf-8") as f:
-                return json.load(f)
-        except Exception as e:
-            print(f"⚠️ Lỗi đọc cache detail: {e}")
-
-    # Tìm session_dir gần nhất trong storage_dir
-    session_dir = None
-    if storage_dir.exists():
-        sess_candidates = sorted(storage_dir.glob(f"*session_{safe_key}*"), key=os.path.getmtime, reverse=True)
-        if sess_candidates:
-            session_dir = sess_candidates[0]
-            # Kiểm tra cache JSON trong session_dir
-            sess_json = session_dir / f"{safe_key}_detail.json"
-            if sess_json.exists():
-                try:
-                    with open(sess_json, "r", encoding="utf-8") as f:
-                        return json.load(f)
-                except Exception:
-                    pass
-
-    # 2. Tìm file Excel báo cáo cụ thể của task này (trong final_report_dir hoặc session_dir)
-    possible_excels = []
-    if final_report_dir.exists():
-        possible_excels = list(final_report_dir.glob(f"*{safe_key}*.xlsx")) + list(final_report_dir.glob(f"*{safe_key}*.xlsm"))
-    if not possible_excels and session_dir and session_dir.exists():
-        possible_excels = list(session_dir.glob("*.xlsx")) + list(session_dir.glob("*.xlsm"))
-
-    # Parse file Excel báo cáo nếu tìm thấy đúng file của task
-    if possible_excels:
-        target_excel = possible_excels[0]
-        detail = parse_excel_report_to_detail(target_excel, keyid, session_dir)
-        if detail:
-            # Lưu cache JSON cho các lần gọi sau
-            try:
-                with open(cache_json_path, "w", encoding="utf-8") as f:
-                    json.dump(detail, f, ensure_ascii=False, indent=2)
-            except Exception:
-                pass
+def load_task_detail_cache(path: Path, directory: Path, keyid: str) -> dict | None:
+    if not file_in_directory(directory, path):
+        return None
+    try:
+        with path.open(encoding="utf-8") as stream:
+            detail = json.load(stream)
+        if isinstance(detail, dict) and str(detail.get("keyid", "")).strip() == keyid.strip():
             return detail
+    except (OSError, ValueError) as error:
+        print(f"⚠️ Lỗi đọc chi tiết hồ sơ {keyid}: {error}")
+    return None
+
+
+def build_or_load_task_detail(
+    keyid: str, final_report_dir: Path, storage_dir: Path,
+    fallback_info: dict | None = None, *, legacy_report: str | None = None,
+) -> dict:
+    """Đọc chi tiết từ báo cáo thuộc đúng hồ sơ hoặc dùng thông tin tổng hợp."""
+    sessions = task_sessions(storage_dir, keyid)
+    session_dir = sessions[0] if sessions else None
+
+    for directory in sessions:
+        cached = load_task_detail_cache(directory / f"{safe_id(keyid)}_detail.json", directory, keyid)
+        if cached is not None:
+            return cached
+
+    for directory in task_sessions(final_report_dir, keyid, include_legacy=False):
+        report = next((path for path in directory.glob("*.xlsx") if file_in_directory(directory, path)), None)
+        if report:
+            report_session = next((path for path in sessions if path.name == directory.name), None)
+            detail = parse_excel_report_to_detail(report, keyid, report_session)
+            if detail:
+                return detail
+
+    if legacy_report:
+        report = final_report_dir / Path(legacy_report).with_suffix(".xlsx").name
+        if file_in_directory(final_report_dir, report):
+            detail = parse_excel_report_to_detail(report, keyid, session_dir)
+            if detail:
+                return detail
 
     # 3. Fallback mềm mại cho các bản ghi demo/mock hoặc đang chờ chạy
     fallback_info = fallback_info or {}

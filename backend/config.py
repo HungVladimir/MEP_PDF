@@ -2,13 +2,13 @@
 # CẤU HÌNH HỆ THỐNG MEP AI (CONFIG)
 # ==========================================
 import os
+from dotenv import load_dotenv
+load_dotenv()
 
 # 1. CẤU HÌNH API & AI MODEL (NextAI-SDV)
-API_URL = os.getenv(
-    "MEP_API_URL", "http://107.126.11.129:32200/api/v1/chat/completions")
-API_KEY = os.getenv(
-    "MEP_API_KEY", "sk-pEqadpi8UZjOr2RWUTdXliuxXcTFVc-dezojIsgbJ0Y")
-MODEL_NAME = os.getenv("MEP_MODEL_NAME", "NextAI-SDV")
+API_URL = os.getenv("ONEAI_LLM__ENDPOINT")
+API_KEY = os.getenv("ONEAI_LLM__API_KEY__MEP_PAYMENT")
+MODEL_NAME = os.getenv("ONEAI_LLM__MODEL_NAME")
 TEMPERATURE = 0.0
 MAX_RETRIES = 3
 MAX_AI_WORKERS = 5          # Số luồng gọi AI song song tối đa
@@ -27,7 +27,6 @@ MAX_IMG_WIDTH = 6000        # Chốt chặn chiều ngang tối đa tránh quá 
 OLE_FAST_MODE = True
 
 # Tọa độ vùng cắt (ROI) góc dưới bên phải để đọc "SỐ BẢN VẼ" (Drawing No)
-# Định dạng: (X_start, Y_start, X_end, Y_end) tính theo tỷ lệ phần trăm (0.0 -> 1.0)
 ROI_DRAWING_NO = (0.7, 0.85, 1.0, 1.0)
 
 # ==========================================
@@ -35,21 +34,20 @@ ROI_DRAWING_NO = (0.7, 0.85, 1.0, 1.0)
 # ==========================================
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 
-# --- THƯ MỤC ĐẦU VÀO PDF (HỖ TRỢ CẢ 2 CHẾ ĐỘ VẬN HÀNH) ---
-# Cách 1 (Thả chung): Thả tất cả PDF vào DIR_PDF_INPUT, hệ thống tự đọc Text phân loại Bản vẽ vs Gate Pass.
-# Cách 2 (Tách riêng / Web Server): Bỏ Bản vẽ vào DIR_PDF_DRAWINGS, bỏ Gate Pass vào DIR_PDF_GATEPASS.
+# --- THƯ MỤC ĐẦU VÀO PDF  ---
 DIR_PDF_INPUT = os.path.join(BASE_DIR, "input_pdf")
 DIR_PDF_DRAWINGS = os.path.join(BASE_DIR, "input_pdf", "drawings")
 DIR_PDF_GATEPASS = os.path.join(BASE_DIR, "input_pdf", "gate_pass")
 
 # --- THƯ MỤC LƯU TRỮ TRUNG GIAN (IMAGES & CSV) ---
 DIR_IMG_EXTRACTED = os.path.join(BASE_DIR, "output", "images")
-DIR_CSV_EXTRACTED = os.path.join(
-    BASE_DIR, "output", "extracted_csv")   # Lưu CSV của Bản vẽ CAD
+DIR_CSV_EXTRACTED = os.path.join(BASE_DIR, "output", "extracted_csv")   # Lưu CSV của Bản vẽ CAD
+
 # Lưu CSV của Biên bản vật tư (Gate Pass)
 DIR_GATEPASS_CSV = os.path.join(BASE_DIR, "output", "gatepass_csv")
 
 # --- THƯ MỤC CHỨA DỮ LIỆU EXCEL THỰC TẾ & BÁO CÁO ĐẦU RA (TỰ ĐỘNG THÍCH ỨNG LOCAL/SERVER) ---
+
 COMPANY_DOC_DIR = os.getenv("COMPANY_PRIVATE_ROOT", r"D:/Private_Documents/Doc/AI-Infra")
 if os.path.exists(COMPANY_DOC_DIR):
     DIR_VENDOR_EXCEL = COMPANY_DOC_DIR
@@ -105,17 +103,14 @@ SHEET_KEYWORDS_GATEPASS = ['bbgn', 'gate', 'mang vào', 'biên bản']
 # ==========================================
 # 6. CẤU HÌNH VẬN HÀNH PIPELINE & GIỚI HẠN UPLOAD
 # ==========================================
-# True: File nào đã có sẵn .csv thì bỏ qua không gọi lại AI
-SKIP_EXTRACTED_CSV = False
-# Giới hạn dung lượng file Excel upload tối đa (MB)
 MAX_UPLOAD_SIZE_MB = int(os.getenv("MAX_UPLOAD_SIZE_MB", 50))
 
 # ==========================================
 # 7. CẤU HÌNH PHÂN QUYỀN HỆ THỐNG (AUTHORIZATION)
 # ==========================================
 # Danh sách KnoxID có quyền Quản trị / Sửa / Xóa (ngăn cách bởi dấu phẩy)
-MEP_ADMIN_USERS = os.getenv("MEP_ADMIN_USERS", "vhung99.nguyen,admin,mep_admin,dong.nh")
+MEP_ADMIN_USERS = os.getenv("MEP_ADMIN_USERS")
 # Danh sách Role OneAI được phép sửa/xóa (Admin, Manager, Leader, v.v.)
-MEP_ADMIN_ROLES = os.getenv("MEP_ADMIN_ROLES", "ADMIN,MANAGER,MEP_ADMIN,LEADER")
+MEP_ADMIN_ROLES = os.getenv("MEP_ADMIN_ROLES")
 # Cờ bật kiểm tra phân quyền nghiêm ngặt (True: Chặn khi không có quyền; False: Mở toàn quyền cho Dev/Test)
-MEP_ENABLE_AUTH = os.getenv("MEP_ENABLE_AUTH", "false").lower() in ("true", "1", "yes")
+MEP_ENABLE_AUTH = os.getenv("MEP_ENABLE_AUTH").lower() in ("true", "1", "yes")

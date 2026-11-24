@@ -1,8 +1,6 @@
 """
 ====================================================================
 MEP ONEAI SYSTEM - MINIO OBJECT STORAGE ADAPTER
-File: backend/minio_storage.py
-Pattern: Chuẩn hóa 100% theo kiến trúc OneAI (visionGuard.py & ai_bill.py)
 Chức năng:
   - Tự động tích hợp singleton `minio_object` của OneAI Server nếu chạy trong hệ thống OneAI.
   - Tự động kết nối Minio Client bằng cấu hình từ .env nếu chạy độc lập / local.
@@ -17,6 +15,8 @@ Chức năng:
 """
 
 import os
+import re
+from hashlib import sha256
 import io
 import time
 import mimetypes
@@ -42,6 +42,19 @@ except ImportError:
 
 MINIO_PREFIX = os.getenv("MINIO_PREFIX", "mep_payment")
 USE_MINIO_CONFIG = os.getenv("USE_MINIO", "true").lower() in ("true", "1", "yes")
+
+
+TASK_OBJECT_FOLDERS = frozenset({"inputs", "reports", "images", "cache"})
+
+
+def task_object_segment(keyid: str) -> str:
+    keyid = keyid.strip()
+    if (
+        keyid.startswith("~") or keyid in TASK_OBJECT_FOLDERS or keyid in (".", "..")
+        or re.search(r'[/\\:]|^\d{4}-\d{2}$', keyid)
+    ):
+        return "~" + sha256(keyid.encode("utf-8")).hexdigest()
+    return keyid
 
 
 class MinioStorageManager:
@@ -75,11 +88,11 @@ class MinioStorageManager:
             except Exception as e:
                 print(f"⚠️ [MinIO Warning] Không thể dùng OneAI Platform minio_object: {e}")
 
-        # 2. Khởi tạo trực tiếp từ biến môi trường trong .env (hỗ trợ cả ONEAI_MINIO_* và MINIO_*)
-        endpoint = os.getenv("ONEAI_MINIO_ENDPOINT") or os.getenv("MINIO_ENDPOINT")
-        access_key = os.getenv("ONEAI_MINIO_ACCESS") or os.getenv("MINIO_ACCESS_KEY")
-        secret_key = os.getenv("ONEAI_MINIO_SECRET") or os.getenv("MINIO_SECRET_KEY")
-        secure_val = os.getenv("ONEAI_MINIO_SECURE", os.getenv("MINIO_SECURE", "false"))
+        # 2. Khởi tạo trực tiếp từ biến môi trường trong .env
+        endpoint = os.getenv("ONEAI_MINIO__ENDPOINT")
+        access_key = os.getenv("ONEAI_MINIO__ACCESS")
+        secret_key = os.getenv("ONEAI_MINIO__SECRET")
+        secure_val = os.getenv("ONEAI_MINIO__SECURE", "false")
         secure = secure_val.lower() in ("true", "1", "yes")
 
         if endpoint and access_key and secret_key and Minio:
@@ -100,7 +113,7 @@ class MinioStorageManager:
             if not Minio:
                 print("ℹ️ [MinIO] Chưa cài thư viện 'minio' -> Tự động chuyển sang lưu đĩa.")
             else:
-                print("ℹ️ [MinIO] Chưa cấu hình ONEAI_MINIO_ENDPOINT / MINIO_ENDPOINT trong .env -> Tự động chuyển sang lưu đĩa.")
+                print("ℹ️ [MinIO] Chưa cấu hình ONEAI_MINIO__ENDPOINT / __ACCESS / __SECRET trong .env -> Tự động chuyển sang lưu đĩa.")
             self.enabled = False
 
     def is_available(self) -> bool:
@@ -113,7 +126,7 @@ class MinioStorageManager:
         mep_payment/[<month>/]<safe_keyid>/<subfolder>/<filename>
         Ví dụ: mep_payment/2026-11/WOR2510150002/reports/Sample_Report.zip
         """
-        safe_key = str(keyid).replace('/', '_').replace('\\', '_').replace(':', '_').strip()
+        safe_key = task_object_segment(keyid)
         sub = subfolder.strip('/') if subfolder else ''
         fname = filename.strip('/')
 
@@ -129,7 +142,7 @@ class MinioStorageManager:
         return "/".join(parts)
 
     def upload_file(self, local_path: Union[str, Path], object_key: str, content_type: Optional[str] = None) -> bool:
-        """Upload file vật lý từ ổ cứng lên MinIO (Wrapper quanh client.put_object theo chuẩn visionGuard)."""
+        """Tải file từ ổ đĩa lên MinIO bằng client.put_object."""
         if not self.is_available():
             return False
         local_p = Path(local_path)
@@ -241,49 +254,32 @@ class MinioStorageManager:
 
     def remove_task_objects(self, keyid: str, month: Optional[str] = None) -> int:
         """
-        Xóa sạch 100% tất cả các objects trên MinIO liên quan đến task KEYID (Cascade Cleanup).
-        Xóa cả cấu trúc theo tháng (mep_payment/<month>/<keyid>/), cấu trúc phẳng cũ (mep_payment/<keyid>/),
-        và các bản copy mồ côi trong mep_payment/reports/.
+        Xóa các object nằm trong cấu trúc lưu trữ của đúng hồ sơ.
         """
-        if not self.is_available() or not keyid:
+        if not self.is_available() or not keyid.strip():
             return 0
 
-        safe_key = str(keyid).replace('/', '_').replace('\\', '_').replace(':', '_').strip()
-        total_deleted = 0
-
-        # 1. Xóa theo cấu trúc mới có month
-        if month:
-            safe_month = str(month).replace('/', '_').replace('\\', '_').strip()
-            prefix_month = f"{MINIO_PREFIX}/{safe_month}/{safe_key}/"
-            total_deleted += self.remove_prefix(prefix_month)
-
-        # 2. Xóa theo cấu trúc phẳng cũ
-        prefix_flat = f"{MINIO_PREFIX}/{safe_key}/"
-        total_deleted += self.remove_prefix(prefix_flat)
-
-        # 3. Quét kiểm tra toàn bộ prefix mep_payment/ để dọn sạch mọi object sót lại
+        safe_key = task_object_segment(keyid)
+        count = 0
+        base_prefix = f"{MINIO_PREFIX}/"
         try:
-            all_objs = self.client.list_objects(self.bucket_name, prefix=f"{MINIO_PREFIX}/", recursive=True)
-            for obj in all_objs:
-                obj_name = obj.object_name
-                # Xóa object nằm trong folder của task
-                if f"/{safe_key}/" in obj_name:
+            for obj in self.client.list_objects(self.bucket_name, prefix=base_prefix, recursive=True):
+                name = obj.object_name
+                parts = name.removeprefix(base_prefix).split("/")
+                flat = len(parts) >= 3 and parts[0] == safe_key and parts[1] in TASK_OBJECT_FOLDERS
+                monthly = (
+                    len(parts) >= 4 and parts[1] == safe_key and parts[2] in TASK_OBJECT_FOLDERS
+                    and (parts[0] == month or re.fullmatch(r"\d{4}-\d{2}", parts[0]))
+                )
+                if name.startswith(base_prefix) and (flat or monthly):
                     try:
-                        self.client.remove_object(self.bucket_name, obj_name)
-                        total_deleted += 1
-                    except Exception:
-                        pass
-                # Xóa file mồ côi trong mep_payment/reports/ có chứa mã WO
-                elif obj_name.startswith(f"{MINIO_PREFIX}/reports/") and safe_key in obj_name:
-                    try:
-                        self.client.remove_object(self.bucket_name, obj_name)
-                        total_deleted += 1
-                    except Exception:
-                        pass
-        except Exception as exc:
-            print(f"⚠️ [MinIO Cleanup Warning] Quét dọn MinIO cho {safe_key}: {exc}")
-
-        return total_deleted
+                        self.client.remove_object(self.bucket_name, name)
+                        count += 1
+                    except Exception as error:
+                        print(f"⚠️ Không thể xóa object của {keyid}: {error}")
+        except Exception as error:
+            print(f"⚠️ Không thể quét object của {keyid}: {error}")
+        return count
 
     def move_task_month(self, keyid: str, old_month: str, new_month: str) -> int:
         """
@@ -294,7 +290,7 @@ class MinioStorageManager:
         if not self.is_available() or not keyid or not old_month or not new_month:
             return 0
 
-        safe_key = str(keyid).replace('/', '_').replace('\\', '_').replace(':', '_').strip()
+        safe_key = task_object_segment(keyid)
         safe_old_m = str(old_month).replace('/', '_').replace('\\', '_').strip()
         safe_new_m = str(new_month).replace('/', '_').replace('\\', '_').strip()
 
@@ -374,37 +370,6 @@ class MinioStorageManager:
 
         return None
 
-    def find_report_file(self, filename: str) -> Optional[str]:
-        """
-        Tìm file báo cáo (.xlsx hoặc .zip) trên MinIO theo tên file:
-        Hỗ trợ tìm trong mep_payment/<month>/<keyid>/reports/ hoặc mep_payment/reports/.
-        """
-        if not self.is_available() or not filename:
-            return None
-
-        # 1. Thử trong thư mục reports cũ
-        candidates = [
-            f"{MINIO_PREFIX}/reports/{filename}",
-            f"{MINIO_PREFIX}/reports/{filename.replace('.zip', '.xlsx')}" if filename.endswith('.zip') else f"{MINIO_PREFIX}/reports/{filename.replace('.xlsx', '.zip')}"
-        ]
-        for c in candidates:
-            if self.object_exists(c):
-                return c
-
-        # 2. Quét tìm trong toàn bộ MinIO
-        try:
-            target_name = Path(filename).name.lower()
-            alt_name = target_name.replace(".zip", ".xlsx") if target_name.endswith(".zip") else target_name.replace(".xlsx", ".zip")
-            all_objs = self.client.list_objects(self.bucket_name, prefix=f"{MINIO_PREFIX}/", recursive=True)
-            for obj in all_objs:
-                fname = Path(obj.object_name).name.lower()
-                if fname in (target_name, alt_name):
-                    return obj.object_name
-        except Exception:
-            pass
-
-        return None
-
     def object_exists(self, object_key: str) -> bool:
         """Kiểm tra xem object có tồn tại trên MinIO hay không."""
         if not self.is_available() or not object_key:
@@ -417,8 +382,7 @@ class MinioStorageManager:
 
     def get_presigned_url(self, object_key: str, expires_days: int = 1) -> Optional[str]:
         """
-        Tạo đường link presigned URL tạm thời cho phép người dùng mở/tải trực tiếp từ MinIO
-        (Đồng bộ theo pattern minio.py của OneAI).
+        Tạo URL có thời hạn để mở hoặc tải trực tiếp tệp từ MinIO.
         """
         if not self.is_available() or not object_key:
             return None
