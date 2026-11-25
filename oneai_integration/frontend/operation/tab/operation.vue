@@ -50,7 +50,8 @@
 
       <!-- THANH TÌM KIẾM ĐA NĂNG MỤC 8 (OMNI SEARCH: WO, TÊN CV, PIC, BỘ PHẬN) -->
       <el-input v-model="searchKeyword" placeholder="Tìm theo số WO, tên công việc, người phụ trách, bộ phận..." clearable class="toolbar-search" style="width: 380px;"
-        @keyup.enter="handleReload" @clear="handleReload" />
+        @keydown.enter="submitSearch" @clear="submitSearch"
+        @compositionstart="beginSearchComposition" @compositionend="endSearchComposition" />
     </div>
 
     <!-- 3. THANH CÔNG CỤ QUẢN TRỊ BẢNG (ACTION BAR THEO THỨ TỰ & MÀU SẮC UX CHUẨN) -->
@@ -66,7 +67,7 @@
 
       <div class="action-buttons">
         <!-- 1. NÚT RELOAD (LÀM MỚI BẢNG) -->
-        <el-button :size="buttonSize" class="btn-reload" :loading="isLoading" @click="handleReload">
+        <el-button :size="buttonSize" class="btn-reload" :loading="isLoading" @click="submitSearch">
           <i class="bi bi-arrow-repeat me-1"></i> Reload
         </el-button>
 
@@ -663,6 +664,11 @@ const loadUserPermissions = async () => {
 const selectedStatus = ref('')
 const selectedMonth = ref('')
 const searchKeyword = ref('')
+const SEARCH_DELAY_MS = 300
+let appliedSearchKeyword = 'ALL'
+let searchRevision = 0
+let searchTimer
+let isSearchComposing = false
 const statusOptions = [
   { label: 'Tất cả trạng thái', value: 'ALL' },
   { label: 'Chờ duyệt / Mới', value: 'WAITING' },
@@ -835,13 +841,15 @@ const startSmartPollingIfNeeded = () => {
     const hasNewRow = tableData.value.some(r => r.isNew)
     if (hasNewRow) return
 
+    const revision = searchRevision
     try {
       const data = await get_data_page(
         page.value, pageSize.value,
         selectedStatus.value || 'ALL',
         selectedMonth.value || 'ALL',
-        searchKeyword.value || 'ALL'
+        appliedSearchKeyword
       )
+      if (revision !== searchRevision) return
       if (Array.isArray(data)) {
         let processed = data
         if (selectedStatus.value === 'OK') {
@@ -887,13 +895,15 @@ const startSmartPollingIfNeeded = () => {
 
 // 1. TẢI DỮ LIỆU TỪ BACKEND
 const loadData = async () => {
+  const revision = searchRevision
   try {
     const data = await get_data_page(
       page.value, pageSize.value,
       selectedStatus.value || 'ALL',
       selectedMonth.value || 'ALL',
-      searchKeyword.value || 'ALL'
+      appliedSearchKeyword
     )
+    if (revision !== searchRevision) return
     let processed = data || []
 
     // Client-side fallback bảo vệ 2 lớp: Nếu backend cũ trả về tất cả COMPLETED khi filter OK/ERR
@@ -915,12 +925,14 @@ const loadData = async () => {
 }
 
 const loadTotal = async () => {
+  const revision = searchRevision
   try {
     const res = await get_total_row(
       selectedStatus.value || 'ALL',
       selectedMonth.value || 'ALL',
-      searchKeyword.value || 'ALL'
+      appliedSearchKeyword
     )
+    if (revision !== searchRevision) return
     total.value = res?.[0]?.TOTAL ?? 0
   } catch (err) {
     console.error("Lỗi lấy tổng số dòng:", err)
@@ -937,12 +949,14 @@ const kpiStats = ref({
 })
 
 const loadKpiSummary = async () => {
+  const revision = searchRevision
   try {
     if (typeof get_kpi_summary === 'function') {
       const res = await get_kpi_summary(
         selectedMonth.value || 'ALL',
-        searchKeyword.value || 'ALL'
+        appliedSearchKeyword
       )
+      if (revision !== searchRevision) return
       if (res && res[0]) {
         kpiStats.value = {
           total: Number(res[0].TOTAL ?? 0),
@@ -959,13 +973,15 @@ const loadKpiSummary = async () => {
   }
 
   // Kênh dự phòng 2: FastAPI Worker (:8000)
+  if (revision !== searchRevision) return
   try {
     const resFast = await axios.get(`${FASTAPI_BASE_URL}/mep_payment/kpi_summary`, {
       params: {
         payment_month: selectedMonth.value || 'ALL',
-        keyword: searchKeyword.value || 'ALL'
+        keyword: appliedSearchKeyword
       }
     })
+    if (revision !== searchRevision) return
     if (resFast.data?.data) {
       kpiStats.value = resFast.data.data
       return
@@ -976,14 +992,43 @@ const loadKpiSummary = async () => {
 }
 
 const handleReload = async () => {
+  const revision = searchRevision
   isLoading.value = true
   try {
-    await loadKpiSummary()
-    await loadTotal()
-    await loadData()
+    await Promise.all([loadKpiSummary(), loadTotal(), loadData()])
   } finally {
-    isLoading.value = false
+    if (revision === searchRevision) isLoading.value = false
   }
+}
+
+const submitSearch = (event) => {
+  if (isSearchComposing || event?.isComposing || event?.keyCode === 229) return
+  clearTimeout(searchTimer)
+  const keyword = searchKeyword.value.trim() || 'ALL'
+  if (keyword !== appliedSearchKeyword) {
+    appliedSearchKeyword = keyword
+    searchRevision++
+    page.value = 1
+  }
+  return handleReload()
+}
+
+const scheduleSearch = () => {
+  clearTimeout(searchTimer)
+  const keyword = searchKeyword.value.trim() || 'ALL'
+  if (!isSearchComposing && keyword !== appliedSearchKeyword) {
+    searchTimer = setTimeout(submitSearch, SEARCH_DELAY_MS)
+  }
+}
+
+const beginSearchComposition = () => {
+  isSearchComposing = true
+  clearTimeout(searchTimer)
+}
+
+const endSearchComposition = () => {
+  isSearchComposing = false
+  scheduleSearch()
 }
 
 const handleKpiFilter = (statusKey) => {
@@ -1561,6 +1606,8 @@ onMounted(() => {
 })
 
 onUnmounted(() => {
+  clearTimeout(searchTimer)
+  searchRevision++
   stopSmartPolling()
   if (mediaQueryWatcher) {
     if (mediaQueryWatcher.removeEventListener) {
@@ -1579,6 +1626,8 @@ const handlePageChange = (p) => { page.value = p; loadData(); }
 const handleSizeChange = (s) => { pageSize.value = s; page.value = 1; loadData(); }
 const goFirst = () => { if (page.value > 1) { page.value = 1; loadData(); } }
 const goLast = () => { if (page.value < totalPages.value) { page.value = totalPages.value; loadData(); } }
+
+watch(searchKeyword, scheduleSearch)
 
 watch(selectedMonth, () => {
   page.value = 1
